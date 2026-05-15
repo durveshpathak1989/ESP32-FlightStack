@@ -16,6 +16,8 @@ This project implements a complete quadcopter flight controller from the ground 
 |-----------|------|-------|
 | Microcontroller | Adafruit HUZZAH32 Feather (ESP32-WROOM-32E) | Dual-core 240 MHz, Wi-Fi + BT |
 | IMU | MPU-9250 (HiLetgo breakout) | Gyro + Accel + Mag via SPI |
+| RC Transmitter | FlySky FS-i6X | 2.4 GHz AFHDS 2A, 6–10 channels |
+| RC Receiver | FlySky FS-iA6B | iBUS single-wire serial output |
 | ESC Protocol | DShot300 / DShot600 | Via ESP32 RMT peripheral |
 | Power | 3S–4S LiPo | 5 V BEC for FC, 3.3 V for sensors |
 
@@ -33,6 +35,16 @@ This project implements a complete quadcopter flight controller from the ground 
 
 > **Warning:** Use 3.3 V only — the MPU-9250 is NOT 5 V tolerant.
 
+### Wiring — FS-iA6B Receiver to HUZZAH32 Feather
+
+| FS-iA6B Pin | Feather GPIO | Notes |
+|---|---|---|
+| iBUS (S.BUS port) | GPIO 16 (UART2 RX) | Single-wire serial, 115200 baud |
+| VCC | 5V (from BEC) | 4.0–6.5V DC |
+| GND | GND | Shared ground with FC |
+
+> **Note:** Use the **S.BUS/iBUS** port on the FS-iA6B (the small connector on the end of the receiver, not the individual CH1–CH6 servo ports). No bind cable is needed after initial binding.
+
 ---
 
 ## Repository Structure
@@ -45,10 +57,15 @@ quadcopter-fc/
 │   ├── MPU9250.cpp
 │   └── Drone_IMU_ESP32.ino
 │
-├── MPU9250_FreeRTOS/               # FreeRTOS-based flight controller
+├── MPU9250_FreeRTOS/               # FreeRTOS IMU with calibration
 │   ├── MPU9250.h
 │   ├── MPU9250.cpp
 │   └── Drone_IMU_FreeRTOS.ino
+│
+├── RC_Interface/                   # FlySky FS-iA6B iBUS + full flight controller
+│   ├── FlySkyiBUS.h                # iBUS driver header
+│   ├── FlySkyiBUS.cpp              # iBUS driver implementation
+│   └── RC_FlightController.ino    # Main sketch: RC + IMU + PID + FreeRTOS
 │
 └── README.md                       # This file
 ```
@@ -177,25 +194,48 @@ motorRR = throttle - rollOut + pitchOut - yawOut
 
 ---
 
-### 7. RC Receiver Interface
+### 7. RC Receiver Interface — FlySky FS-iA6B iBUS
 
-Decodes pilot input from the RC receiver.
+Decodes pilot input from the FlySky FS-iA6B receiver using the **iBUS protocol** — a single-wire digital serial bus running at 115200 baud. This is far more reliable and precise than PPM.
 
-**Supported protocols:**
-- **SBUS** — serial, inverted UART at 100 kbps (Futaba, FrSky)
-- **PPM** — pulse-position modulation via GPIO interrupt
+**Files:** `RC_Interface/FlySkyiBUS.h`, `RC_Interface/FlySkyiBUS.cpp`
 
-**Channels decoded:**
-| Channel | Function |
-|---------|----------|
-| CH1 | Roll |
-| CH2 | Pitch |
-| CH3 | Throttle |
-| CH4 | Yaw |
-| CH5 | Flight mode (Angle / Acro) |
-| CH6 | Arm / Disarm |
+**iBUS Frame Structure:**
+```
+Byte 0:    0x20  (frame length = 32)
+Byte 1:    0x40  (command byte)
+Bytes 2–29: 14 channels × 2 bytes little-endian (1000–2000 µs)
+Bytes 30–31: Checksum = 0xFFFF − Σ(bytes 0..29)
+Frame rate: ~7 ms (142 Hz)
+```
 
-**Safety:** Motors are disarmed on RC signal loss (failsafe). Re-arming requires throttle-low + arm switch cycle.
+**Switch / Knob Assignments (FS-i6X):**
+
+| Channel | FS-i6X Control | Function |
+|---------|---------------|----------|
+| CH1 | Right stick L/R | Roll |
+| CH2 | Right stick U/D | Pitch |
+| CH3 | Left stick U/D | Throttle |
+| CH4 | Left stick L/R | Yaw |
+| CH5 | SWA (2-pos) | Arm / Disarm |
+| CH6 | VrA (knob) | Calib trigger (fully CW) / PID tune |
+| CH7 | SWB (2-pos) | ANGLE ↔ ACRO flight mode |
+| CH8 | SWC (3-pos) | Spare |
+| CH9 | SWD (2-pos) | Spare |
+| CH10 | VrB (knob) | Spare / PID gain B |
+
+**Key API:**
+```cpp
+rcReceiver.begin(16, 17, 2);         // RX pin, TX pin, UART num
+rcReceiver.update();                  // call in tight loop / FreeRTOS task
+RCCommand cmd = rcReceiver.getCommand();  // normalised pilot intent
+// cmd.throttle  0.0–1.0
+// cmd.roll/pitch/yaw  -1.0–+1.0
+// cmd.mode      DISARMED / ANGLE / ACRO / FAILSAFE
+// cmd.calibRequest  true when VrA knob is fully CW
+```
+
+**Safety:** If no valid iBUS frame is received within 500 ms, the mode switches to `FlightMode::FAILSAFE`, motors are stopped, and a failsafe counter is incremented. Re-arming requires cycling SWA low then high again.
 
 ---
 
@@ -203,25 +243,20 @@ Decodes pilot input from the RC receiver.
 
 Provides real-time monitoring and in-field tuning via the USB serial port (115200 baud).
 
-**Serial command menu:**
+**Serial command menu (115200 baud):**
 
 | Command | Action |
 |---------|--------|
 | `C` | Launch full calibration wizard (Gyro → Accel → Mag) |
+| `V` | Verify sensors (WHO_AM_I + self-test) |
 | `S` | Save calibration to NVS flash |
 | `L` | Load calibration from NVS flash |
-| `V` | Verify all sensors (WHO_AM_I + self-test) |
-| `D` | Dump 10 raw EXT_SENS_DATA samples + SLV0 config |
-| `P` | Print current Roll / Pitch / Yaw + sensor values |
-| `R` | Reset / reboot |
+| `R` | Print all 10 raw RC channels in µs + frame rate |
+| `P` | Print attitude (R/P/Y), gyro rates, motor outputs, RC command |
+| `T` | Toggle telemetry stream on/off |
+| `D` | Dump 10 raw IMU EXT_SENS_DATA samples |
 
-**Telemetry output fields (50 Hz):**
-- Attitude: Roll, Pitch, Yaw (°)
-- Rates: Gx, Gy, Gz (°/s)
-- Acceleration: Ax, Ay, Az (g)
-- Magnetometer: Mx, My, Mz (µT)
-- Motor outputs: M1–M4 (DShot throttle value)
-- Loop timing: IMU dt (µs)
+**RC-triggered calibration:** Twist the VrA knob fully clockwise while disarmed to trigger the calibration sequence without touching a laptop. Results auto-save to NVS flash.
 
 ---
 

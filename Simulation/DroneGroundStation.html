@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 Drone Ground Station</title>
+<style>
+:root{
+  --bg:#060d14; --surface:#0c1824; --surface2:#111f2e; --border:#1a3550;
+  --accent:#3a9bd5; --green:#27ae60; --red:#e74c3c; --amber:#e8a020;
+  --dim:#3a6080; --text:#a8c8e0; --bright:#d0e8f8; --purple:#9b59b6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;font-size:12px;overflow:hidden}
+#app{display:grid;grid-template-rows:48px 1fr 235px;height:100vh}
+#header{display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+#main{display:grid;grid-template-columns:240px 1fr 270px;gap:1px;background:var(--border);overflow:hidden}
+.panel{background:var(--surface);padding:12px;overflow:hidden}
+.panel-title{font-size:9px;letter-spacing:2px;color:var(--dim);margin-bottom:10px;text-transform:uppercase}
+.h-title{font-size:14px;font-weight:bold;color:var(--bright);letter-spacing:3px}
+.h-sub{font-size:9px;color:var(--dim);letter-spacing:2px;margin-top:1px}
+.h-right{display:flex;align-items:center;gap:10px}
+button{padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:1px}
+button:hover{background:#12263a}
+#connect-btn{border-color:var(--accent);color:var(--accent)}
+#connect-btn.connected{border-color:var(--green);color:var(--green)}
+#sim-btn.active{border-color:var(--amber);color:var(--amber);background:#2a1d05}
+.led{width:8px;height:8px;border-radius:50%;background:var(--red)}
+.led.on{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+#mode-badge{padding:4px 12px;border-radius:3px;font-size:11px;font-weight:bold;letter-spacing:2px;border:1px solid;transition:all .3s}
+
+#centre{display:grid;grid-template-rows:1fr auto;gap:1px;background:var(--border)}
+#attitude-panel{background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;position:relative}
+#motor-panel{background:var(--surface);padding:12px}
+#ai-canvas{border-radius:50%;border:2px solid var(--accent)}
+#compass-canvas{border-radius:4px;border:1px solid var(--border);margin-top:8px}
+
+.stick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.stick-label{font-size:9px;color:var(--dim);text-align:center;margin-bottom:3px}
+canvas.stick{border:1px solid var(--border);border-radius:3px;display:block;margin:0 auto}
+.row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #0a1a28}
+.name{color:var(--dim)}
+.val{color:var(--bright);font-weight:bold}
+.bar-wrap{background:#0a1a28;border-radius:2px;height:6px;margin-top:2px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:width .08s,background .08s}
+.motor-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.motor-cell{text-align:center}
+.motor-name{font-size:9px;color:var(--dim);margin-bottom:3px}
+.motor-pct{font-size:15px;font-weight:bold;color:var(--bright)}
+.imu-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #0a1a28}
+.imu-name{color:var(--dim);font-size:11px}
+.imu-val{color:var(--bright);font-size:15px;font-weight:bold}
+.imu-unit{color:var(--dim);font-size:9px;margin-left:2px}
+#footer{border-top:1px solid var(--border);background:var(--surface);padding:8px 12px;overflow:hidden}
+#status-row{display:flex;gap:14px;align-items:center;margin-bottom:6px}
+.stat-item{display:flex;gap:6px;align-items:center}
+.stat-label{color:var(--dim);font-size:9px;letter-spacing:1px}
+.stat-val{color:var(--bright);font-size:11px;font-weight:bold}
+#log-wrap{height:175px;overflow-y:auto;display:flex;flex-direction:column;gap:1px}
+.log-line{padding:1px 4px;font-size:10px;white-space:nowrap;border-radius:1px}
+.log-telem{color:#3a9bd5}.log-cal{color:var(--accent)}.log-boot{color:var(--green)}.log-rc{color:var(--amber)}.log-warn{color:var(--red)}.log-other{color:#2a4a60}
+input[type=range]{width:100%;accent-color:#3a9bd5}
+.slider-block{margin:8px 0}
+.slider-title{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px}
+.chip{border:1px solid var(--border);border-radius:999px;padding:2px 7px;color:var(--dim);font-size:9px}
+#parse-status.good{color:var(--green)} #parse-status.bad{color:var(--red)}
+#help-overlay{position:absolute;right:14px;top:14px;width:310px;background:rgba(12,24,36,.94);border:1px solid var(--accent);border-radius:8px;padding:12px;box-shadow:0 0 18px rgba(58,155,213,.25);display:none;z-index:10}
+#help-overlay.show{display:block}
+#help-overlay h3{color:var(--bright);font-size:13px;margin-bottom:8px}
+#help-overlay p{line-height:1.4;margin-bottom:7px}
+#raw-line{font-size:10px;color:#6a9aba;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:470px}
+kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(--bright)}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0a1624}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div>
+      <div class="h-title">ESP32 QUADCOPTER · GROUND STATION</div>
+      <div class="h-sub">MPU-9250 · RC Controller · FreeRTOS · 115200 baud</div>
+    </div>
+    <div class="h-right">
+      <div class="led" id="led"></div><span id="conn-status" style="font-size:9px;color:var(--dim)">OFFLINE</span>
+      <div id="mode-badge">UNKNOWN</div>
+      <button id="connect-btn" onclick="toggleSerial()">CONNECT SERIAL</button>
+      <button id="sim-btn" onclick="toggleSim()">SIM MODE</button>
+      <button onclick="toggleHelp()">HOW IT WORKS</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <div class="panel">
+      <div class="panel-title">RC Inputs</div>
+      <div class="stick-grid">
+        <div><div class="stick-label">LEFT Thr/Yaw</div><canvas class="stick" id="stick-left" width="88" height="88"></canvas></div>
+        <div><div class="stick-label">RIGHT Pit/Roll</div><canvas class="stick" id="stick-right" width="88" height="88"></canvas></div>
+      </div>
+      <div class="row"><span class="name">THROTTLE</span><span class="val" id="rc-thr">0%</span></div><div class="bar-wrap"><div class="bar-fill" id="bar-thr"></div></div>
+      <div class="row"><span class="name">ROLL CMD</span><span class="val" id="rc-roll">0.00</span></div><div class="bar-wrap"><div class="bar-fill" id="bar-roll"></div></div>
+      <div class="row"><span class="name">PITCH CMD</span><span class="val" id="rc-pitch">0.00</span></div><div class="bar-wrap"><div class="bar-fill" id="bar-pitch"></div></div>
+      <div class="row"><span class="name">YAW CMD</span><span class="val" id="rc-yaw">0.00</span></div><div class="bar-wrap"><div class="bar-fill" id="bar-yaw"></div></div>
+      <div class="row" style="margin-top:8px"><span class="name">RC FRAME RATE</span><span class="val" id="rc-hz">0 Hz</span></div>
+
+      <div style="margin-top:14px" class="panel-title">Manual Test Sliders</div>
+      <div class="slider-block"><div class="slider-title"><span>Throttle</span><span id="sl-thr-val">0.00</span></div><input id="sl-thr" type="range" min="0" max="1" step="0.01" value="0"></div>
+      <div class="slider-block"><div class="slider-title"><span>Roll</span><span id="sl-roll-val">0.00</span></div><input id="sl-roll" type="range" min="-1" max="1" step="0.01" value="0"></div>
+      <div class="slider-block"><div class="slider-title"><span>Pitch</span><span id="sl-pitch-val">0.00</span></div><input id="sl-pitch" type="range" min="-1" max="1" step="0.01" value="0"></div>
+      <div class="slider-block"><div class="slider-title"><span>Yaw</span><span id="sl-yaw-val">0.00</span></div><input id="sl-yaw" type="range" min="-1" max="1" step="0.01" value="0"></div>
+    </div>
+
+    <div id="centre">
+      <div id="attitude-panel">
+        <div class="panel-title" style="align-self:flex-start">Attitude Indicator</div>
+        <div id="help-overlay">
+          <h3>How this screen is created</h3>
+          <p><b>1.</b> ESP32 prints one text telemetry line over USB serial.</p>
+          <p><b>2.</b> Browser reads that line using Web Serial.</p>
+          <p><b>3.</b> Parser extracts roll, pitch, yaw, RC commands, motors, mode, and RC Hz.</p>
+          <p><b>4.</b> State object is updated.</p>
+          <p><b>5.</b> Render function redraws meters, bars, sticks, motors, compass, and artificial horizon.</p>
+          <p>Use <kbd>SIM MODE</kbd> or sliders to test UI without ESP32.</p>
+        </div>
+        <canvas id="ai-canvas" width="220" height="220"></canvas>
+        <canvas id="compass-canvas" width="180" height="82"></canvas>
+        <div style="display:flex;gap:28px;margin-top:10px">
+          <div style="text-align:center"><div style="font-size:9px;color:var(--dim)">ROLL</div><div style="font-size:18px;font-weight:bold;color:var(--bright)" id="val-roll">+0.0°</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:var(--dim)">PITCH</div><div style="font-size:18px;font-weight:bold;color:var(--bright)" id="val-pitch">+0.0°</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:var(--dim)">YAW</div><div style="font-size:18px;font-weight:bold;color:var(--bright)" id="val-yaw">0.0°</div></div>
+        </div>
+      </div>
+      <div id="motor-panel">
+        <div class="panel-title">Motor Outputs</div>
+        <div class="motor-grid">
+          <div class="motor-cell"><div class="motor-name">FL · FRONT LEFT</div><div class="motor-pct" id="mot-fl">0%</div><div class="bar-wrap"><div class="bar-fill" id="bar-fl"></div></div></div>
+          <div class="motor-cell"><div class="motor-name">FR · FRONT RIGHT</div><div class="motor-pct" id="mot-fr">0%</div><div class="bar-wrap"><div class="bar-fill" id="bar-fr"></div></div></div>
+          <div class="motor-cell"><div class="motor-name">RL · REAR LEFT</div><div class="motor-pct" id="mot-rl">0%</div><div class="bar-wrap"><div class="bar-fill" id="bar-rl"></div></div></div>
+          <div class="motor-cell"><div class="motor-name">RR · REAR RIGHT</div><div class="motor-pct" id="mot-rr">0%</div><div class="bar-wrap"><div class="bar-fill" id="bar-rr"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">IMU · AHRS</div>
+      <div class="imu-row"><span class="imu-name">Roll</span><span><span class="imu-val" id="imu-roll">+0.0</span><span class="imu-unit">°</span></span></div>
+      <div class="imu-row"><span class="imu-name">Pitch</span><span><span class="imu-val" id="imu-pitch">+0.0</span><span class="imu-unit">°</span></span></div>
+      <div class="imu-row"><span class="imu-name">Yaw</span><span><span class="imu-val" id="imu-yaw">0.0</span><span class="imu-unit">°</span></span></div>
+
+      <div style="margin-top:12px" class="panel-title">Telemetry Health</div>
+      <div class="imu-row"><span class="imu-name">Parser</span><span class="val" id="parse-status">WAITING</span></div>
+      <div class="imu-row"><span class="imu-name">Tick</span><span class="val" id="sys-tick">0</span></div>
+      <div class="imu-row"><span class="imu-name">RC rate</span><span class="val"><span id="sys-hz">0</span> Hz</span></div>
+      <div class="imu-row"><span class="imu-name">Lines/s</span><span class="val" id="sys-lps">0</span></div>
+      <div class="imu-row"><span class="imu-name">Age</span><span class="val" id="age-ms">—</span></div>
+
+      <div style="margin-top:12px" class="panel-title">Last Parsed Values</div>
+      <div id="debug-values" style="font-size:10px;line-height:1.55;color:#6a9aba"></div>
+    </div>
+  </div>
+
+  <div id="footer">
+    <div id="status-row">
+      <div class="stat-item"><span class="stat-label">LOG</span><span class="stat-val" id="log-count">0 lines</span></div>
+      <div class="stat-item"><span class="stat-label">PORT</span><span class="stat-val" id="port-name">—</span></div>
+      <div class="stat-item"><span class="stat-label">RAW</span><span class="stat-val" id="raw-line">—</span></div>
+      <button onclick="clearLog()">CLEAR</button>
+    </div>
+    <div id="log-wrap"></div>
+  </div>
+</div>
+
+<script>
+let state={roll:0,pitch:0,yaw:0,thr:0,rcRoll:0,rcPitch:0,rcYaw:0,motFL:0,motFR:0,motRL:0,motRR:0,mode:'UNKNOWN',rcHz:0,tick:0};
+let serialPort=null, reader=null, connected=false, keepReading=false, lineBuffer='', logLines=[];
+let linesThisSec=0,lps=0,lastTelemMs=0,simTimer=null,simT=0;
+let textDecoder=new TextDecoder();
+
+setInterval(()=>{lps=linesThisSec;linesThisSec=0;},1000);
+setInterval(()=>{const age=lastTelemMs?Date.now()-lastTelemMs:null;setText('age-ms',age?age+' ms':'—');},250);
+
+function parseLine(line){
+  document.getElementById('raw-line').textContent=line;
+  const re=/\[\s*(\d+)\s*\]\s+([A-Za-z0-9_]+)\s*\|\s*R\s*=\s*([+\-]?\d+(?:\.\d+)?)\s+P\s*=\s*([+\-]?\d+(?:\.\d+)?)\s+Y\s*=\s*([+\-]?\d+(?:\.\d+)?)\s*\|\s*T\s*=\s*([+\-]?\d+(?:\.\d+)?)\s+R\s*=\s*([+\-]?\d+(?:\.\d+)?)\s+P\s*=\s*([+\-]?\d+(?:\.\d+)?)\s+Y\s*=\s*([+\-]?\d+(?:\.\d+)?)\s*\|\s*MOT\s+([+\-]?\d+(?:\.\d+)?)\s+([+\-]?\d+(?:\.\d+)?)\s+([+\-]?\d+(?:\.\d+)?)\s+([+\-]?\d+(?:\.\d+)?)\s*\|\s*RC@([+\-]?\d+(?:\.\d+)?)Hz/i;
+  const m=line.match(re);
+  if(m){
+    state.tick=parseInt(m[1],10);
+    state.mode=normalizeMode(m[2]);
+    state.roll=parseFloat(m[3]); state.pitch=parseFloat(m[4]); state.yaw=parseFloat(m[5]);
+    state.thr=parseFloat(m[6]); state.rcRoll=parseFloat(m[7]); state.rcPitch=parseFloat(m[8]); state.rcYaw=parseFloat(m[9]);
+    state.motFL=parseFloat(m[10]); state.motFR=parseFloat(m[11]); state.motRL=parseFloat(m[12]); state.motRR=parseFloat(m[13]);
+    state.rcHz=parseFloat(m[14]);
+    setParser(true); return 'telem';
+  }
+  setParser(false);
+  if(line.includes('[CAL]'))return'cal'; if(line.includes('[BOOT]'))return'boot'; if(line.includes('[RC]'))return'rc';
+  if(/WARN|FAIL|Timeout/i.test(line))return'warn'; return'other';
+}
+function normalizeMode(x){x=(x||'UNKNOWN').toUpperCase(); if(x==='DISARMD')return'DISARMED'; if(x==='FAILSFE')return'FAILSAFE'; return x;}
+function setParser(ok){const el=document.getElementById('parse-status');el.textContent=ok?'OK':'NO MATCH';el.className=ok?'good':'bad';}
+
+async function toggleSerial(){
+  if(connected){await disconnectSerial();return;}
+  if(!('serial'in navigator)){alert('Use Chrome or Edge. Web Serial is not available in this browser.');return;}
+  try{serialPort=await navigator.serial.requestPort();}catch(e){return;}
+  try{await serialPort.open({baudRate:115200,dataBits:8,stopBits:1,parity:'none'});}
+  catch(e){addLog('Cannot open port: '+e.message+' — close Arduino Serial Monitor first','warn');serialPort=null;return;}
+  connected=true;keepReading=true;lineBuffer='';setConnUI(true);readLoop();
+}
+async function disconnectSerial(){
+  keepReading=false;connected=false;
+  if(reader){try{await reader.cancel();}catch(_){} try{reader.releaseLock();}catch(_){} reader=null;}
+  if(serialPort){try{await serialPort.close();}catch(_){} serialPort=null;}
+  setConnUI(false);addLog('[GS] Disconnected.','boot');
+}
+function setConnUI(on){
+  document.getElementById('connect-btn').textContent=on?'DISCONNECT':'CONNECT SERIAL';
+  document.getElementById('connect-btn').classList.toggle('connected',on);
+  document.getElementById('led').classList.toggle('on',on);
+  document.getElementById('conn-status').textContent=on?'LIVE':'OFFLINE';
+  document.getElementById('port-name').textContent=on?'COM port':'—';
+}
+async function readLoop(){
+  reader=serialPort.readable.getReader();addLog('[GS] Serial connected — reading at 115200 baud','boot');
+  try{
+    while(keepReading){
+      let result; try{result=await reader.read();}catch(e){addLog('[GS] Read error: '+e.message,'warn');break;}
+      if(result.done)break;
+      lineBuffer+=textDecoder.decode(result.value,{stream:true});
+      const parts=lineBuffer.split(/\r?\n/); lineBuffer=parts.pop(); parts.forEach(processLine);
+    }
+  }finally{
+    try{reader.releaseLock();}catch(_){} reader=null;
+    if(connected){connected=false;setConnUI(false);addLog('[GS] Connection lost — click CONNECT SERIAL to reconnect','warn');}
+  }
+}
+function processLine(line){
+  line=line.trim(); if(!line)return; linesThisSec++;
+  const type=parseLine(line); addLog(line,type);
+  if(type==='telem'){lastTelemMs=Date.now();requestAnimationFrame(render);}
+}
+
+function toggleSim(){
+  const btn=document.getElementById('sim-btn');
+  if(simTimer){clearInterval(simTimer);simTimer=null;btn.classList.remove('active');addLog('[SIM] stopped','boot');return;}
+  btn.classList.add('active'); addLog('[SIM] started — generated ESP32 telemetry lines','boot');
+  simTimer=setInterval(()=>{
+    simT+=0.08;
+    const roll=25*Math.sin(simT), pitch=12*Math.cos(simT*.8), yaw=(simT*35)%360;
+    const thr=parseFloat(document.getElementById('sl-thr').value) || (0.45+0.25*Math.sin(simT*.5));
+    const rr=parseFloat(document.getElementById('sl-roll').value), pp=parseFloat(document.getElementById('sl-pitch').value), yy=parseFloat(document.getElementById('sl-yaw').value);
+    const fl=clamp(thr+pp*0.12+rr*0.12-yy*0.08,0,1), fr=clamp(thr+pp*0.12-rr*0.12+yy*0.08,0,1);
+    const rl=clamp(thr-pp*0.12+rr*0.12+yy*0.08,0,1), rrv=clamp(thr-pp*0.12-rr*0.12-yy*0.08,0,1);
+    const line=`[ ${Math.round(simT*100)}] ANGLE | R=${fmtNum(roll,1)} P=${fmtNum(pitch,1)} Y=${yaw.toFixed(1)} | T=${thr.toFixed(2)} R=${fmtNum(rr,2)} P=${fmtNum(pp,2)} Y=${fmtNum(yy,2)} | MOT ${fl.toFixed(2)} ${fr.toFixed(2)} ${rl.toFixed(2)} ${rrv.toFixed(2)} | RC@145Hz`;
+    processLine(line);
+  },100);
+}
+['thr','roll','pitch','yaw'].forEach(id=>{
+  document.getElementById('sl-'+id).addEventListener('input',()=>{
+    document.getElementById('sl-'+id+'-val').textContent=parseFloat(document.getElementById('sl-'+id).value).toFixed(2);
+    if(!simTimer){
+      state.thr=parseFloat(document.getElementById('sl-thr').value); state.rcRoll=parseFloat(document.getElementById('sl-roll').value);
+      state.rcPitch=parseFloat(document.getElementById('sl-pitch').value); state.rcYaw=parseFloat(document.getElementById('sl-yaw').value);
+      state.roll=state.rcRoll*35; state.pitch=state.rcPitch*25; state.yaw=(state.yaw+state.rcYaw*5+360)%360; state.mode='MANUAL';
+      const t=state.thr,r=state.rcRoll,p=state.rcPitch,y=state.rcYaw;
+      state.motFL=clamp(t+p*.12+r*.12-y*.08,0,1); state.motFR=clamp(t+p*.12-r*.12+y*.08,0,1);
+      state.motRL=clamp(t-p*.12+r*.12+y*.08,0,1); state.motRR=clamp(t-p*.12-r*.12-y*.08,0,1);
+      render();
+    }
+  });
+});
+function toggleHelp(){document.getElementById('help-overlay').classList.toggle('show');}
+
+function render(){
+  const s=state;
+  const badge=document.getElementById('mode-badge');
+  const modeStyles={DISARMED:['#1a3a2a','#27ae60','#27ae60'],ANGLE:['#1a2a4a','#3a9bd5','#3a9bd5'],ACRO:['#3a1a2a','#e74c3c','#e74c3c'],FAILSAFE:['#3a2000','#e8a020','#e8a020'],MANUAL:['#2a1a3a','#9b59b6','#9b59b6']};
+  const ms=modeStyles[s.mode]||['#1a1a1a','#3a3a3a','#5a5a5a']; badge.style.background=ms[0];badge.style.borderColor=ms[1];badge.style.color=ms[2];badge.style.textShadow=`0 0 6px ${ms[1]}`; badge.textContent=s.mode;
+
+  setText('imu-roll',fmt(s.roll,1,true)); setText('imu-pitch',fmt(s.pitch,1,true)); setText('imu-yaw',s.yaw.toFixed(1));
+  setText('val-roll',fmt(s.roll,1,true)+'°'); setText('val-pitch',fmt(s.pitch,1,true)+'°'); setText('val-yaw',s.yaw.toFixed(1)+'°');
+  setText('rc-thr',Math.round(s.thr*100)+'%'); setText('rc-roll',fmt(s.rcRoll,2)); setText('rc-pitch',fmt(s.rcPitch,2)); setText('rc-yaw',fmt(s.rcYaw,2));
+  setText('rc-hz',s.rcHz.toFixed(0)+' Hz'); setText('sys-tick',s.tick); setText('sys-hz',s.rcHz.toFixed(0)); setText('sys-lps',lps);
+  setBar('bar-thr',s.thr*100,s.thr>.7?'#e74c3c':s.thr>.3?'#e8a020':'#27ae60');
+  setBar('bar-roll',50+s.rcRoll*50,'#3a9bd5'); setBar('bar-pitch',50+s.rcPitch*50,'#3a9bd5'); setBar('bar-yaw',50+s.rcYaw*50,'#3a9bd5');
+  [['fl',s.motFL],['fr',s.motFR],['rl',s.motRL],['rr',s.motRR]].forEach(([id,v])=>{const pct=Math.round(v*100);setText('mot-'+id,pct+'%');const col=pct>70?'#e74c3c':pct>30?'#e8a020':pct>0?'#27ae60':'#3a3a3a';document.getElementById('mot-'+id).style.color=col;setBar('bar-'+id,pct,col);});
+  drawAI(s.roll,s.pitch); drawCompass(s.yaw); drawStick('stick-left',s.rcYaw,s.thr*2-1); drawStick('stick-right',s.rcRoll,s.rcPitch);
+  setText('log-count',logLines.length+' lines');
+  document.getElementById('debug-values').innerHTML=`mode=${s.mode}<br>thr=${s.thr.toFixed(2)} rollCmd=${s.rcRoll.toFixed(2)}<br>pitchCmd=${s.rcPitch.toFixed(2)} yawCmd=${s.rcYaw.toFixed(2)}<br>motors=[${s.motFL.toFixed(2)}, ${s.motFR.toFixed(2)}, ${s.motRL.toFixed(2)}, ${s.motRR.toFixed(2)}]`;
+}
+function drawAI(roll,pitch){
+  const c=document.getElementById('ai-canvas'),ctx=c.getContext('2d'),w=c.width,h=c.height,cx=w/2,cy=h/2,r=w/2-2;
+  ctx.clearRect(0,0,w,h);ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.clip();ctx.translate(cx,cy);ctx.rotate(-roll*Math.PI/180);ctx.translate(0,(pitch/90)*r*1.4);
+  ctx.fillStyle='#1a5a9a';ctx.fillRect(-w,-h*2,w*2,h*2);ctx.fillStyle='#6b4226';ctx.fillRect(-w,0,w*2,h*2);ctx.strokeStyle='#d4b483';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-w,0);ctx.lineTo(w,0);ctx.stroke();
+  for(let deg=-80;deg<=80;deg+=10){if(deg===0)continue;const y=-(deg/90)*r*1.4,lw=Math.abs(deg)%30===0?34:20;ctx.strokeStyle='#d4b483';ctx.lineWidth=Math.abs(deg)%30===0?1.5:1;ctx.beginPath();ctx.moveTo(-lw,y);ctx.lineTo(lw,y);ctx.stroke();if(Math.abs(deg)%30===0){ctx.fillStyle='#d4b483';ctx.font='9px monospace';ctx.textAlign='left';ctx.fillText((deg>0?'+':'')+deg,lw+4,y+4);}}
+  ctx.restore();ctx.save();ctx.translate(cx,cy);ctx.strokeStyle='#f0d040';ctx.lineWidth=3;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-45,0);ctx.lineTo(-18,0);ctx.stroke();ctx.beginPath();ctx.moveTo(18,0);ctx.lineTo(45,0);ctx.stroke();ctx.beginPath();ctx.moveTo(0,-5);ctx.lineTo(0,-15);ctx.stroke();ctx.fillStyle='#f0d040';ctx.beginPath();ctx.arc(0,0,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#3a9bd5';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
+  for(let d=-60;d<=60;d+=10){const rad=(d-90)*Math.PI/180,rl=d%30===0?r-14:r-7;ctx.strokeStyle='#6a9aba';ctx.lineWidth=d%30===0?1.5:1;ctx.beginPath();ctx.moveTo(r*Math.cos(rad),r*Math.sin(rad));ctx.lineTo(rl*Math.cos(rad),rl*Math.sin(rad));ctx.stroke();}
+  const rr=(-roll-90)*Math.PI/180;ctx.fillStyle='#f0d040';ctx.beginPath();ctx.moveTo((r-2)*Math.cos(rr),(r-2)*Math.sin(rr));ctx.lineTo((r-12)*Math.cos(rr-.06),(r-12)*Math.sin(rr-.06));ctx.lineTo((r-12)*Math.cos(rr+.06),(r-12)*Math.sin(rr+.06));ctx.closePath();ctx.fill();ctx.restore();
+}
+function drawCompass(yaw){
+  const c=document.getElementById('compass-canvas'),ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0c1824';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#1a3550';ctx.strokeRect(0,0,w,h);const px=w/90;
+  for(let d=-60;d<=150;d+=10){const deg=((Math.round(yaw/10)*10+d)%360+360)%360,x=w/2+d*px;if(x<0||x>w)continue;const major=deg%30===0;ctx.strokeStyle=major?'#3a9bd5':'#1a3550';ctx.lineWidth=major?1.5:1;ctx.beginPath();ctx.moveTo(x,major?0:8);ctx.lineTo(x,22);ctx.stroke();if(major){const label={0:'N',90:'E',180:'S',270:'W'}[deg]||deg;ctx.fillStyle=[0,90,180,270].includes(deg)?'#3a9bd5':'#6a8aaa';ctx.font=[0,90,180,270].includes(deg)?'bold 9px monospace':'8px monospace';ctx.textAlign='center';ctx.fillText(label,x,36);}}
+  ctx.strokeStyle='#f0d040';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,18);ctx.stroke();ctx.fillStyle='#f0d040';ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2-4,8);ctx.lineTo(w/2+4,8);ctx.closePath();ctx.fill();ctx.fillStyle='#d0e8f8';ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillText(yaw.toFixed(1)+'°',w/2,60);ctx.fillStyle='#3a6080';ctx.font='9px monospace';ctx.fillText('HEADING',w/2,74);
+}
+function drawStick(id,x,y){
+  const c=document.getElementById(id),ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0a1824';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#1a3550';ctx.strokeRect(0,0,w,h);ctx.strokeStyle='#0f2535';ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();const sx=w/2+clamp(x,-1,1)*(w/2-9),sy=h/2-clamp(y,-1,1)*(h/2-9);ctx.fillStyle='#3a9bd5';ctx.shadowColor='#3a9bd5';ctx.shadowBlur=8;ctx.beginPath();ctx.arc(sx,sy,6,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+}
+function addLog(text,type){logLines.push({text,type});if(logLines.length>500)logLines.splice(0,100);const wrap=document.getElementById('log-wrap');const div=document.createElement('div');div.className='log-line log-'+type;div.textContent=text;wrap.appendChild(div);if(wrap.children.length>300)wrap.removeChild(wrap.children[0]);wrap.scrollTop=wrap.scrollHeight;}
+function clearLog(){logLines=[];document.getElementById('log-wrap').innerHTML='';setText('log-count','0 lines');}
+function setText(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+function setBar(id,pct,color){const el=document.getElementById(id);if(!el)return;el.style.width=clamp(pct,0,100)+'%';if(color)el.style.background=color;}
+function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
+function fmt(v,dp,sign=false){const s=Number(v).toFixed(dp);return sign?(v>=0?'+'+s:s):s;}
+function fmtNum(v,dp){return (v>=0?'+':'')+v.toFixed(dp);}
+render();
+</script>
+</body>
+</html>
