@@ -79,7 +79,7 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
   <div id="header">
     <div>
       <div class="h-title">ESP32 QUADCOPTER · GROUND STATION</div>
-      <div class="h-sub">MPU-9250 · RC Controller · FreeRTOS · Serial/WiFi telemetry</div>
+      <div class="h-sub">MPU-9250 · BMP280 · RC Controller · FreeRTOS · CPU telemetry</div>
     </div>
     <div class="h-right">
       <div class="led" id="led"></div><span id="conn-status" style="font-size:9px;color:var(--dim)">OFFLINE</span>
@@ -119,7 +119,7 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
           <p><b>1.</b> ESP32 prints one text telemetry line over USB serial.</p>
           <p><b>2A.</b> USB mode: browser reads that line using Web Serial.</p>
           <p><b>2B.</b> WiFi mode: connect to ESP32 hotspot, then browser polls <b>192.168.4.1/telemetry</b>.</p>
-          <p><b>3.</b> Parser/API extracts roll, pitch, yaw, RC commands, motors, mode, and RC Hz.</p>
+          <p><b>3.</b> Parser/API extracts roll, pitch, yaw, RC commands, motors, BMP280, CPU load, mode, and RC Hz.</p>
           <p><b>4.</b> State object is updated.</p>
           <p><b>5.</b> Render function redraws meters, bars, sticks, motors, compass, and artificial horizon.</p>
           <p>Use <kbd>SIM MODE</kbd> or sliders to test UI without ESP32.</p>
@@ -155,6 +155,13 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
       <div class="imu-row"><span class="imu-name">Altitude</span><span><span class="imu-val" id="bmp-altitude">—</span><span class="imu-unit">m</span></span></div>
       <div class="imu-row"><span class="imu-name">BMP status</span><span class="val" id="bmp-status">WAITING</span></div>
 
+      <div style="margin-top:12px" class="panel-title">ESP32 CPU Load</div>
+      <div class="imu-row"><span class="imu-name">Core 0</span><span><span class="imu-val" id="cpu-core0">—</span><span class="imu-unit">%</span></span></div>
+      <div class="bar-wrap"><div class="bar-fill" id="bar-cpu0"></div></div>
+      <div class="imu-row"><span class="imu-name">Core 1</span><span><span class="imu-val" id="cpu-core1">—</span><span class="imu-unit">%</span></span></div>
+      <div class="bar-wrap"><div class="bar-fill" id="bar-cpu1"></div></div>
+      <div class="imu-row"><span class="imu-name">CPU status</span><span class="val" id="cpu-status">WAITING</span></div>
+
       <div style="margin-top:12px" class="panel-title">Telemetry Health</div>
       <div class="imu-row"><span class="imu-name">Parser</span><span class="val" id="parse-status">WAITING</span></div>
       <div class="imu-row"><span class="imu-name">Tick</span><span class="val" id="sys-tick">0</span></div>
@@ -179,7 +186,7 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
 </div>
 
 <script>
-let state={roll:0,pitch:0,yaw:0,thr:0,rcRoll:0,rcPitch:0,rcYaw:0,motFL:0,motFR:0,motRL:0,motRR:0,mode:'UNKNOWN',rcHz:0,tick:0,bmpTempC:NaN,bmpPressureHpa:NaN,bmpAltitudeM:NaN,bmpValid:false};
+let state={roll:0,pitch:0,yaw:0,thr:0,rcRoll:0,rcPitch:0,rcYaw:0,motFL:0,motFR:0,motRL:0,motRR:0,mode:'UNKNOWN',rcHz:0,tick:0,bmpTempC:NaN,bmpPressureHpa:NaN,bmpAltitudeM:NaN,bmpValid:false,cpuCore0:NaN,cpuCore1:NaN,cpuValid:false};
 let serialPort=null, reader=null, connected=false, keepReading=false, lineBuffer='', logLines=[];
 let wifiConnected=false, wifiTimer=null, wifiUrl='http://192.168.4.1/telemetry';
 let linesThisSec=0,lps=0,lastTelemMs=0,simTimer=null,simT=0;
@@ -201,6 +208,8 @@ function parseLine(line){
     state.rcHz=parseFloat(m[14]);
     const bm=line.match(/BMP\s+T\s*=\s*([+\-]?\d+(?:\.\d+)?)C\s+P\s*=\s*([+\-]?\d+(?:\.\d+)?)hPa\s+ALT\s*=\s*([+\-]?\d+(?:\.\d+)?)m\s+(OK|NO_BMP)/i);
     if(bm){state.bmpTempC=parseFloat(bm[1]);state.bmpPressureHpa=parseFloat(bm[2]);state.bmpAltitudeM=parseFloat(bm[3]);state.bmpValid=bm[4].toUpperCase()==='OK';}
+    const cm=line.match(/CPU\s+C0\s*=\s*([+\-]?\d+(?:\.\d+)?)%\s+C1\s*=\s*([+\-]?\d+(?:\.\d+)?)%\s+(OK|WAIT)/i);
+    if(cm){state.cpuCore0=parseFloat(cm[1]);state.cpuCore1=parseFloat(cm[2]);state.cpuValid=cm[3].toUpperCase()==='OK';}
     setParser(true); return 'telem';
   }
   setParser(false);
@@ -263,6 +272,9 @@ function applyTelemetryJson(j){
   state.bmpPressureHpa=Number(j.bmpPressureHpa);
   state.bmpAltitudeM=Number(j.bmpAltitudeM);
   state.bmpValid=!!j.bmpValid;
+  state.cpuCore0=Number(j.cpuCore0);
+  state.cpuCore1=Number(j.cpuCore1);
+  state.cpuValid=!!j.cpuValid;
   setParser(true); lastTelemMs=Date.now(); linesThisSec++;
   document.getElementById('raw-line').textContent=JSON.stringify(j);
   requestAnimationFrame(render);
@@ -313,7 +325,8 @@ function toggleSim(){
     const fl=clamp(thr+pp*0.12+rr*0.12-yy*0.08,0,1), fr=clamp(thr+pp*0.12-rr*0.12+yy*0.08,0,1);
     const rl=clamp(thr-pp*0.12+rr*0.12+yy*0.08,0,1), rrv=clamp(thr-pp*0.12-rr*0.12-yy*0.08,0,1);
     const bmpTemp=24+1.5*Math.sin(simT*.4), bmpPressure=1013.25-2*Math.sin(simT*.2), bmpAlt=44330*(1-Math.pow(bmpPressure/1013.25,0.19029495));
-    const line=`[ ${Math.round(simT*100)}] ANGLE | R=${fmtNum(roll,1)} P=${fmtNum(pitch,1)} Y=${yaw.toFixed(1)} | T=${thr.toFixed(2)} R=${fmtNum(rr,2)} P=${fmtNum(pp,2)} Y=${fmtNum(yy,2)} | MOT ${fl.toFixed(2)} ${fr.toFixed(2)} ${rl.toFixed(2)} ${rrv.toFixed(2)} | RC@145Hz | BMP T=${bmpTemp.toFixed(1)}C P=${bmpPressure.toFixed(1)}hPa ALT=${bmpAlt.toFixed(1)}m OK`;
+    const cpu0=22+12*Math.sin(simT*.3), cpu1=35+18*Math.cos(simT*.25);
+    const line=`[ ${Math.round(simT*100)}] ANGLE | R=${fmtNum(roll,1)} P=${fmtNum(pitch,1)} Y=${yaw.toFixed(1)} | T=${thr.toFixed(2)} R=${fmtNum(rr,2)} P=${fmtNum(pp,2)} Y=${fmtNum(yy,2)} | MOT ${fl.toFixed(2)} ${fr.toFixed(2)} ${rl.toFixed(2)} ${rrv.toFixed(2)} | RC@145Hz | BMP T=${bmpTemp.toFixed(1)}C P=${bmpPressure.toFixed(1)}hPa ALT=${bmpAlt.toFixed(1)}m OK | CPU C0=${cpu0.toFixed(0)}% C1=${cpu1.toFixed(0)}% OK`;
     processLine(line);
   },100);
 }
@@ -344,6 +357,11 @@ function render(){
   setText('bmp-pressure',Number.isFinite(s.bmpPressureHpa)?s.bmpPressureHpa.toFixed(1):'—');
   setText('bmp-altitude',Number.isFinite(s.bmpAltitudeM)?s.bmpAltitudeM.toFixed(1):'—');
   const bmpEl=document.getElementById('bmp-status'); if(bmpEl){bmpEl.textContent=s.bmpValid?'OK':'NO DATA';bmpEl.style.color=s.bmpValid?'#27ae60':'#e74c3c';}
+  setText('cpu-core0',Number.isFinite(s.cpuCore0)?s.cpuCore0.toFixed(0):'—');
+  setText('cpu-core1',Number.isFinite(s.cpuCore1)?s.cpuCore1.toFixed(0):'—');
+  setBar('bar-cpu0',Number.isFinite(s.cpuCore0)?s.cpuCore0:0,cpuColor(s.cpuCore0));
+  setBar('bar-cpu1',Number.isFinite(s.cpuCore1)?s.cpuCore1:0,cpuColor(s.cpuCore1));
+  const cpuEl=document.getElementById('cpu-status'); if(cpuEl){cpuEl.textContent=s.cpuValid?'OK':'CALIBRATING';cpuEl.style.color=s.cpuValid?'#27ae60':'#e8a020';}
   setText('val-roll',fmt(s.roll,1,true)+'°'); setText('val-pitch',fmt(s.pitch,1,true)+'°'); setText('val-yaw',s.yaw.toFixed(1)+'°');
   setText('rc-thr',Math.round(s.thr*100)+'%'); setText('rc-roll',fmt(s.rcRoll,2)); setText('rc-pitch',fmt(s.rcPitch,2)); setText('rc-yaw',fmt(s.rcYaw,2));
   setText('rc-hz',s.rcHz.toFixed(0)+' Hz'); setText('sys-tick',s.tick); setText('sys-hz',s.rcHz.toFixed(0)); setText('sys-lps',lps);
@@ -352,7 +370,7 @@ function render(){
   [['fl',s.motFL],['fr',s.motFR],['rl',s.motRL],['rr',s.motRR]].forEach(([id,v])=>{const pct=Math.round(v*100);setText('mot-'+id,pct+'%');const col=pct>70?'#e74c3c':pct>30?'#e8a020':pct>0?'#27ae60':'#3a3a3a';document.getElementById('mot-'+id).style.color=col;setBar('bar-'+id,pct,col);});
   drawAI(s.roll,s.pitch); drawCompass(s.yaw); drawStick('stick-left',s.rcYaw,s.thr*2-1); drawStick('stick-right',s.rcRoll,s.rcPitch);
   setText('log-count',logLines.length+' lines');
-  document.getElementById('debug-values').innerHTML=`mode=${s.mode}<br>thr=${s.thr.toFixed(2)} rollCmd=${s.rcRoll.toFixed(2)}<br>pitchCmd=${s.rcPitch.toFixed(2)} yawCmd=${s.rcYaw.toFixed(2)}<br>motors=[${s.motFL.toFixed(2)}, ${s.motFR.toFixed(2)}, ${s.motRL.toFixed(2)}, ${s.motRR.toFixed(2)}]<br>BMP=${s.bmpValid?'OK':'NO DATA'} temp=${Number.isFinite(s.bmpTempC)?s.bmpTempC.toFixed(1):'—'}C pressure=${Number.isFinite(s.bmpPressureHpa)?s.bmpPressureHpa.toFixed(1):'—'}hPa alt=${Number.isFinite(s.bmpAltitudeM)?s.bmpAltitudeM.toFixed(1):'—'}m`;
+  document.getElementById('debug-values').innerHTML=`mode=${s.mode}<br>thr=${s.thr.toFixed(2)} rollCmd=${s.rcRoll.toFixed(2)}<br>pitchCmd=${s.rcPitch.toFixed(2)} yawCmd=${s.rcYaw.toFixed(2)}<br>motors=[${s.motFL.toFixed(2)}, ${s.motFR.toFixed(2)}, ${s.motRL.toFixed(2)}, ${s.motRR.toFixed(2)}]<br>BMP=${s.bmpValid?'OK':'NO DATA'} temp=${Number.isFinite(s.bmpTempC)?s.bmpTempC.toFixed(1):'—'}C pressure=${Number.isFinite(s.bmpPressureHpa)?s.bmpPressureHpa.toFixed(1):'—'}hPa alt=${Number.isFinite(s.bmpAltitudeM)?s.bmpAltitudeM.toFixed(1):'—'}m<br>CPU=${s.cpuValid?'OK':'CAL'} core0=${Number.isFinite(s.cpuCore0)?s.cpuCore0.toFixed(0):'—'}% core1=${Number.isFinite(s.cpuCore1)?s.cpuCore1.toFixed(0):'—'}%`;
 }
 function drawAI(roll,pitch){
   const c=document.getElementById('ai-canvas'),ctx=c.getContext('2d'),w=c.width,h=c.height,cx=w/2,cy=h/2,r=w/2-2;
@@ -376,6 +394,7 @@ function clearLog(){logLines=[];document.getElementById('log-wrap').innerHTML=''
 function setText(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
 function setBar(id,pct,color){const el=document.getElementById(id);if(!el)return;el.style.width=clamp(pct,0,100)+'%';if(color)el.style.background=color;}
 function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
+function cpuColor(v){if(!Number.isFinite(v))return '#3a3a3a';return v>80?'#e74c3c':v>55?'#e8a020':'#27ae60';}
 function fmt(v,dp,sign=false){const s=Number(v).toFixed(dp);return sign?(v>=0?'+'+s:s):s;}
 function fmtNum(v,dp){return (v>=0?'+':'')+v.toFixed(dp);}
 render();

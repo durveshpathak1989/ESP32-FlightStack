@@ -48,6 +48,7 @@
 #include "FlySkyiBUS.h"
 #include "TelemetryWiFi.h"
 #include "BMP280Sensor.h"
+#include "CPUUtilization.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -92,6 +93,8 @@ struct FlightState {
     float gx_dps, gy_dps, gz_dps;
     float bmpTemp_c, bmpPressure_hpa, bmpAltitude_m;
     bool  bmpValid;
+    float cpuCore0_pct, cpuCore1_pct;
+    bool  cpuValid;
     float motorFL, motorFR, motorRL, motorRR;
     RCCommand rc;
     bool  armed;
@@ -123,6 +126,7 @@ static TaskHandle_t hTaskRC     = nullptr;
 static TaskHandle_t hTaskSerial = nullptr;
 static TaskHandle_t hTaskWiFi   = nullptr;
 static TaskHandle_t hTaskBMP    = nullptr;
+static TaskHandle_t hTaskCPU    = nullptr;
 
 // ─────────────────────────────────────────────────────────────
 //  PID
@@ -195,6 +199,9 @@ static bool provideTelemetry(TelemetryPacket& out) {
     out.bmp_pressure_hpa = s.bmpPressure_hpa;
     out.bmp_altitude_m = s.bmpAltitude_m;
     out.bmp_valid = s.bmpValid;
+    out.cpu_core0_pct = s.cpuCore0_pct;
+    out.cpu_core1_pct = s.cpuCore1_pct;
+    out.cpu_valid = s.cpuValid;
     return true;
 }
 
@@ -653,14 +660,17 @@ static void taskSerial(void* /*pv*/)
             Serial.printf("[%6lu] %s | R=%+6.1f P=%+6.1f Y=%6.1f | "
                           "T=%.2f R=%+.2f P=%+.2f Y=%+.2f | "
                           "MOT %.2f %.2f %.2f %.2f | RC@%.0fHz | "
-                          "BMP T=%.1fC P=%.1fhPa ALT=%.1fm %s\n",
+                          "BMP T=%.1fC P=%.1fhPa ALT=%.1fm %s | "
+                          "CPU C0=%.0f%% C1=%.0f%% %s\n",
                           (unsigned long)tick, mStr,
                           s.roll_deg, s.pitch_deg, s.yaw_deg,
                           s.rc.throttle, s.rc.roll, s.rc.pitch, s.rc.yaw,
                           s.motorFL, s.motorFR, s.motorRL, s.motorRR,
                           rcReceiver.getFrameRate(),
                           s.bmpTemp_c, s.bmpPressure_hpa, s.bmpAltitude_m,
-                          s.bmpValid ? "OK" : "NO_BMP");
+                          s.bmpValid ? "OK" : "NO_BMP",
+                          s.cpuCore0_pct, s.cpuCore1_pct,
+                          s.cpuValid ? "OK" : "WAIT");
         }
 
         tick++;
@@ -694,6 +704,31 @@ static void taskBMP(void* /*pv*/)
                 xSemaphoreGive(g_flightMutex);
             }
         }
+        vTaskDelayUntil(&lastWake, period);
+    }
+}
+
+
+// ═════════════════════════════════════════════════════════════
+//  TASK: taskCPU — Core 0, priority 1, 2 Hz
+//  Updates FreeRTOS idle-hook based CPU utilization estimate.
+// ═════════════════════════════════════════════════════════════
+static void taskCPU(void* /*pv*/)
+{
+    const TickType_t period = pdMS_TO_TICKS(500);
+    TickType_t lastWake = xTaskGetTickCount();
+
+    for (;;) {
+        cpuUtilization.update();
+        CPUUtilizationData c = cpuUtilization.get();
+
+        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+            g_state.cpuCore0_pct = c.core0_pct;
+            g_state.cpuCore1_pct = c.core1_pct;
+            g_state.cpuValid = c.valid;
+            xSemaphoreGive(g_flightMutex);
+        }
+
         vTaskDelayUntil(&lastWake, period);
     }
 }
@@ -739,6 +774,13 @@ void setup()
     Serial.println(F("[BOOT] BMP280 scan..."));
     bmp280.scanI2C(PIN_BMP_SDA, PIN_BMP_SCL, 100000);
 
+    Serial.print(F("[BOOT] CPU monitor... "));
+    if (cpuUtilization.begin(1000)) {
+        Serial.println(F("OK"));
+    } else {
+        Serial.println(F("idle-hook registration failed"));
+    }
+
     Serial.print(F("[BOOT] BMP280... "));
     if (bmp280.beginAuto(PIN_BMP_SDA, PIN_BMP_SCL, 100000)) {
         Serial.println(F("OK"));
@@ -762,6 +804,7 @@ void setup()
     xTaskCreatePinnedToCore(taskSerial, "Serial", 4096, nullptr, 1, &hTaskSerial, 0);
     xTaskCreatePinnedToCore(taskWiFi,   "WiFi",   4096, nullptr, 1, &hTaskWiFi,   0);
     xTaskCreatePinnedToCore(taskBMP,    "BMP280", 3072, nullptr, 1, &hTaskBMP,    0);
+    xTaskCreatePinnedToCore(taskCPU,    "CPU",    3072, nullptr, 1, &hTaskCPU,    0);
     xTaskCreatePinnedToCore(taskIMU,    "IMU",    8192, nullptr, 5, &hTaskIMU,    1);
     xTaskCreatePinnedToCore(taskPID,    "PID",    4096, nullptr, 4, &hTaskPID,    1);
 
