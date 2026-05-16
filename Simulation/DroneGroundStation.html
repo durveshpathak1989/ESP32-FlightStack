@@ -149,6 +149,12 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
       <div class="imu-row"><span class="imu-name">Pitch</span><span><span class="imu-val" id="imu-pitch">+0.0</span><span class="imu-unit">°</span></span></div>
       <div class="imu-row"><span class="imu-name">Yaw</span><span><span class="imu-val" id="imu-yaw">0.0</span><span class="imu-unit">°</span></span></div>
 
+      <div style="margin-top:12px" class="panel-title">BMP280 · Barometer</div>
+      <div class="imu-row"><span class="imu-name">Temp</span><span><span class="imu-val" id="bmp-temp">—</span><span class="imu-unit">°C</span></span></div>
+      <div class="imu-row"><span class="imu-name">Pressure</span><span><span class="imu-val" id="bmp-pressure">—</span><span class="imu-unit">hPa</span></span></div>
+      <div class="imu-row"><span class="imu-name">Altitude</span><span><span class="imu-val" id="bmp-altitude">—</span><span class="imu-unit">m</span></span></div>
+      <div class="imu-row"><span class="imu-name">BMP status</span><span class="val" id="bmp-status">WAITING</span></div>
+
       <div style="margin-top:12px" class="panel-title">Telemetry Health</div>
       <div class="imu-row"><span class="imu-name">Parser</span><span class="val" id="parse-status">WAITING</span></div>
       <div class="imu-row"><span class="imu-name">Tick</span><span class="val" id="sys-tick">0</span></div>
@@ -173,7 +179,7 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
 </div>
 
 <script>
-let state={roll:0,pitch:0,yaw:0,thr:0,rcRoll:0,rcPitch:0,rcYaw:0,motFL:0,motFR:0,motRL:0,motRR:0,mode:'UNKNOWN',rcHz:0,tick:0};
+let state={roll:0,pitch:0,yaw:0,thr:0,rcRoll:0,rcPitch:0,rcYaw:0,motFL:0,motFR:0,motRL:0,motRR:0,mode:'UNKNOWN',rcHz:0,tick:0,bmpTempC:NaN,bmpPressureHpa:NaN,bmpAltitudeM:NaN,bmpValid:false};
 let serialPort=null, reader=null, connected=false, keepReading=false, lineBuffer='', logLines=[];
 let wifiConnected=false, wifiTimer=null, wifiUrl='http://192.168.4.1/telemetry';
 let linesThisSec=0,lps=0,lastTelemMs=0,simTimer=null,simT=0;
@@ -193,6 +199,8 @@ function parseLine(line){
     state.thr=parseFloat(m[6]); state.rcRoll=parseFloat(m[7]); state.rcPitch=parseFloat(m[8]); state.rcYaw=parseFloat(m[9]);
     state.motFL=parseFloat(m[10]); state.motFR=parseFloat(m[11]); state.motRL=parseFloat(m[12]); state.motRR=parseFloat(m[13]);
     state.rcHz=parseFloat(m[14]);
+    const bm=line.match(/BMP\s+T\s*=\s*([+\-]?\d+(?:\.\d+)?)C\s+P\s*=\s*([+\-]?\d+(?:\.\d+)?)hPa\s+ALT\s*=\s*([+\-]?\d+(?:\.\d+)?)m\s+(OK|NO_BMP)/i);
+    if(bm){state.bmpTempC=parseFloat(bm[1]);state.bmpPressureHpa=parseFloat(bm[2]);state.bmpAltitudeM=parseFloat(bm[3]);state.bmpValid=bm[4].toUpperCase()==='OK';}
     setParser(true); return 'telem';
   }
   setParser(false);
@@ -251,6 +259,10 @@ function applyTelemetryJson(j){
   state.thr=Number(j.thr)||0; state.rcRoll=Number(j.rcRoll)||0; state.rcPitch=Number(j.rcPitch)||0; state.rcYaw=Number(j.rcYaw)||0;
   state.motFL=Number(j.motFL)||0; state.motFR=Number(j.motFR)||0; state.motRL=Number(j.motRL)||0; state.motRR=Number(j.motRR)||0;
   state.rcHz=Number(j.rcHz)||0;
+  state.bmpTempC=Number(j.bmpTempC);
+  state.bmpPressureHpa=Number(j.bmpPressureHpa);
+  state.bmpAltitudeM=Number(j.bmpAltitudeM);
+  state.bmpValid=!!j.bmpValid;
   setParser(true); lastTelemMs=Date.now(); linesThisSec++;
   document.getElementById('raw-line').textContent=JSON.stringify(j);
   requestAnimationFrame(render);
@@ -300,7 +312,8 @@ function toggleSim(){
     const rr=parseFloat(document.getElementById('sl-roll').value), pp=parseFloat(document.getElementById('sl-pitch').value), yy=parseFloat(document.getElementById('sl-yaw').value);
     const fl=clamp(thr+pp*0.12+rr*0.12-yy*0.08,0,1), fr=clamp(thr+pp*0.12-rr*0.12+yy*0.08,0,1);
     const rl=clamp(thr-pp*0.12+rr*0.12+yy*0.08,0,1), rrv=clamp(thr-pp*0.12-rr*0.12-yy*0.08,0,1);
-    const line=`[ ${Math.round(simT*100)}] ANGLE | R=${fmtNum(roll,1)} P=${fmtNum(pitch,1)} Y=${yaw.toFixed(1)} | T=${thr.toFixed(2)} R=${fmtNum(rr,2)} P=${fmtNum(pp,2)} Y=${fmtNum(yy,2)} | MOT ${fl.toFixed(2)} ${fr.toFixed(2)} ${rl.toFixed(2)} ${rrv.toFixed(2)} | RC@145Hz`;
+    const bmpTemp=24+1.5*Math.sin(simT*.4), bmpPressure=1013.25-2*Math.sin(simT*.2), bmpAlt=44330*(1-Math.pow(bmpPressure/1013.25,0.19029495));
+    const line=`[ ${Math.round(simT*100)}] ANGLE | R=${fmtNum(roll,1)} P=${fmtNum(pitch,1)} Y=${yaw.toFixed(1)} | T=${thr.toFixed(2)} R=${fmtNum(rr,2)} P=${fmtNum(pp,2)} Y=${fmtNum(yy,2)} | MOT ${fl.toFixed(2)} ${fr.toFixed(2)} ${rl.toFixed(2)} ${rrv.toFixed(2)} | RC@145Hz | BMP T=${bmpTemp.toFixed(1)}C P=${bmpPressure.toFixed(1)}hPa ALT=${bmpAlt.toFixed(1)}m OK`;
     processLine(line);
   },100);
 }
@@ -327,6 +340,10 @@ function render(){
   const ms=modeStyles[s.mode]||['#1a1a1a','#3a3a3a','#5a5a5a']; badge.style.background=ms[0];badge.style.borderColor=ms[1];badge.style.color=ms[2];badge.style.textShadow=`0 0 6px ${ms[1]}`; badge.textContent=s.mode;
 
   setText('imu-roll',fmt(s.roll,1,true)); setText('imu-pitch',fmt(s.pitch,1,true)); setText('imu-yaw',s.yaw.toFixed(1));
+  setText('bmp-temp',Number.isFinite(s.bmpTempC)?s.bmpTempC.toFixed(1):'—');
+  setText('bmp-pressure',Number.isFinite(s.bmpPressureHpa)?s.bmpPressureHpa.toFixed(1):'—');
+  setText('bmp-altitude',Number.isFinite(s.bmpAltitudeM)?s.bmpAltitudeM.toFixed(1):'—');
+  const bmpEl=document.getElementById('bmp-status'); if(bmpEl){bmpEl.textContent=s.bmpValid?'OK':'NO DATA';bmpEl.style.color=s.bmpValid?'#27ae60':'#e74c3c';}
   setText('val-roll',fmt(s.roll,1,true)+'°'); setText('val-pitch',fmt(s.pitch,1,true)+'°'); setText('val-yaw',s.yaw.toFixed(1)+'°');
   setText('rc-thr',Math.round(s.thr*100)+'%'); setText('rc-roll',fmt(s.rcRoll,2)); setText('rc-pitch',fmt(s.rcPitch,2)); setText('rc-yaw',fmt(s.rcYaw,2));
   setText('rc-hz',s.rcHz.toFixed(0)+' Hz'); setText('sys-tick',s.tick); setText('sys-hz',s.rcHz.toFixed(0)); setText('sys-lps',lps);
@@ -335,7 +352,7 @@ function render(){
   [['fl',s.motFL],['fr',s.motFR],['rl',s.motRL],['rr',s.motRR]].forEach(([id,v])=>{const pct=Math.round(v*100);setText('mot-'+id,pct+'%');const col=pct>70?'#e74c3c':pct>30?'#e8a020':pct>0?'#27ae60':'#3a3a3a';document.getElementById('mot-'+id).style.color=col;setBar('bar-'+id,pct,col);});
   drawAI(s.roll,s.pitch); drawCompass(s.yaw); drawStick('stick-left',s.rcYaw,s.thr*2-1); drawStick('stick-right',s.rcRoll,s.rcPitch);
   setText('log-count',logLines.length+' lines');
-  document.getElementById('debug-values').innerHTML=`mode=${s.mode}<br>thr=${s.thr.toFixed(2)} rollCmd=${s.rcRoll.toFixed(2)}<br>pitchCmd=${s.rcPitch.toFixed(2)} yawCmd=${s.rcYaw.toFixed(2)}<br>motors=[${s.motFL.toFixed(2)}, ${s.motFR.toFixed(2)}, ${s.motRL.toFixed(2)}, ${s.motRR.toFixed(2)}]`;
+  document.getElementById('debug-values').innerHTML=`mode=${s.mode}<br>thr=${s.thr.toFixed(2)} rollCmd=${s.rcRoll.toFixed(2)}<br>pitchCmd=${s.rcPitch.toFixed(2)} yawCmd=${s.rcYaw.toFixed(2)}<br>motors=[${s.motFL.toFixed(2)}, ${s.motFR.toFixed(2)}, ${s.motRL.toFixed(2)}, ${s.motRR.toFixed(2)}]<br>BMP=${s.bmpValid?'OK':'NO DATA'} temp=${Number.isFinite(s.bmpTempC)?s.bmpTempC.toFixed(1):'—'}C pressure=${Number.isFinite(s.bmpPressureHpa)?s.bmpPressureHpa.toFixed(1):'—'}hPa alt=${Number.isFinite(s.bmpAltitudeM)?s.bmpAltitudeM.toFixed(1):'—'}m`;
 }
 function drawAI(roll,pitch){
   const c=document.getElementById('ai-canvas'),ctx=c.getContext('2d'),w=c.width,h=c.height,cx=w/2,cy=h/2,r=w/2-2;
