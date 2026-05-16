@@ -45,6 +45,7 @@
 #include <SPI.h>
 #include "MPU9250.h"
 #include "FlySkyiBUS.h"
+#include "TelemetryWiFi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -114,6 +115,7 @@ static TaskHandle_t hTaskIMU    = nullptr;
 static TaskHandle_t hTaskPID    = nullptr;
 static TaskHandle_t hTaskRC     = nullptr;
 static TaskHandle_t hTaskSerial = nullptr;
+static TaskHandle_t hTaskWiFi   = nullptr;
 
 // ─────────────────────────────────────────────────────────────
 //  PID
@@ -139,6 +141,51 @@ static PID pidRatePitch(0.5f, 0.002f, 0.010f);
 static PID pidRateYaw  (1.0f, 0.005f, 0.000f);
 static PID pidAngleRoll (4.0f, 0.0f, 0.0f);
 static PID pidAnglePitch(4.0f, 0.0f, 0.0f);
+
+
+// ─────────────────────────────────────────────────────────────
+//  Helper: convert flight mode enum to ground-station string
+// ─────────────────────────────────────────────────────────────
+static const char* flightModeToString(FlightMode mode) {
+    switch (mode) {
+        case FlightMode::DISARMED: return "DISARMED";
+        case FlightMode::ANGLE:    return "ANGLE";
+        case FlightMode::ACRO:     return "ACRO";
+        case FlightMode::FAILSAFE: return "FAILSAFE";
+        default:                   return "UNKNOWN";
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Wi-Fi telemetry provider
+//  Called by TelemetryWiFi.cpp when the HTML requests /telemetry.
+// ─────────────────────────────────────────────────────────────
+static bool provideTelemetry(TelemetryPacket& out) {
+    FlightState s;
+    if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+        return false;
+    }
+    s = g_state;
+    xSemaphoreGive(g_flightMutex);
+
+    out.tick      = s.loopCount;
+    out.mode      = flightModeToString(s.rc.mode);
+    out.roll_deg  = s.roll_deg;
+    out.pitch_deg = s.pitch_deg;
+    out.yaw_deg   = s.yaw_deg;
+    out.throttle  = s.rc.throttle;
+    out.rc_roll   = s.rc.roll;
+    out.rc_pitch  = s.rc.pitch;
+    out.rc_yaw    = s.rc.yaw;
+    out.motor_fl  = s.motorFL;
+    out.motor_fr  = s.motorFR;
+    out.motor_rl  = s.motorRL;
+    out.motor_rr  = s.motorRR;
+    out.rc_hz     = rcReceiver.getFrameRate();
+    out.armed     = s.armed;
+    out.rc_valid  = s.rc.valid;
+    return true;
+}
 
 // ─────────────────────────────────────────────────────────────
 //  Motor stub
@@ -607,6 +654,22 @@ static void taskSerial(void* /*pv*/)
     }
 }
 
+
+// ═════════════════════════════════════════════════════════════
+//  TASK: taskWiFi — Core 0, priority 1
+//  Handles browser HTTP requests for /telemetry.
+// ═════════════════════════════════════════════════════════════
+static void taskWiFi(void* /*pv*/)
+{
+    telemetryWiFi.setTelemetryProvider(provideTelemetry);
+    telemetryWiFi.begin("ESP32-DRONE", "12345678");
+
+    for (;;) {
+        telemetryWiFi.update();
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+}
+
 // ═════════════════════════════════════════════════════════════
 //  setup()
 // ═════════════════════════════════════════════════════════════
@@ -643,6 +706,7 @@ void setup()
 
     xTaskCreatePinnedToCore(taskRC,     "RC",     3072, nullptr, 3, &hTaskRC,     0);
     xTaskCreatePinnedToCore(taskSerial, "Serial", 4096, nullptr, 1, &hTaskSerial, 0);
+    xTaskCreatePinnedToCore(taskWiFi,   "WiFi",   4096, nullptr, 1, &hTaskWiFi,   0);
     xTaskCreatePinnedToCore(taskIMU,    "IMU",    8192, nullptr, 5, &hTaskIMU,    1);
     xTaskCreatePinnedToCore(taskPID,    "PID",    4096, nullptr, 4, &hTaskPID,    1);
 
