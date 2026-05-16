@@ -48,6 +48,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "Submodules/TelemetryWiFi.h"
 
 // ─────────────────────────────────────────────────────────────
 //  Pin assignments
@@ -106,6 +107,15 @@ enum class CalibState : uint8_t {
     DONE
 };
 static volatile CalibState g_calibState = CalibState::IDLE;
+
+
+// ─────────────────────────────────────────────────────────────
+//  Wi-Fi telemetry
+// ─────────────────────────────────────────────────────────────
+static TelemetryWiFi g_telem;
+static const char* WIFI_AP_SSID = "QuadTelemetry";
+static const char* WIFI_AP_PASS = "quad12345";  // >=8 chars for WPA2
+static const uint16_t WIFI_TELEM_PORT = 14550;
 
 // ─────────────────────────────────────────────────────────────
 //  Task handles
@@ -600,6 +610,21 @@ static void taskSerial(void* /*pv*/)
                           s.rc.throttle, s.rc.roll, s.rc.pitch, s.rc.yaw,
                           s.motorFL, s.motorFR, s.motorRL, s.motorRR,
                           rcReceiver.getFrameRate());
+
+            if (g_telem.isReady()) {
+                g_telem.poll();
+                char pkt[256];
+                snprintf(pkt, sizeof(pkt),
+                         "tick=%lu,mode=%s,roll=%.2f,pitch=%.2f,yaw=%.2f,thr=%.3f,"
+                         "rcRoll=%.3f,rcPitch=%.3f,rcYaw=%.3f,mFL=%.3f,mFR=%.3f,"
+                         "mRL=%.3f,mRR=%.3f,rcHz=%.1f",
+                         (unsigned long)tick, mStr,
+                         s.roll_deg, s.pitch_deg, s.yaw_deg,
+                         s.rc.throttle, s.rc.roll, s.rc.pitch, s.rc.yaw,
+                         s.motorFL, s.motorFR, s.motorRL, s.motorRR,
+                         rcReceiver.getFrameRate());
+                g_telem.send(pkt);
+            }
         }
 
         tick++;
@@ -640,6 +665,17 @@ void setup()
 
     rcReceiver.begin(PIN_IBUS_RX, PIN_IBUS_TX, 2);
     Serial.println(F("[BOOT] iBUS receiver ready."));
+
+    Serial.print(F("[BOOT] Wi-Fi telemetry AP... "));
+    if (g_telem.beginAP(WIFI_AP_SSID, WIFI_AP_PASS, WIFI_TELEM_PORT)) {
+        Serial.print(F("OK @ "));
+        Serial.print(g_telem.apIP());
+        Serial.print(F(":"));
+        Serial.println(g_telem.port());
+        Serial.println(F("[BOOT] Send any UDP packet to this port to register your ground station client IP."));
+    } else {
+        Serial.println(F("FAILED"));
+    }
 
     xTaskCreatePinnedToCore(taskRC,     "RC",     3072, nullptr, 3, &hTaskRC,     0);
     xTaskCreatePinnedToCore(taskSerial, "Serial", 4096, nullptr, 1, &hTaskSerial, 0);
