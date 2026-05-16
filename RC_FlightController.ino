@@ -8,6 +8,7 @@
  * ║   FS-iA6B iBUS port → GPIO 16 (UART2 RX)                        ║
  * ║   FS-iA6B VCC       → 5V (BEC)   GND → GND                      ║
  * ║   MPU-9250 SCLK→5  MOSI→18  MISO→19  NCS→33  VCC→3.3V          ║
+ * ║   BMP280 SDA→21  SCL→22  VCC→3.3V  GND→GND  CSB→3.3V        ║
  * ║   Motors: FL→25  FR→27  RL→14  RR→32 (DShot stub)               ║
  * ╠══════════════════════════════════════════════════════════════════╣
  * ║  RC SWITCH ASSIGNMENTS (FS-i6X Mode 2)                           ║
@@ -46,6 +47,7 @@
 #include "MPU9250.h"
 #include "FlySkyiBUS.h"
 #include "TelemetryWiFi.h"
+#include "BMP280Sensor.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -59,6 +61,8 @@
 #define PIN_MPU_CS          33
 #define PIN_IBUS_RX         16
 #define PIN_IBUS_TX         17
+#define PIN_BMP_SDA         21
+#define PIN_BMP_SCL         22
 
 // ─────────────────────────────────────────────────────────────
 //  RC thresholds
@@ -86,6 +90,8 @@ MPU9250 imu(PIN_MPU_CS);
 struct FlightState {
     float roll_deg, pitch_deg, yaw_deg;
     float gx_dps, gy_dps, gz_dps;
+    float bmpTemp_c, bmpPressure_hpa, bmpAltitude_m;
+    bool  bmpValid;
     float motorFL, motorFR, motorRL, motorRR;
     RCCommand rc;
     bool  armed;
@@ -116,6 +122,7 @@ static TaskHandle_t hTaskPID    = nullptr;
 static TaskHandle_t hTaskRC     = nullptr;
 static TaskHandle_t hTaskSerial = nullptr;
 static TaskHandle_t hTaskWiFi   = nullptr;
+static TaskHandle_t hTaskBMP    = nullptr;
 
 // ─────────────────────────────────────────────────────────────
 //  PID
@@ -184,6 +191,10 @@ static bool provideTelemetry(TelemetryPacket& out) {
     out.rc_hz     = rcReceiver.getFrameRate();
     out.armed     = s.armed;
     out.rc_valid  = s.rc.valid;
+    out.bmp_temp_c = s.bmpTemp_c;
+    out.bmp_pressure_hpa = s.bmpPressure_hpa;
+    out.bmp_altitude_m = s.bmpAltitude_m;
+    out.bmp_valid = s.bmpValid;
     return true;
 }
 
@@ -641,15 +652,48 @@ static void taskSerial(void* /*pv*/)
             }
             Serial.printf("[%6lu] %s | R=%+6.1f P=%+6.1f Y=%6.1f | "
                           "T=%.2f R=%+.2f P=%+.2f Y=%+.2f | "
-                          "MOT %.2f %.2f %.2f %.2f | RC@%.0fHz\n",
+                          "MOT %.2f %.2f %.2f %.2f | RC@%.0fHz | "
+                          "BMP T=%.1fC P=%.1fhPa ALT=%.1fm %s\n",
                           (unsigned long)tick, mStr,
                           s.roll_deg, s.pitch_deg, s.yaw_deg,
                           s.rc.throttle, s.rc.roll, s.rc.pitch, s.rc.yaw,
                           s.motorFL, s.motorFR, s.motorRL, s.motorRR,
-                          rcReceiver.getFrameRate());
+                          rcReceiver.getFrameRate(),
+                          s.bmpTemp_c, s.bmpPressure_hpa, s.bmpAltitude_m,
+                          s.bmpValid ? "OK" : "NO_BMP");
         }
 
         tick++;
+        vTaskDelayUntil(&lastWake, period);
+    }
+}
+
+
+// ═════════════════════════════════════════════════════════════
+//  TASK: taskBMP — Core 0, priority 1, 20 Hz
+//  Reads BMP280 pressure, temperature, and calculated altitude.
+// ═════════════════════════════════════════════════════════════
+static void taskBMP(void* /*pv*/)
+{
+    const TickType_t period = pdMS_TO_TICKS(50);
+    TickType_t lastWake = xTaskGetTickCount();
+
+    for (;;) {
+        BMP280Data b;
+        if (bmp280.read(b)) {
+            if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+                g_state.bmpTemp_c = b.temperature_c;
+                g_state.bmpPressure_hpa = b.pressure_hpa;
+                g_state.bmpAltitude_m = b.altitude_m;
+                g_state.bmpValid = b.valid;
+                xSemaphoreGive(g_flightMutex);
+            }
+        } else {
+            if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+                g_state.bmpValid = false;
+                xSemaphoreGive(g_flightMutex);
+            }
+        }
         vTaskDelayUntil(&lastWake, period);
     }
 }
@@ -692,6 +736,16 @@ void setup()
     }
     Serial.println(F("OK"));
 
+    Serial.println(F("[BOOT] BMP280 scan..."));
+    bmp280.scanI2C(PIN_BMP_SDA, PIN_BMP_SCL, 100000);
+
+    Serial.print(F("[BOOT] BMP280... "));
+    if (bmp280.beginAuto(PIN_BMP_SDA, PIN_BMP_SCL, 100000)) {
+        Serial.println(F("OK"));
+    } else {
+        Serial.println(F("not found — altitude telemetry disabled."));
+    }
+
     Serial.print(F("[BOOT] NVS calibration... "));
     if (imu.loadCalibration()) {
         Serial.println(F("loaded."));
@@ -707,6 +761,7 @@ void setup()
     xTaskCreatePinnedToCore(taskRC,     "RC",     3072, nullptr, 3, &hTaskRC,     0);
     xTaskCreatePinnedToCore(taskSerial, "Serial", 4096, nullptr, 1, &hTaskSerial, 0);
     xTaskCreatePinnedToCore(taskWiFi,   "WiFi",   4096, nullptr, 1, &hTaskWiFi,   0);
+    xTaskCreatePinnedToCore(taskBMP,    "BMP280", 3072, nullptr, 1, &hTaskBMP,    0);
     xTaskCreatePinnedToCore(taskIMU,    "IMU",    8192, nullptr, 5, &hTaskIMU,    1);
     xTaskCreatePinnedToCore(taskPID,    "PID",    4096, nullptr, 4, &hTaskPID,    1);
 

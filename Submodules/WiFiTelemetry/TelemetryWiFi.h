@@ -41,6 +41,10 @@ struct TelemetryPacket {
     float rc_hz;
     bool armed;
     bool rc_valid;
+    float bmp_temp_c;
+    float bmp_pressure_hpa;
+    float bmp_altitude_m;
+    bool bmp_valid;
 };
 
 class TelemetryWiFi {

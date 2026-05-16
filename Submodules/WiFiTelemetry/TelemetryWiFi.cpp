@@ -124,7 +124,7 @@ void TelemetryWiFi::_handleNotFound()
 String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
 {
     String json;
-    json.reserve(420);
+    json.reserve(560);
     json += "{\"ok\":true";
     json += ",\"tick\":" + String(p.tick);
     json += ",\"mode\":\"" + String(p.mode ? p.mode : "UNKNOWN") + "\"";
@@ -142,6 +142,10 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     json += ",\"rcHz\":" + String(p.rc_hz, 1);
     json += ",\"armed\":" + String(p.armed ? "true" : "false");
     json += ",\"rcValid\":" + String(p.rc_valid ? "true" : "false");
+    json += ",\"bmpTempC\":" + String(p.bmp_temp_c, 2);
+    json += ",\"bmpPressureHpa\":" + String(p.bmp_pressure_hpa, 2);
+    json += ",\"bmpAltitudeM\":" + String(p.bmp_altitude_m, 2);
+    json += ",\"bmpValid\":" + String(p.bmp_valid ? "true" : "false");
     json += ",\"clients\":" + String(WiFi.softAPgetStationNum());
     json += ",\"requests\":" + String(_requestCount);
     json += "}";
