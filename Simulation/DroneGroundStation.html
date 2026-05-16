@@ -22,8 +22,8 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
 .h-right{display:flex;align-items:center;gap:10px}
 button{padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:1px}
 button:hover{background:#12263a}
-#connect-btn{border-color:var(--accent);color:var(--accent)}
-#connect-btn.connected{border-color:var(--green);color:var(--green)}
+#connect-btn,#wifi-btn{border-color:var(--accent);color:var(--accent)}
+#connect-btn.connected,#wifi-btn.connected{border-color:var(--green);color:var(--green)}
 #sim-btn.active{border-color:var(--amber);color:var(--amber);background:#2a1d05}
 .led{width:8px;height:8px;border-radius:50%;background:var(--red)}
 .led.on{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
@@ -79,12 +79,13 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
   <div id="header">
     <div>
       <div class="h-title">ESP32 QUADCOPTER · GROUND STATION</div>
-      <div class="h-sub">MPU-9250 · RC Controller · FreeRTOS · 115200 baud</div>
+      <div class="h-sub">MPU-9250 · RC Controller · FreeRTOS · Serial/WiFi telemetry</div>
     </div>
     <div class="h-right">
       <div class="led" id="led"></div><span id="conn-status" style="font-size:9px;color:var(--dim)">OFFLINE</span>
       <div id="mode-badge">UNKNOWN</div>
       <button id="connect-btn" onclick="toggleSerial()">CONNECT SERIAL</button>
+      <button id="wifi-btn" onclick="toggleWifi()">CONNECT WIFI</button>
       <button id="sim-btn" onclick="toggleSim()">SIM MODE</button>
       <button onclick="toggleHelp()">HOW IT WORKS</button>
     </div>
@@ -116,8 +117,9 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
         <div id="help-overlay">
           <h3>How this screen is created</h3>
           <p><b>1.</b> ESP32 prints one text telemetry line over USB serial.</p>
-          <p><b>2.</b> Browser reads that line using Web Serial.</p>
-          <p><b>3.</b> Parser extracts roll, pitch, yaw, RC commands, motors, mode, and RC Hz.</p>
+          <p><b>2A.</b> USB mode: browser reads that line using Web Serial.</p>
+          <p><b>2B.</b> WiFi mode: connect to ESP32 hotspot, then browser polls <b>192.168.4.1/telemetry</b>.</p>
+          <p><b>3.</b> Parser/API extracts roll, pitch, yaw, RC commands, motors, mode, and RC Hz.</p>
           <p><b>4.</b> State object is updated.</p>
           <p><b>5.</b> Render function redraws meters, bars, sticks, motors, compass, and artificial horizon.</p>
           <p>Use <kbd>SIM MODE</kbd> or sliders to test UI without ESP32.</p>
@@ -173,6 +175,7 @@ kbd{border:1px solid var(--border);padding:1px 4px;border-radius:2px;color:var(-
 <script>
 let state={roll:0,pitch:0,yaw:0,thr:0,rcRoll:0,rcPitch:0,rcYaw:0,motFL:0,motFR:0,motRL:0,motRR:0,mode:'UNKNOWN',rcHz:0,tick:0};
 let serialPort=null, reader=null, connected=false, keepReading=false, lineBuffer='', logLines=[];
+let wifiConnected=false, wifiTimer=null, wifiUrl='http://192.168.4.1/telemetry';
 let linesThisSec=0,lps=0,lastTelemMs=0,simTimer=null,simT=0;
 let textDecoder=new TextDecoder();
 
@@ -238,6 +241,52 @@ function processLine(line){
   line=line.trim(); if(!line)return; linesThisSec++;
   const type=parseLine(line); addLog(line,type);
   if(type==='telem'){lastTelemMs=Date.now();requestAnimationFrame(render);}
+}
+
+function applyTelemetryJson(j){
+  if(!j || !j.ok) return false;
+  state.tick=Number(j.tick)||0;
+  state.mode=normalizeMode(j.mode||'UNKNOWN');
+  state.roll=Number(j.roll)||0; state.pitch=Number(j.pitch)||0; state.yaw=Number(j.yaw)||0;
+  state.thr=Number(j.thr)||0; state.rcRoll=Number(j.rcRoll)||0; state.rcPitch=Number(j.rcPitch)||0; state.rcYaw=Number(j.rcYaw)||0;
+  state.motFL=Number(j.motFL)||0; state.motFR=Number(j.motFR)||0; state.motRL=Number(j.motRL)||0; state.motRR=Number(j.motRR)||0;
+  state.rcHz=Number(j.rcHz)||0;
+  setParser(true); lastTelemMs=Date.now(); linesThisSec++;
+  document.getElementById('raw-line').textContent=JSON.stringify(j);
+  requestAnimationFrame(render);
+  return true;
+}
+async function toggleWifi(){
+  if(wifiConnected){stopWifi();return;}
+  wifiConnected=true;
+  document.getElementById('wifi-btn').textContent='DISCONNECT WIFI';
+  document.getElementById('wifi-btn').classList.add('connected');
+  document.getElementById('led').classList.add('on');
+  document.getElementById('conn-status').textContent='WIFI';
+  document.getElementById('port-name').textContent='192.168.4.1';
+  addLog('[WiFi] Connect your computer/phone to hotspot ESP32-DRONE, password 12345678','boot');
+  addLog('[WiFi] Polling '+wifiUrl,'boot');
+  await pollWifiOnce();
+  wifiTimer=setInterval(pollWifiOnce,100);  // 10 Hz UI update
+}
+function stopWifi(){
+  wifiConnected=false;
+  if(wifiTimer){clearInterval(wifiTimer);wifiTimer=null;}
+  document.getElementById('wifi-btn').textContent='CONNECT WIFI';
+  document.getElementById('wifi-btn').classList.remove('connected');
+  if(!connected){document.getElementById('led').classList.remove('on');document.getElementById('conn-status').textContent='OFFLINE';document.getElementById('port-name').textContent='—';}
+  addLog('[WiFi] stopped','boot');
+}
+async function pollWifiOnce(){
+  if(!wifiConnected)return;
+  try{
+    const r=await fetch(wifiUrl,{cache:'no-store'});
+    const j=await r.json();
+    if(!applyTelemetryJson(j)) throw new Error(j && j.error ? j.error : 'bad packet');
+  }catch(e){
+    setParser(false);
+    document.getElementById('raw-line').textContent='WiFi error: '+e.message;
+  }
 }
 
 function toggleSim(){
