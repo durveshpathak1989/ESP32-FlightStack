@@ -8,7 +8,7 @@
  * ║   FS-iA6B iBUS port → GPIO 16 (UART2 RX)                        ║
  * ║   MPU-9250 SCLK→5  MOSI→18  MISO→19  NCS→33  VCC→3.3V          ║
  * ║   BMP280 SDA→21  SCL→22  VCC→3.3V  GND→GND  CSB→3.3V           ║
- * ║   Motors: FL→25  FR→27  RL→14  RR→32 (DShot stub)               ║
+ * ║   Motors: FL→25  FR→15  RL→14  RR→32 (DShot stub)               ║
  * ╠══════════════════════════════════════════════════════════════════╣
  * ║  RC SWITCH ASSIGNMENTS                                            ║
  * ║   CH7 SWA  → ARM / DISARM                                        ║
@@ -26,6 +26,7 @@
 
 #include <SPI.h>
 #include <stdarg.h>   // for calLogf()
+#include "MotorControl.h"
 #include "MPU9250.h"
 #include "FlySkyiBUS.h"
 #include "TelemetryWiFi.h"
@@ -42,6 +43,14 @@
 #define PIN_SPI_MISO  19
 #define PIN_SPI_MOSI  18
 #define PIN_MPU_CS    33
+#define PIN_MPU_INT   27   // MPU-9250 INT — reserved INPUT, do not use as output
+
+// Motor DShot signal pins
+// GPIO27 is MPU-9250 INT — FR moved to GPIO15 which is free on right rail
+#define PIN_MOTOR_FL  25   // A1  left  rail — CCW front-left
+#define PIN_MOTOR_FR  15   // 15/A8 right rail — CW  front-right  (was 27, conflicts with MPU INT)
+#define PIN_MOTOR_RL  14   // 14/A6 right rail — CW  rear-left
+#define PIN_MOTOR_RR  32   // 32/A7 right rail — CCW rear-right
 #define PIN_IBUS_RX   16
 #define PIN_IBUS_TX   17
 #define PIN_BMP_SDA   21
@@ -302,8 +311,18 @@ static void handleTune(const TunePacket& in) {
 // ─────────────────────────────────────────────────────────────
 //  Motor stub + SWC helpers
 // ─────────────────────────────────────────────────────────────
-static void writeMotors(float fl,float fr,float rl,float rr){(void)fl;(void)fr;(void)rl;(void)rr;}
-static void motorsOff(){writeMotors(0,0,0,0);}
+// ─────────────────────────────────────────────────────────────
+//  Motor control — delegates to MotorControl.h / .cpp
+//  FL=GPIO25(CCW) FR=GPIO15(CW) RL=GPIO14(CW) RR=GPIO32(CCW)
+//  X-frame mixer lives in motorMixerX()
+// ─────────────────────────────────────────────────────────────
+static void motorsBegin() {
+    motorBegin();   // sets up LEDC PWM on all four pins
+}
+static void writeMotors(float fl, float fr, float rl, float rr) {
+    motorSet(fl, fr, rl, rr);
+}
+static void motorsOff(){ motorOff(); }
 static bool swcIsUp(){return rcReceiver.getChannel(RC_CH_AUX3)>=SWC_THRESHOLD;}
 static void waitSwcDown(){while(swcIsUp())delay(20);}
 static void silentWait(uint32_t ms){uint32_t t=millis();while(millis()-t<ms)delay(50);}
@@ -475,6 +494,7 @@ static void taskPID(void* /*pv*/)
             if(xSemaphoreTake(g_flightMutex,pdMS_TO_TICKS(1))==pdTRUE){
                 g_state.armed=false;
                 g_state.motorFL=g_state.motorFR=g_state.motorRL=g_state.motorRR=0;
+                motorOff(); // immediately cut all PWM
                 g_state.rc=cmd; xSemaphoreGive(g_flightMutex);
             }
             vTaskDelayUntil(&lastWake,period); continue;
@@ -612,6 +632,10 @@ void setup()
     configASSERT(g_flightMutex); configASSERT(g_tuneMutex);
     memset(&g_state,0,sizeof(g_state));
 
+    motorsBegin();    // configure LEDC PWM channels, GPIO27 as MPU INT input
+    // To calibrate ESCs (first time only), uncomment next line, flash, run, then comment out again:
+    // motorEscCalibrate();
+    motorEscArm();    // send 1000µs arm pulse, wait for ESC init beeps
     SPI.begin(PIN_SPI_SCK,PIN_SPI_MISO,PIN_SPI_MOSI,PIN_MPU_CS);
     delay(10);
 
@@ -635,9 +659,9 @@ void setup()
 
     syncTuningFromObjects();   // populate g_tuning from initial PID values
 
-    xTaskCreatePinnedToCore(taskRC,    "RC",    3072,nullptr,3,&hTaskRC,    0);
+    xTaskCreatePinnedToCore(taskRC,    "RC",    6144,nullptr,3,&hTaskRC,    0);
     xTaskCreatePinnedToCore(taskSerial,"Serial",4096,nullptr,1,&hTaskSerial,0);
-    xTaskCreatePinnedToCore(taskWiFi,  "WiFi",  12288,nullptr,1,&hTaskWiFi,  0);
+    xTaskCreatePinnedToCore(taskWiFi,  "WiFi", 10240,nullptr,1,&hTaskWiFi,  0);
     xTaskCreatePinnedToCore(taskBMP,   "BMP280",3072,nullptr,1,&hTaskBMP,   0);
     xTaskCreatePinnedToCore(taskCPU,   "CPU",   3072,nullptr,1,&hTaskCPU,   0);
     xTaskCreatePinnedToCore(taskIMU,   "IMU",   8192,nullptr,5,&hTaskIMU,   1);
