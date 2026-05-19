@@ -4,72 +4,58 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESP32 Drone Ground Station</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-/* ═══════════════════════════════════════════════
-   Design tokens
-═══════════════════════════════════════════════ */
 :root{
-  --bg:#04070d; --surface:#080f1a; --s2:#0c1520; --border:#162c44; --b2:#1b3a5c;
-  --accent:#2d8fcf; --a2:#1a6090;
-  --green:#22c55e; --red:#ef4444; --amber:#f59e0b; --purple:#a855f7; --cyan:#06b6d4;
-  --dim:#4a7090; --text:#9ec4dc; --bright:#d0eaf8;
-  --fn:'JetBrains Mono',monospace;
-  --fs:13px;          /* base font size – bumped up from 11px */
-  --fs-sm:11px;
-  --fs-xs:10px;
-  --fs-hd:15px;
+  --bg:#04070d;--surface:#080f1a;--s2:#0c1520;--border:#162c44;--b2:#1b3a5c;
+  --accent:#2d8fcf;--a2:#1a6090;
+  --green:#22c55e;--red:#ef4444;--amber:#f59e0b;--purple:#a855f7;--cyan:#06b6d4;
+  --dim:#4a7090;--text:#9ec4dc;--bright:#d0eaf8;
+  --fn:'JetBrains Mono',monospace;--fs:13px;--fs-sm:11px;--fs-xs:10px;--fs-hd:15px;
+  --left-col:440px;
 }
 *{box-sizing:border-box;margin:0;padding:0;font-family:var(--fn);font-size:var(--fs)}
 body{background:var(--bg);color:var(--text);overflow:hidden;height:100vh}
-
-/* ── App shell ────────────────────────────────── */
 #app{display:grid;grid-template-rows:50px 1fr;height:100vh}
-
-/* ── Header ───────────────────────────────────── */
 #hdr{display:flex;align-items:center;justify-content:space-between;padding:0 14px;
      background:var(--surface);border-bottom:1px solid var(--border);gap:10px;flex-shrink:0}
 .htitle{font-size:var(--fs-hd);font-weight:700;color:var(--bright);letter-spacing:2.5px;white-space:nowrap}
 .hsub{font-size:var(--fs-xs);color:var(--dim);letter-spacing:1px;margin-top:1px}
 .hbtns{display:flex;gap:7px;align-items:center;flex-shrink:0}
+.resizeCtrl{display:flex;align-items:center;gap:6px;padding:3px 8px;border:1px solid var(--border);border-radius:3px;background:#040a10;color:var(--dim);white-space:nowrap}
+.resizeCtrl label,.resizeCtrl span{font-size:var(--fs-xs);letter-spacing:1px;color:var(--dim)}
+.resizeCtrl input{width:110px;accent-color:var(--accent)}
 button{padding:5px 12px;border-radius:3px;border:1px solid var(--border);background:transparent;
        color:var(--text);cursor:pointer;font-size:var(--fs-xs);letter-spacing:1px;
        font-family:var(--fn);transition:.15s}
 button:hover{background:var(--s2)}
 .ba{border-color:var(--accent);color:var(--accent)}
 .ba.on{border-color:var(--green);color:var(--green);background:#071a0d}
-.bw{border-color:var(--amber);color:var(--amber)}
-.bw.on{background:#160f00}
-.bred{border-color:var(--red);color:var(--red)}
-.bred.on{background:#1a0505;border-color:#ff6060;color:#ff6060}
+.bw{border-color:var(--amber);color:var(--amber)}.bw.on{background:#160f00}
+.bred{border-color:var(--red);color:var(--red)}.bred.on{background:#1a0505;border-color:#ff6060;color:#ff6060}
 .led{width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0}
 .led.on{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
-#badge{padding:3px 11px;border-radius:3px;font-size:var(--fs-sm);font-weight:700;
-       letter-spacing:2px;border:1px solid;transition:.25s}
+#badge{padding:3px 11px;border-radius:3px;font-size:var(--fs-sm);font-weight:700;letter-spacing:2px;border:1px solid;transition:.25s}
 
-/* ── 5-column body grid ──────────────────────── */
+/* 5-column grid — Column 1+2 merged; left column is user-resizable */
 #body{display:grid;
-      grid-template-columns:220px 220px 1fr 1fr 240px;
+      grid-template-columns:var(--left-col) minmax(320px,1fr) minmax(320px,1fr) 240px minmax(360px,1.15fr);
       grid-template-rows:1fr 1fr;
-      gap:1px;background:var(--border);overflow:hidden;
-      height:calc(100vh - 50px)}
-.panel{background:var(--surface);padding:10px;overflow:hidden;
-       display:flex;flex-direction:column;gap:6px}
-.ptitle{font-size:var(--fs-xs);letter-spacing:2px;color:var(--dim);
-        text-transform:uppercase;flex-shrink:0;margin-bottom:1px}
-
-/* col layout */
+      gap:1px;background:var(--border);overflow:hidden;height:calc(100vh - 50px)}
+.panel{background:var(--surface);padding:10px;overflow:hidden;display:flex;flex-direction:column;gap:6px}
+.ptitle{font-size:var(--fs-xs);letter-spacing:2px;color:var(--dim);text-transform:uppercase;flex-shrink:0;margin-bottom:1px}
 #pRC   {grid-column:1;grid-row:1/3;overflow-y:auto}
-#pATT  {grid-column:2;grid-row:1/3;align-items:center;justify-content:center}
-#pIMU  {grid-column:3;grid-row:1}
-#pRPM  {grid-column:3;grid-row:2}
-#pCAL  {grid-column:4;grid-row:1;overflow:hidden}
-#pTEL  {grid-column:4;grid-row:2;overflow-y:auto}
-#pGAINS{grid-column:5;grid-row:1/3;overflow-y:auto}
+#pIMU  {grid-column:2;grid-row:1}
+#pRPM  {grid-column:2;grid-row:2}
+#pCAL  {grid-column:3;grid-row:1;overflow:hidden}
+#pTEL  {grid-column:3;grid-row:2;overflow-y:auto}
+#pGAINS{grid-column:4;grid-row:1/3;overflow-y:auto}
+#pGPS  {grid-column:5;grid-row:1/3;overflow:hidden}
 #pRC::-webkit-scrollbar,#pGAINS::-webkit-scrollbar,#pTEL::-webkit-scrollbar{width:3px}
 #pRC::-webkit-scrollbar-thumb,#pGAINS::-webkit-scrollbar-thumb,#pTEL::-webkit-scrollbar-thumb{background:var(--border)}
 
-/* ── RC widgets ───────────────────────────────── */
 .sticks{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
 .slbl{font-size:var(--fs-xs);color:var(--dim);text-align:center;margin-bottom:2px}
 canvas.stick{border:1px solid var(--border);border-radius:3px;display:block;margin:0 auto}
@@ -77,71 +63,68 @@ canvas.stick{border:1px solid var(--border);border-radius:3px;display:block;marg
 .rn{color:var(--dim)}.rv{color:var(--bright);font-weight:700}
 .bar{background:#04090f;border-radius:2px;height:6px;overflow:hidden;margin-top:1px;min-width:0}
 .bf{height:100%;border-radius:2px;transition:width .1s,background .1s}
-
-/* ── Attitude ─────────────────────────────────── */
+.attBlock{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:6px}
 canvas#ai{border-radius:50%;border:2px solid var(--accent)}
 canvas#cmp{border-radius:3px;border:1px solid var(--border);margin-top:6px}
 .euler{display:flex;gap:20px;margin-top:8px}
 .eaxis{text-align:center}
 .elbel{font-size:var(--fs-xs);color:var(--dim)}
 .eval{font-size:17px;font-weight:700;color:var(--bright)}
-
-/* ── RC Hz gauge ──────────────────────────────── */
 #gaugeWrap{display:flex;flex-direction:column;align-items:center}
 #gaugeVal{font-size:15px;font-weight:700;color:var(--bright);margin-top:-2px}
 #gaugeLbl{font-size:var(--fs-xs);color:var(--dim);letter-spacing:1px}
-
-/* ── Plot wrapper ─────────────────────────────── */
 .plotWrap{flex:1;min-height:0;position:relative}
 .plotWrap canvas{position:absolute;inset:0;width:100%;height:100%}
-
-/* ── Legend ───────────────────────────────────── */
 .legend{display:flex;gap:10px;font-size:var(--fs-xs);color:var(--dim);flex-wrap:wrap;flex-shrink:0}
 .lgdot{display:inline-block;width:8px;height:2px;border-radius:1px;margin-right:3px;vertical-align:middle}
-
-/* ── Calibration log ──────────────────────────── */
 #calLogTitle{display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 #calStage{font-size:var(--fs-sm);padding:4px 7px;border-radius:3px;background:#040a10;
-           border:1px solid var(--border);color:var(--cyan);flex-shrink:0;
-           min-height:24px;word-break:break-word}
+           border:1px solid var(--border);color:var(--cyan);flex-shrink:0;min-height:24px;word-break:break-word}
 #calLog{flex:1;min-height:0;overflow-y:auto;font-size:var(--fs-sm);line-height:1.55;
         background:var(--bg);border:1px solid var(--border);border-radius:3px;
         padding:6px;white-space:pre-wrap;word-break:break-all}
 #calLog::-webkit-scrollbar{width:3px}
 #calLog::-webkit-scrollbar-thumb{background:var(--b2)}
-.lCAL {color:#06b6d4}.lBOOT{color:var(--green)}.lRC{color:var(--amber)}
+.lCAL{color:#06b6d4}.lBOOT{color:var(--green)}.lRC{color:var(--amber)}
 .lTUNE{color:#a855f7}.lWARN{color:var(--red)}.lIMU{color:#f59e0b}
 .lTELEM{color:#1a3a56}.lOTHER{color:#2a4060}
-
-/* ── Tuning ───────────────────────────────────── */
 .tsec{margin-top:8px;font-size:var(--fs-xs);letter-spacing:2px;color:var(--accent);
       text-transform:uppercase;padding-bottom:4px;border-bottom:1px solid var(--border);flex-shrink:0}
-.trow{display:grid;grid-template-columns:1fr 78px 42px;align-items:center;
-      gap:4px;padding:3px 0;border-bottom:1px solid #060e18}
+.trow{display:grid;grid-template-columns:1fr 78px 42px;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #060e18}
 .tlbl{color:var(--dim);font-size:var(--fs-sm)}
-.tval{background:var(--bg);border:1px solid var(--border);border-radius:2px;
-      color:var(--bright);font-size:var(--fs-sm);padding:3px 5px;width:100%;
-      font-family:var(--fn);text-align:right}
+.tval{background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--bright);
+      font-size:var(--fs-sm);padding:3px 5px;width:100%;font-family:var(--fn);text-align:right}
 .tval:focus{outline:none;border-color:var(--accent)}
 .tapply{padding:2px 6px;font-size:var(--fs-xs);border-radius:2px;border:1px solid var(--a2);
         color:var(--accent);cursor:pointer;background:transparent;font-family:var(--fn)}
 .tapply:hover{background:var(--a2);color:#fff}
 #tuneStatus{font-size:var(--fs-sm);color:var(--amber);padding:3px 0;flex-shrink:0}
 .applyBtn{width:100%;margin-top:5px;padding:6px;border:1px solid var(--green);
-           color:var(--green);background:transparent;border-radius:3px;
-           cursor:pointer;font-size:var(--fs-sm);letter-spacing:1px;font-family:var(--fn)}
+          color:var(--green);background:transparent;border-radius:3px;
+          cursor:pointer;font-size:var(--fs-sm);letter-spacing:1px;font-family:var(--fn)}
 .applyBtn:hover{background:#071a0d}
 .mstat{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #06101a}
-.mn{color:var(--dim);font-size:var(--fs-sm)}
-.mv{color:var(--bright);font-weight:700;font-size:var(--fs-sm)}
+.mn{color:var(--dim);font-size:var(--fs-sm)}.mv{color:var(--bright);font-weight:700;font-size:var(--fs-sm)}
 
-/* ── Serial warning toast ─────────────────────── */
+/* GPS panel */
+#gpsMap{flex:1;min-height:0;border:1px solid var(--border);border-radius:2px}
+.leaflet-container{background:#030810!important}
+.leaflet-tile{filter:brightness(.45) saturate(.4) hue-rotate(175deg)}
+.leaflet-control-zoom a{background:var(--surface)!important;color:var(--accent)!important;border-color:var(--border)!important}
+.grow{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #06101a;flex-shrink:0}
+.gn{color:var(--dim);font-size:var(--fs-xs)}.gv{color:var(--bright);font-size:var(--fs-xs);font-weight:700}
+.gv.ok{color:var(--green)}.gv.bad{color:var(--red)}
+#satRow{display:flex;gap:3px;flex-wrap:wrap;flex-shrink:0;margin:2px 0}
+.sat{width:10px;height:10px;border-radius:1px;background:var(--border);transition:.3s}
+.sat.active{background:var(--green)}
+#fixBadge{flex-shrink:0;padding:2px 8px;border-radius:2px;font-size:var(--fs-xs);
+           letter-spacing:1px;border:1px solid var(--red);color:var(--red);background:#0f0305;align-self:flex-start}
+#fixBadge.fix{border-color:var(--green);color:var(--green);background:#030f07}
+
 #serialWarn{display:none;position:fixed;top:58px;left:50%;transform:translateX(-50%);
             background:#1a0a00;border:1px solid var(--red);border-radius:5px;
-            padding:10px 16px;font-size:var(--fs-sm);color:#fca5a5;z-index:100;
+            padding:10px 16px;font-size:var(--fs-sm);color:#fca5a5;z-index:1000;
             max-width:500px;text-align:center;line-height:1.5}
-
-/* ── Data-log download area ───────────────────── */
 #logBar{display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap}
 #logCount{font-size:var(--fs-xs);color:var(--dim)}
 </style>
@@ -150,15 +133,17 @@ canvas#cmp{border-radius:3px;border:1px solid var(--border);margin-top:6px}
 <div id="serialWarn"></div>
 <div id="app">
 
-<!-- ══════════════════════════════════════════════
-     HEADER
-══════════════════════════════════════════════ -->
 <div id="hdr">
   <div>
-    <div class="htitle">ESP32 QUADCOPTER · GROUND STATION v2.2</div>
-    <div class="hsub">MPU-9250 · BMP280 · FreeRTOS · Live PID+Mahony · IMU/RPM Plot · Calib Log · CSV Logger</div>
+    <div class="htitle">ESP32 QUADCOPTER · GROUND STATION v2.3</div>
+    <div class="hsub">MPU-9250 · BMP280 · GPS GY-GPS6MV2 · FreeRTOS · Live PID+Mahony · IMU/RPM Plot · Calib Log · CSV Logger</div>
   </div>
   <div class="hbtns">
+    <div class="resizeCtrl" title="Resize merged Column 1 width">
+      <label for="leftColWidth">COL 1</label>
+      <input id="leftColWidth" type="range" min="330" max="620" value="440" oninput="setLeftColumnWidth(this.value)">
+      <span id="leftColWidthVal">440px</span>
+    </div>
     <div class="led" id="led"></div>
     <span id="connLbl" style="font-size:11px;color:var(--dim)">OFFLINE</span>
     <div id="badge">UNKNOWN</div>
@@ -170,29 +155,20 @@ canvas#cmp{border-radius:3px;border:1px solid var(--border);margin-top:6px}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════
-     BODY GRID
-══════════════════════════════════════════════ -->
 <div id="body">
 
-<!-- ① RC Panel ─────────── col 1, full height -->
+<!-- ① RC -->
 <div class="panel" id="pRC">
   <div class="ptitle">RC Inputs &amp; Status</div>
   <div class="sticks">
-    <div><div class="slbl">L Thr / Yaw</div>
-         <canvas class="stick" id="sL" width="85" height="85"></canvas></div>
-    <div><div class="slbl">R Pit / Roll</div>
-         <canvas class="stick" id="sR" width="85" height="85"></canvas></div>
+    <div><div class="slbl">L Thr / Yaw</div><canvas class="stick" id="sL" width="85" height="85"></canvas></div>
+    <div><div class="slbl">R Pit / Roll</div><canvas class="stick" id="sR" width="85" height="85"></canvas></div>
   </div>
-
-  <!-- RC Hz Gauge -->
   <div class="ptitle">RC Frame Rate</div>
   <div id="gaugeWrap">
     <canvas id="rcGauge" width="160" height="96"></canvas>
-    <div id="gaugeVal">0 Hz</div>
-    <div id="gaugeLbl">RC FRAME RATE</div>
+    <div id="gaugeVal">0 Hz</div><div id="gaugeLbl">RC FRAME RATE</div>
   </div>
-
   <div class="row"><span class="rn">THROTTLE</span><span class="rv" id="vthr">0 %</span></div>
   <div class="bar"><div class="bf" id="bthr"></div></div>
   <div class="row"><span class="rn">ROLL</span><span class="rv" id="vrll">0.00</span></div>
@@ -201,48 +177,36 @@ canvas#cmp{border-radius:3px;border:1px solid var(--border);margin-top:6px}
   <div class="bar"><div class="bf" id="bpch"></div></div>
   <div class="row"><span class="rn">YAW</span><span class="rv" id="vyaw">0.00</span></div>
   <div class="bar"><div class="bf" id="byaw"></div></div>
-
   <div class="ptitle" style="margin-top:7px">Motors</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-    <div><div style="font-size:10px;color:var(--dim)">FL (CCW)</div>
-         <div style="font-size:14px;font-weight:700;color:var(--bright)" id="mFL">0 %</div>
-         <div class="bar"><div class="bf" id="bmFL"></div></div></div>
-    <div><div style="font-size:10px;color:var(--dim)">FR (CW)</div>
-         <div style="font-size:14px;font-weight:700;color:var(--bright)" id="mFR">0 %</div>
-         <div class="bar"><div class="bf" id="bmFR"></div></div></div>
-    <div><div style="font-size:10px;color:var(--dim)">RL (CW)</div>
-         <div style="font-size:14px;font-weight:700;color:var(--bright)" id="mRL">0 %</div>
-         <div class="bar"><div class="bf" id="bmRL"></div></div></div>
-    <div><div style="font-size:10px;color:var(--dim)">RR (CCW)</div>
-         <div style="font-size:14px;font-weight:700;color:var(--bright)" id="mRR">0 %</div>
-         <div class="bar"><div class="bf" id="bmRR"></div></div></div>
+    <div><div style="font-size:10px;color:var(--dim)">FL (CCW)</div><div style="font-size:14px;font-weight:700;color:var(--bright)" id="mFL">0 %</div><div class="bar"><div class="bf" id="bmFL"></div></div></div>
+    <div><div style="font-size:10px;color:var(--dim)">FR (CW)</div><div style="font-size:14px;font-weight:700;color:var(--bright)" id="mFR">0 %</div><div class="bar"><div class="bf" id="bmFR"></div></div></div>
+    <div><div style="font-size:10px;color:var(--dim)">RL (CW)</div><div style="font-size:14px;font-weight:700;color:var(--bright)" id="mRL">0 %</div><div class="bar"><div class="bf" id="bmRL"></div></div></div>
+    <div><div style="font-size:10px;color:var(--dim)">RR (CCW)</div><div style="font-size:14px;font-weight:700;color:var(--bright)" id="mRR">0 %</div><div class="bar"><div class="bf" id="bmRR"></div></div></div>
   </div>
-
   <div class="ptitle" style="margin-top:7px">Barometer (BMP280)</div>
   <div class="row"><span class="rn">Temperature</span><span class="rv" id="vbt">— °C</span></div>
   <div class="row"><span class="rn">Pressure</span><span class="rv" id="vbp">— hPa</span></div>
   <div class="row"><span class="rn">Altitude</span><span class="rv" id="vba">— m</span></div>
-
   <div class="ptitle" style="margin-top:7px">CPU Load</div>
   <div class="row"><span class="rn">Core 0</span><span class="rv" id="vcpu0">— %</span></div>
   <div class="bar"><div class="bf" id="bcpu0"></div></div>
   <div class="row"><span class="rn">Core 1</span><span class="rv" id="vcpu1">— %</span></div>
   <div class="bar"><div class="bf" id="bcpu1"></div></div>
-</div>
-
-<!-- ② Attitude ─────────── col 2, full height -->
-<div class="panel" id="pATT">
-  <div class="ptitle" style="align-self:flex-start">Attitude Indicator</div>
-  <canvas id="ai"  width="196" height="196"></canvas>
-  <canvas id="cmp" width="175" height="76"></canvas>
-  <div class="euler">
-    <div class="eaxis"><div class="elbel">ROLL</div><div class="eval" id="eR">+0.0°</div></div>
-    <div class="eaxis"><div class="elbel">PITCH</div><div class="eval" id="eP">+0.0°</div></div>
-    <div class="eaxis"><div class="elbel">YAW</div><div class="eval" id="eY">0.0°</div></div>
+  <div class="attBlock" id="attBlock">
+    <div class="ptitle" style="align-self:flex-start">Attitude / Altitude Indicator</div>
+    <canvas id="ai" width="196" height="196"></canvas>
+    <canvas id="cmp" width="175" height="76"></canvas>
+    <div class="euler">
+      <div class="eaxis"><div class="elbel">ROLL</div><div class="eval" id="eR">+0.0°</div></div>
+      <div class="eaxis"><div class="elbel">PITCH</div><div class="eval" id="eP">+0.0°</div></div>
+      <div class="eaxis"><div class="elbel">YAW</div><div class="eval" id="eY">0.0°</div></div>
+    </div>
   </div>
 </div>
 
-<!-- ③ IMU Plot ─────────── col 3, row 1 -->
+<!-- ② Attitude moved into merged Column 1 -->
+<!-- ③ IMU Plot -->
 <div class="panel" id="pIMU">
   <div class="ptitle">IMU Signal Plotter — Fused AHRS vs Raw Sensors</div>
   <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;flex-wrap:wrap">
@@ -261,8 +225,7 @@ canvas#cmp{border-radius:3px;border:1px solid var(--border);margin-top:6px}
       <span><span class="lgdot" style="background:#22c55e;opacity:.4;border:1px dashed #22c55e"></span>Ay·90°</span>
       <span><span class="lgdot" style="background:#a855f7;opacity:.4;border:1px dashed #a855f7"></span>Az·90°</span>
     </div>
-    <select id="imuAxis" style="background:var(--bg);color:var(--text);border:1px solid var(--border);
-      border-radius:2px;padding:2px 5px;font-size:10px;font-family:var(--fn);margin-left:auto">
+    <select id="imuAxis" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:2px;padding:2px 5px;font-size:10px;font-family:var(--fn);margin-left:auto">
       <option value="rpy">Fused R/P/Y  (°)</option>
       <option value="gyro">Gyro raw  (°/s)</option>
       <option value="accel">Accel raw  (×90°)</option>
@@ -272,11 +235,10 @@ canvas#cmp{border-radius:3px;border:1px solid var(--border);margin-top:6px}
   <div class="plotWrap"><canvas id="imuPlot"></canvas></div>
 </div>
 
-<!-- ④ RPM Gauges ────────── col 3, row 2 -->
+<!-- ④ RPM -->
 <div class="panel" id="pRPM">
   <div class="ptitle">Motor RPM Gauges — estimated (throttle × KV × Vbat)</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
-              gap:4px;flex:1;min-height:0">
+  <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:4px;flex:1;min-height:0">
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
       <div style="font-size:10px;color:#2d8fcf;margin-bottom:1px">FL (CCW)</div>
       <canvas id="rpmGaugeFL" style="width:100%;max-width:130px;height:auto"></canvas>
@@ -300,33 +262,21 @@ canvas#cmp{border-radius:3px;border:1px solid var(--border);margin-top:6px}
   </div>
 </div>
 
-<!-- ⑤ Calibration Log ─── col 4, row 1 -->
+<!-- ⑤ Cal Log -->
 <div class="panel" id="pCAL">
-  <div id="calLogTitle" style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+  <div id="calLogTitle">
     <div class="ptitle">Calibration &amp; System Log</div>
-    <button style="font-size:10px;padding:2px 8px;border:1px solid var(--border);
-                   color:var(--dim);background:transparent;cursor:pointer;border-radius:2px;
-                   font-family:var(--fn)" onclick="clearCalLog()">CLEAR</button>
+    <button style="font-size:10px;padding:2px 8px;border:1px solid var(--border);color:var(--dim);background:transparent;cursor:pointer;border-radius:2px;font-family:var(--fn)" onclick="clearCalLog()">CLEAR</button>
   </div>
-  <!-- Current stage / last CAL message -->
-  <div id="calStage" style="font-size:11px;padding:4px 7px;border-radius:3px;background:#040a10;
-       border:1px solid var(--border);color:var(--cyan);flex-shrink:0;min-height:26px">
-    — Waiting for connection —
-  </div>
-  <!-- Scrolling log -->
+  <div id="calStage" style="font-size:11px;padding:4px 7px;border-radius:3px;background:#040a10;border:1px solid var(--border);color:var(--cyan);flex-shrink:0;min-height:26px">— Waiting for connection —</div>
   <div id="calLog"></div>
 </div>
 
-<!-- ⑥ Telemetry health ── col 4, row 2 -->
+<!-- ⑥ Telemetry Health -->
 <div class="panel" id="pTEL">
   <div class="ptitle">Telemetry Health</div>
   <div id="tuneStatus">Connect Wi-Fi to enable tuning</div>
-
-  <!-- Data-log controls -->
-  <div id="logBar">
-    <span id="logCount">0 rows logged</span>
-  </div>
-
+  <div id="logBar"><span id="logCount">0 rows logged</span></div>
   <div class="mstat"><span class="mn">Parser</span><span class="mv" id="sParse">WAIT</span></div>
   <div class="mstat"><span class="mn">Tick</span><span class="mv" id="stk">0</span></div>
   <div class="mstat"><span class="mn">RC Hz</span><span class="mv" id="shz">—</span></div>
@@ -336,897 +286,464 @@ canvas#cmp{border-radius:3px;border:1px solid var(--border);margin-top:6px}
   <div class="mstat"><span class="mn">rKp live</span><span class="mv" id="srKp">—</span></div>
 </div>
 
-<!-- ⑦ Gain Tuner ────────── col 5, full height -->
+<!-- ⑦ Gains -->
 <div class="panel" id="pGAINS">
   <div class="ptitle">Live Gain Tuner</div>
-  <div style="font-size:10px;color:var(--dim);line-height:1.4">
-    Wi-Fi only · Drone must be <b style="color:var(--green)">DISARMED</b>
-  </div>
-
+  <div style="font-size:10px;color:var(--dim);line-height:1.4">Wi-Fi only · Drone must be <b style="color:var(--green)">DISARMED</b></div>
   <div class="tsec">Rate PID — Roll (inner)</div>
   <div class="trow"><span class="tlbl">Kp</span><input class="tval" id="rKp" value="0.5000"><button class="tapply" onclick="sendSingle('pid_roll_kp','rKp')">SET</button></div>
   <div class="trow"><span class="tlbl">Ki</span><input class="tval" id="rKi" value="0.00200"><button class="tapply" onclick="sendSingle('pid_roll_ki','rKi')">SET</button></div>
   <div class="trow"><span class="tlbl">Kd</span><input class="tval" id="rKd" value="0.0100"><button class="tapply" onclick="sendSingle('pid_roll_kd','rKd')">SET</button></div>
-
   <div class="tsec">Rate PID — Pitch (inner)</div>
   <div class="trow"><span class="tlbl">Kp</span><input class="tval" id="pKp" value="0.5000"><button class="tapply" onclick="sendSingle('pid_pitch_kp','pKp')">SET</button></div>
   <div class="trow"><span class="tlbl">Ki</span><input class="tval" id="pKi" value="0.00200"><button class="tapply" onclick="sendSingle('pid_pitch_ki','pKi')">SET</button></div>
   <div class="trow"><span class="tlbl">Kd</span><input class="tval" id="pKd" value="0.0100"><button class="tapply" onclick="sendSingle('pid_pitch_kd','pKd')">SET</button></div>
-
   <div class="tsec">Rate PID — Yaw (inner)</div>
   <div class="trow"><span class="tlbl">Kp</span><input class="tval" id="yKp" value="1.0000"><button class="tapply" onclick="sendSingle('pid_yaw_kp','yKp')">SET</button></div>
   <div class="trow"><span class="tlbl">Ki</span><input class="tval" id="yKi" value="0.00500"><button class="tapply" onclick="sendSingle('pid_yaw_ki','yKi')">SET</button></div>
   <div class="trow"><span class="tlbl">Kd</span><input class="tval" id="yKd" value="0.0000"><button class="tapply" onclick="sendSingle('pid_yaw_kd','yKd')">SET</button></div>
-
   <div class="tsec">Angle PID (outer loop)</div>
-  <div style="font-size:10px;color:var(--dim);padding:1px 0">
-    Converts lean-angle error → rate setpoint for inner loop
-  </div>
+  <div style="font-size:10px;color:var(--dim);padding:1px 0">Converts lean-angle error → rate setpoint</div>
   <div class="trow"><span class="tlbl">Roll Kp</span><input class="tval" id="arKp" value="4.000"><button class="tapply" onclick="sendSingle('pid_angle_roll_kp','arKp')">SET</button></div>
   <div class="trow"><span class="tlbl">Pitch Kp</span><input class="tval" id="apKp" value="4.000"><button class="tapply" onclick="sendSingle('pid_angle_pitch_kp','apKp')">SET</button></div>
-
   <div class="tsec">Mahony AHRS Filter</div>
-  <div style="font-size:10px;color:var(--dim);padding:1px 0">
-    Kp 2–10: accel/mag trust strength<br>Ki 0.001–0.05: gyro drift correction
-  </div>
+  <div style="font-size:10px;color:var(--dim);padding:1px 0">Kp 2–10: accel/mag trust · Ki 0.001–0.05: gyro drift</div>
   <div class="trow"><span class="tlbl">Kp</span><input class="tval" id="mKp" value="2.0000"><button class="tapply" onclick="sendSingle('mahony_kp','mKp')">SET</button></div>
   <div class="trow"><span class="tlbl">Ki</span><input class="tval" id="mKi" value="0.00500"><button class="tapply" onclick="sendSingle('mahony_ki','mKi')">SET</button></div>
-
   <button class="applyBtn" onclick="sendAllGains()">⬆ APPLY ALL GAINS</button>
 </div>
 
-</div><!-- /body -->
-</div><!-- /app -->
+<!-- ⑧ GPS — resized right column -->
+<div class="panel" id="pGPS">
+  <div class="ptitle">GPS — GY-GPS6MV2 (NEO-6M) · GPIO13</div>
+  <div id="fixBadge">NO FIX</div>
+  <div id="satRow"></div>
+  <!-- map — tiles need internet; track works offline -->
+  <div id="gpsMap"></div>
+  <div class="grow"><span class="gn">LATITUDE</span> <span class="gv" id="gLat">—</span></div>
+  <div class="grow"><span class="gn">LONGITUDE</span><span class="gv" id="gLon">—</span></div>
+  <div class="grow"><span class="gn">GPS ALT</span>  <span class="gv" id="gAlt">— m</span></div>
+  <div class="grow"><span class="gn">SPEED</span>    <span class="gv" id="gSpd">— km/h</span></div>
+  <div class="grow"><span class="gn">COURSE</span>   <span class="gv" id="gCrs">—°</span></div>
+  <div class="grow"><span class="gn">SATS</span>     <span class="gv" id="gSats">0</span></div>
+  <div class="grow"><span class="gn">HDOP</span>     <span class="gv" id="gHdop">—</span></div>
+  <div class="grow"><span class="gn">FIX TYPE</span> <span class="gv" id="gFix">—</span></div>
+  <div class="grow"><span class="gn">UTC</span>      <span class="gv" id="gUtc">--:--:--</span></div>
+  <button style="margin-top:2px;font-size:10px;padding:3px 8px;border:1px solid var(--border);color:var(--dim);background:transparent;cursor:pointer;border-radius:2px;font-family:var(--fn);flex-shrink:0" onclick="resetGpsTrack()">CLEAR TRACK</button>
+</div>
+
+</div></div>
 
 <script>
 'use strict';
-// ═══════════════════════════════════════════════
-//  State
-// ═══════════════════════════════════════════════
-const S = {
-  roll:0, pitch:0, yaw:0,
-  ax:0, ay:0, az:0, gx:0, gy:0, gz:0,
-  thr:0, rcRoll:0, rcPitch:0, rcYaw:0, rcHz:0,
-  motFL:0, motFR:0, motRL:0, motRR:0,
-  rpmFL:0, rpmFR:0, rpmRL:0, rpmRR:0,
-  mode:'UNKNOWN', armed:false, tick:0,
-  bmpTemp:NaN, bmpPressure:NaN, bmpAlt:NaN, bmpValid:false,
-  cpu0:NaN, cpu1:NaN
+function setLeftColumnWidth(px){
+  const w=Math.max(330,Math.min(620,Number(px)||440));
+  document.documentElement.style.setProperty('--left-col',w+'px');
+  const slider=document.getElementById('leftColWidth');
+  const label=document.getElementById('leftColWidthVal');
+  if(slider) slider.value=w;
+  if(label) label.textContent=w+'px';
+  try{localStorage.setItem('droneLeftColWidth',String(w));}catch{}
+  setTimeout(()=>{try{if(gpsMap)gpsMap.invalidateSize();}catch{}},60);
+}
+(function initLeftColumnWidth(){
+  const saved=parseInt(localStorage.getItem('droneLeftColWidth')||'440',10);
+  window.addEventListener('DOMContentLoaded',()=>setLeftColumnWidth(saved));
+})();
+const S={
+  roll:0,pitch:0,yaw:0,ax:0,ay:0,az:0,gx:0,gy:0,gz:0,
+  thr:0,rcRoll:0,rcPitch:0,rcYaw:0,rcHz:0,
+  motFL:0,motFR:0,motRL:0,motRR:0,rpmFL:0,rpmFR:0,rpmRL:0,rpmRR:0,
+  mode:'UNKNOWN',armed:false,tick:0,
+  bmpTemp:NaN,bmpPressure:NaN,bmpAlt:NaN,bmpValid:false,cpu0:NaN,cpu1:NaN,
+  gpsValid:false,gpsLat:0,gpsLon:0,gpsAlt:0,gpsSpd:0,gpsCrs:0,
+  gpsSats:0,gpsHdop:0,gpsFix:0,gpsH:0,gpsM:0,gpsSec:0
 };
-
-// Ring buffers – 300 samples
-const BUF = 300;
-const hist = {
-  roll:new Float32Array(BUF), pitch:new Float32Array(BUF), yaw:new Float32Array(BUF),
-  gx:new Float32Array(BUF),   gy:new Float32Array(BUF),   gz:new Float32Array(BUF),
-  ax:new Float32Array(BUF),   ay:new Float32Array(BUF),   az:new Float32Array(BUF),
+const BUF=300;
+const hist={
+  roll:new Float32Array(BUF),pitch:new Float32Array(BUF),yaw:new Float32Array(BUF),
+  gx:new Float32Array(BUF),gy:new Float32Array(BUF),gz:new Float32Array(BUF),
+  ax:new Float32Array(BUF),ay:new Float32Array(BUF),az:new Float32Array(BUF),
   rpmFL:new Float32Array(BUF),rpmFR:new Float32Array(BUF),
   rpmRL:new Float32Array(BUF),rpmRR:new Float32Array(BUF)
 };
-let histIdx = 0;
+let histIdx=0;
 function pushHist(){
-  hist.roll[histIdx]=S.roll;   hist.pitch[histIdx]=S.pitch; hist.yaw[histIdx]=S.yaw;
-  hist.gx[histIdx]=S.gx;      hist.gy[histIdx]=S.gy;       hist.gz[histIdx]=S.gz;
-  hist.ax[histIdx]=S.ax*90;   hist.ay[histIdx]=S.ay*90;    hist.az[histIdx]=S.az*90;
+  hist.roll[histIdx]=S.roll;hist.pitch[histIdx]=S.pitch;hist.yaw[histIdx]=S.yaw;
+  hist.gx[histIdx]=S.gx;hist.gy[histIdx]=S.gy;hist.gz[histIdx]=S.gz;
+  hist.ax[histIdx]=S.ax*90;hist.ay[histIdx]=S.ay*90;hist.az[histIdx]=S.az*90;
   hist.rpmFL[histIdx]=S.rpmFL;hist.rpmFR[histIdx]=S.rpmFR;
   hist.rpmRL[histIdx]=S.rpmRL;hist.rpmRR[histIdx]=S.rpmRR;
   histIdx=(histIdx+1)%BUF;
 }
 
-// ═══════════════════════════════════════════════
-//  CSV Data Logger
-// ═══════════════════════════════════════════════
-let logging   = false;
-let logRows   = [];   // array of CSV row strings
-const LOG_HEADER = 'timestamp_ms,mode,armed,roll_deg,pitch_deg,yaw_deg,'+
-  'gx_dps,gy_dps,gz_dps,ax_g,ay_g,az_g,throttle,rcRoll,rcPitch,rcYaw,rcHz,'+
-  'motFL,motFR,motRL,motRR,rpmFL,rpmFR,rpmRL,rpmRR,'+
-  'bmpTemp_C,bmpPress_hPa,bmpAlt_m,cpu0_pct,cpu1_pct';
+// ── GPS / Leaflet ──────────────────────────────
+const FIX_LABELS={0:'NO FIX',1:'GPS',2:'DGPS'};
+let gpsMap=null,droneMarker=null,homeMarker=null,trackLine=null,trackPoints=[],mapCentered=false;
+const droneIconHtml=`<svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="10" fill="#04070d" stroke="#2d8fcf" stroke-width="1.5"/><circle cx="11" cy="11" r="2.5" fill="#2d8fcf"/><line x1="11" y1="1" x2="11" y2="6" stroke="#2d8fcf" stroke-width="1.5"/><line x1="21" y1="11" x2="16" y2="11" stroke="#2d8fcf" stroke-width="1.5"/><line x1="11" y1="21" x2="11" y2="16" stroke="#2d8fcf" stroke-width="1.5"/><line x1="1" y1="11" x2="6" y2="11" stroke="#2d8fcf" stroke-width="1.5"/><circle cx="5" cy="5" r="2" fill="#f59e0b" opacity=".9"/><circle cx="17" cy="5" r="2" fill="#f59e0b" opacity=".9"/><circle cx="5" cy="17" r="2" fill="#f59e0b" opacity=".9"/><circle cx="17" cy="17" r="2" fill="#f59e0b" opacity=".9"/></svg>`;
 
+function initMap(){
+  if(gpsMap) return;
+  gpsMap=L.map('gpsMap',{zoomControl:true,attributionControl:false}).setView([0,0],15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}).addTo(gpsMap);
+}
+function updateGpsMap(lat,lon,valid){
+  if(!gpsMap||!valid||(lat===0&&lon===0)) return;
+  const icon=L.divIcon({html:droneIconHtml,iconSize:[22,22],iconAnchor:[11,11],className:''});
+  if(!droneMarker){
+    droneMarker=L.marker([lat,lon],{icon}).addTo(gpsMap);
+    homeMarker=L.circleMarker([lat,lon],{radius:5,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:1,weight:2})
+                .addTo(gpsMap).bindTooltip('HOME',{permanent:true,direction:'top'});
+  } else { droneMarker.setLatLng([lat,lon]); }
+  trackPoints.push([lat,lon]);
+  if(trackPoints.length>3000) trackPoints.shift();
+  if(trackLine) gpsMap.removeLayer(trackLine);
+  trackLine=L.polyline(trackPoints,{color:'#2d8fcf',weight:2,opacity:.8}).addTo(gpsMap);
+  if(!mapCentered){gpsMap.setView([lat,lon],17);mapCentered=true;}
+}
+function resetGpsTrack(){
+  trackPoints=[];
+  if(trackLine){gpsMap.removeLayer(trackLine);trackLine=null;}
+  if(droneMarker){gpsMap.removeLayer(droneMarker);droneMarker=null;}
+  if(homeMarker){gpsMap.removeLayer(homeMarker);homeMarker=null;}
+  mapCentered=false;
+}
+function updateSatDots(n){
+  const row=document.getElementById('satRow'),MAX=16;
+  if(row.children.length!==MAX){row.innerHTML='';for(let i=0;i<MAX;i++){const d=document.createElement('div');d.className='sat';row.appendChild(d);}}
+  for(let i=0;i<MAX;i++) row.children[i].classList.toggle('active',i<n);
+}
+function renderGps(){
+  const v=S.gpsValid;
+  const fb=document.getElementById('fixBadge');
+  fb.textContent=v?'FIX ✓':'NO FIX';fb.className=v?'fix':'';
+  updateSatDots(S.gpsSats);
+  setText('gLat',v?S.gpsLat.toFixed(6)+'°':'—');
+  setText('gLon',v?S.gpsLon.toFixed(6)+'°':'—');
+  setText('gAlt',v?S.gpsAlt.toFixed(1)+' m':'—');
+  setText('gSpd',v?S.gpsSpd.toFixed(1)+' km/h':'—');
+  setText('gCrs',v?S.gpsCrs.toFixed(1)+'°':'—');
+  setText('gSats',S.gpsSats);
+  setText('gHdop',v?S.gpsHdop.toFixed(2):'—');
+  setText('gFix',FIX_LABELS[S.gpsFix]||'—');
+  setText('gUtc',`${String(S.gpsH).padStart(2,'0')}:${String(S.gpsM).padStart(2,'0')}:${String(S.gpsSec).padStart(2,'0')} UTC`);
+  ['gLat','gLon'].forEach(id=>{const el=document.getElementById(id);if(el){el.className='gv';el.classList.add(v?'ok':'bad');}});
+  updateGpsMap(S.gpsLat,S.gpsLon,v);
+}
+
+// ── CSV Logger ─────────────────────────────────
+let logging=false,logRows=[];
+const LOG_HEADER='timestamp_ms,mode,armed,roll_deg,pitch_deg,yaw_deg,gx_dps,gy_dps,gz_dps,ax_g,ay_g,az_g,throttle,rcRoll,rcPitch,rcYaw,rcHz,motFL,motFR,motRL,motRR,rpmFL,rpmFR,rpmRL,rpmRR,bmpTemp_C,bmpPress_hPa,bmpAlt_m,cpu0_pct,cpu1_pct,gpsValid,gpsLat,gpsLon,gpsAlt_m,gpsSpd_kmh,gpsSats,gpsHdop';
 function toggleLog(){
-  logging = !logging;
-  const btn = document.getElementById('btnLog');
-  const dlBtn = document.getElementById('btnDL');
-  if(logging){
-    logRows = [LOG_HEADER];
-    btn.textContent  = '⏹ STOP LOG';
-    btn.classList.add('on');
-    dlBtn.style.display = 'none';
-    addCalLog('[LOG] Data logging started','lTUNE');
-  } else {
-    btn.textContent  = '⏺ LOG';
-    btn.classList.remove('on');
-    if(logRows.length > 1){
-      dlBtn.style.display = '';
-    }
-    addCalLog(`[LOG] Logging stopped — ${logRows.length-1} rows captured`,'lTUNE');
-  }
-  setText('logCount', `${Math.max(0,logRows.length-1)} rows logged`);
+  logging=!logging;
+  const btn=document.getElementById('btnLog'),dlBtn=document.getElementById('btnDL');
+  if(logging){logRows=[LOG_HEADER];btn.textContent='⏹ STOP LOG';btn.classList.add('on');dlBtn.style.display='none';addCalLog('[LOG] Data logging started (GPS columns included)','lTUNE');}
+  else{btn.textContent='⏺ LOG';btn.classList.remove('on');if(logRows.length>1)dlBtn.style.display='';addCalLog(`[LOG] Logging stopped — ${logRows.length-1} rows captured`,'lTUNE');}
+  setText('logCount',`${Math.max(0,logRows.length-1)} rows logged`);
 }
-
 function appendLogRow(){
-  if(!logging) return;
-  const r = [
-    Date.now(), S.mode, S.armed?1:0,
-    S.roll.toFixed(3), S.pitch.toFixed(3), S.yaw.toFixed(3),
-    S.gx.toFixed(4), S.gy.toFixed(4), S.gz.toFixed(4),
-    S.ax.toFixed(5), S.ay.toFixed(5), S.az.toFixed(5),
-    S.thr.toFixed(4), S.rcRoll.toFixed(4), S.rcPitch.toFixed(4), S.rcYaw.toFixed(4),
-    S.rcHz.toFixed(1),
-    S.motFL.toFixed(4), S.motFR.toFixed(4), S.motRL.toFixed(4), S.motRR.toFixed(4),
-    Math.round(S.rpmFL), Math.round(S.rpmFR), Math.round(S.rpmRL), Math.round(S.rpmRR),
-    isFinite(S.bmpTemp)    ? S.bmpTemp.toFixed(2)     : '',
-    isFinite(S.bmpPressure)? S.bmpPressure.toFixed(2) : '',
-    isFinite(S.bmpAlt)     ? S.bmpAlt.toFixed(2)      : '',
-    isFinite(S.cpu0)       ? S.cpu0.toFixed(1)         : '',
-    isFinite(S.cpu1)       ? S.cpu1.toFixed(1)         : ''
+  if(!logging)return;
+  const r=[Date.now(),S.mode,S.armed?1:0,S.roll.toFixed(3),S.pitch.toFixed(3),S.yaw.toFixed(3),
+    S.gx.toFixed(4),S.gy.toFixed(4),S.gz.toFixed(4),S.ax.toFixed(5),S.ay.toFixed(5),S.az.toFixed(5),
+    S.thr.toFixed(4),S.rcRoll.toFixed(4),S.rcPitch.toFixed(4),S.rcYaw.toFixed(4),S.rcHz.toFixed(1),
+    S.motFL.toFixed(4),S.motFR.toFixed(4),S.motRL.toFixed(4),S.motRR.toFixed(4),
+    Math.round(S.rpmFL),Math.round(S.rpmFR),Math.round(S.rpmRL),Math.round(S.rpmRR),
+    isFinite(S.bmpTemp)?S.bmpTemp.toFixed(2):'',isFinite(S.bmpPressure)?S.bmpPressure.toFixed(2):'',
+    isFinite(S.bmpAlt)?S.bmpAlt.toFixed(2):'',isFinite(S.cpu0)?S.cpu0.toFixed(1):'',isFinite(S.cpu1)?S.cpu1.toFixed(1):'',
+    S.gpsValid?1:0,S.gpsValid?S.gpsLat.toFixed(6):'',S.gpsValid?S.gpsLon.toFixed(6):'',
+    S.gpsValid?S.gpsAlt.toFixed(1):'',S.gpsValid?S.gpsSpd.toFixed(1):'',S.gpsSats,S.gpsValid?S.gpsHdop.toFixed(2):''
   ].join(',');
-  logRows.push(r);
-  setText('logCount', `${logRows.length-1} rows logged`);
+  logRows.push(r);setText('logCount',`${logRows.length-1} rows logged`);
 }
-
 function downloadLog(){
-  if(logRows.length < 2){ alert('No data to download.'); return; }
-  const blob = new Blob([logRows.join('\n')], {type:'text/csv'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  const ts   = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-  a.download = `drone_log_${ts}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  if(logRows.length<2){alert('No data to download.');return;}
+  const blob=new Blob([logRows.join('\n')],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  a.download=`drone_log_${ts}.csv`;a.click();URL.revokeObjectURL(url);
   addCalLog(`[LOG] Downloaded ${logRows.length-1} rows as ${a.download}`,'lTUNE');
 }
 
-// ═══════════════════════════════════════════════
-//  Connection state
-// ═══════════════════════════════════════════════
-let serial=null, reader=null, connected=false, keepReading=false, lineBuffer='';
-let wifiOn=false, wifiTimer=null;
-const wifiUrl  = 'http://192.168.4.1/telemetry';
-const tuneUrl  = 'http://192.168.4.1/tune';
-let simTimer=null, simT=0, lastTelemMs=0;
-let wifiLogSeq=0, wifiLogTimer=null;  // Wi-Fi log polling state
-const td = new TextDecoder();
+// ── Connection ─────────────────────────────────
+let serial=null,reader=null,connected=false,keepReading=false,lineBuffer='';
+let wifiOn=false,wifiTimer=null,wifiLogSeq=0,wifiLogTimer=null;
+const wifiUrl='http://192.168.4.1/telemetry',tuneUrl='http://192.168.4.1/tune';
+let simTimer=null,simT=0,lastTelemMs=0;
+const td=new TextDecoder();
+setInterval(()=>{const a=lastTelemMs?Date.now()-lastTelemMs:null;setText('sAge',a?a+'ms':'—');},300);
 
-setInterval(()=>{
-  const a = lastTelemMs ? Date.now()-lastTelemMs : null;
-  setText('sAge', a ? a+'ms' : '—');
-}, 300);
-
-// ── Serial ─────────────────────────────────────
 async function toggleSerial(){
-  if(connected){ await disconnSer(); return; }
-
-  if(!('serial' in navigator)){
-    showWarn('⚠ Web Serial API not available.<br>'+
-      'Use <b>Google Chrome</b> or <b>Microsoft Edge</b>.<br>'+
-      'If already on Chrome: open <b>chrome://flags</b> → enable '+
-      '"<b>Experimental Web Platform Features</b>" → Relaunch.');
-    return;
-  }
-
-  let port;
-  try{ port = await navigator.serial.requestPort(); }
-  catch(e){
-    if(e.name==='NotFoundError'||/cancel/i.test(e.message)) return;
-    showWarn('Port picker error: '+e.message); return;
-  }
-
-  try{ await port.open({baudRate:115200, dataBits:8, stopBits:1, parity:'none'}); }
-  catch(e){
-    showWarn('Cannot open port: '+e.message+
-      '<br>→ Close the <b>Arduino Serial Monitor</b> first — only one app can use the port.');
-    return;
-  }
-
-  serial=port; connected=true; keepReading=true; lineBuffer='';
-  setConn(true,'SERIAL');
-  addCalLog('[GS] Serial connected at 115200 baud — reading ESP32 output','lBOOT');
-  readLoop();
+  if(connected){await disconnSer();return;}
+  if(!('serial' in navigator)){showWarn('⚠ Web Serial API not available.<br>Use <b>Google Chrome</b> or <b>Microsoft Edge</b>.<br>If already on Chrome: open <b>chrome://flags</b> → enable "Experimental Web Platform Features" → Relaunch.');return;}
+  let port;try{port=await navigator.serial.requestPort();}catch(e){if(e.name==='NotFoundError'||/cancel/i.test(e.message))return;showWarn('Port picker error: '+e.message);return;}
+  try{await port.open({baudRate:115200,dataBits:8,stopBits:1,parity:'none'});}
+  catch(e){showWarn('Cannot open port: '+e.message+'<br>→ Close the Arduino Serial Monitor first — only one app can use the port.');return;}
+  serial=port;connected=true;keepReading=true;lineBuffer='';
+  setConn(true,'SERIAL');addCalLog('[GS] Serial connected at 115200 baud','lBOOT');readLoop();
 }
-
 async function disconnSer(){
-  keepReading=false; connected=false;
+  keepReading=false;connected=false;
   if(reader){try{await reader.cancel();}catch{}try{reader.releaseLock();}catch{}reader=null;}
   if(serial){try{await serial.close();}catch{}serial=null;}
-  setConn(false);
-  addCalLog('[GS] Serial disconnected','lRC');
+  setConn(false);addCalLog('[GS] Serial disconnected','lRC');
 }
-
 async function readLoop(){
-  reader = serial.readable.getReader();
-  try{
-    while(keepReading){
-      let r;
-      try{ r = await reader.read(); }catch{ break; }
-      if(r.done) break;
-      lineBuffer += td.decode(r.value, {stream:true});
-      const parts = lineBuffer.split(/\r?\n/);
-      lineBuffer = parts.pop();
-      parts.forEach(processLine);
-    }
-  }finally{
-    try{reader.releaseLock();}catch{}reader=null;
-    if(connected){
-      connected=false; setConn(false);
-      addCalLog('[GS] Connection lost — click SERIAL to reconnect','lWARN');
-    }
-  }
+  reader=serial.readable.getReader();
+  try{while(keepReading){let r;try{r=await reader.read();}catch{break;}if(r.done)break;lineBuffer+=td.decode(r.value,{stream:true});const parts=lineBuffer.split(/\r?\n/);lineBuffer=parts.pop();parts.forEach(processLine);}}
+  finally{try{reader.releaseLock();}catch{}reader=null;if(connected){connected=false;setConn(false);addCalLog('[GS] Connection lost','lWARN');}}
 }
+function showWarn(msg){const el=document.getElementById('serialWarn');el.innerHTML=msg;el.style.display='block';clearTimeout(el._t);el._t=setTimeout(()=>el.style.display='none',9000);}
 
-function showWarn(msg){
-  const el = document.getElementById('serialWarn');
-  el.innerHTML = msg; el.style.display = 'block';
-  clearTimeout(el._t);
-  el._t = setTimeout(()=>el.style.display='none', 9000);
-}
-
-// ── Wi-Fi ──────────────────────────────────────
 async function toggleWifi(){
-  if(wifiOn){ stopWifi(); return; }
-  wifiOn=true; setConn(true,'WIFI');
-  wifiLogSeq = 0;  // reset: fetch all buffered log lines on connect
-  addCalLog('[GS] Wi-Fi connected — telemetry + calibration log active','lBOOT');
-  addCalLog('[GS] Flip SWD UP (disarmed) to start calibration','lBOOT');
-  await pollWifi();
-  await pollWifiLog();  // immediate first log fetch
-  wifiTimer    = setInterval(pollWifi,    100);  // 10 Hz telemetry
-  wifiLogTimer = setInterval(pollWifiLog, 500);  //  2 Hz log stream
+  if(wifiOn){stopWifi();return;}
+  wifiOn=true;setConn(true,'WIFI');wifiLogSeq=0;
+  addCalLog('[GS] Wi-Fi connected — telemetry + GPS + log active','lBOOT');
+  await pollWifi();await pollWifiLog();
+  wifiTimer=setInterval(pollWifi,100);wifiLogTimer=setInterval(pollWifiLog,500);
 }
 function stopWifi(){
-  wifiOn=false;
-  if(wifiTimer)   {clearInterval(wifiTimer);   wifiTimer=null;}
-  if(wifiLogTimer){clearInterval(wifiLogTimer);wifiLogTimer=null;}
-  document.getElementById('btnWifi').classList.remove('on');
-  if(!connected) setConn(false);
-  addCalLog('[GS] Wi-Fi stopped','lRC');
+  wifiOn=false;if(wifiTimer){clearInterval(wifiTimer);wifiTimer=null;}if(wifiLogTimer){clearInterval(wifiLogTimer);wifiLogTimer=null;}
+  document.getElementById('btnWifi').classList.remove('on');if(!connected)setConn(false);addCalLog('[GS] Wi-Fi stopped','lRC');
 }
 async function pollWifi(){
-  if(!wifiOn) return;
-  try{
-    const r = await fetch(wifiUrl, {cache:'no-store'});
-    const j = await r.json();
-    if(!j.ok) throw new Error(j.error||'bad packet');
-    applyJson(j); setParser(true);
-  }catch(e){ setParser(false); }
+  if(!wifiOn)return;
+  try{const r=await fetch(wifiUrl,{cache:'no-store'});const j=await r.json();if(!j.ok)throw new Error(j.error||'bad packet');applyJson(j);setParser(true);}catch(e){setParser(false);}
 }
-
-function setConn(on, type=''){
-  document.getElementById('btnSerial').classList.toggle('on', on&&type==='SERIAL');
-  document.getElementById('btnWifi').classList.toggle('on', on&&type==='WIFI');
-  document.getElementById('led').classList.toggle('on', on);
-  document.getElementById('connLbl').textContent = on ? type : 'OFFLINE';
-  document.getElementById('tuneStatus').textContent =
-    on&&type==='WIFI' ? 'Wi-Fi connected — tuning enabled (DISARM first!)' :
-    on                ? 'Serial connected — Wi-Fi needed for tuning' :
-                        'Offline — connect serial or Wi-Fi';
+function setConn(on,type=''){
+  document.getElementById('btnSerial').classList.toggle('on',on&&type==='SERIAL');
+  document.getElementById('btnWifi').classList.toggle('on',on&&type==='WIFI');
+  document.getElementById('led').classList.toggle('on',on);
+  document.getElementById('connLbl').textContent=on?type:'OFFLINE';
+  document.getElementById('tuneStatus').textContent=on&&type==='WIFI'?'Wi-Fi connected — tuning enabled (DISARM first!)':on?'Serial connected — Wi-Fi needed for tuning':'Offline — connect serial or Wi-Fi';
 }
-
-// ── Apply Wi-Fi JSON ────────────────────────────
-// ── Wi-Fi log poller — GET /log?since=N ──────────────────────
 async function pollWifiLog(){
-  if(!wifiOn) return;
+  if(!wifiOn)return;
   try{
-    const r=await fetch('http://192.168.4.1/log?since='+wifiLogSeq, {cache:'no-store'});
-    const j=await r.json();
-    if(!j.ok) return;
-    wifiLogSeq = j.nextSeq;  // advance seq for next poll
-    if(j.lines && j.lines.length > 0){
-      j.lines.forEach(entry=>{
-        const line = entry.text;
-        // Classify exactly the same way as serial lines
-        const cls =
-          line.startsWith('[CAL]')               ? 'lCAL'   :
-          line.startsWith('[BOOT]')              ? 'lBOOT'  :
-          /^\[RC\]|^\[iBUS\]/.test(line)         ? 'lRC'    :
-          line.startsWith('[TUNE]')              ? 'lTUNE'  :
-          /^\[IMU\]|^\[NVS\]/.test(line)         ? 'lIMU'   :
-          /WARN|FAIL|FATAL|Timeout|ERROR/i.test(line) ? 'lWARN' :
-          /^\[/.test(line)                       ? 'lBOOT'  :
-          /^[╔╚╠║╗╝╣═─]/.test(line)             ? 'lCAL'   :
-          /\|\s*R=/.test(line)                   ? 'lTELEM' : 'lOTHER';
-        addCalLog(line, cls);
-        // Update calibration stage banner for [CAL] lines
-        if(line.startsWith('[CAL]')){
-          const el=document.getElementById('calStage');
-          el.textContent=line.replace('[CAL]','').trim();
-          el.style.color=
-            line.includes('✓')       ?'var(--green)' :
-            line.includes('GYRO')    ?'var(--amber)' :
-            line.includes('ACCEL')   ?'var(--cyan)'  :
-            line.includes('MAG')     ?'var(--purple)':
-            line.includes('COMPLETE')||line.includes('SAVED')?'var(--green)':'var(--cyan)';
-        }
-      });
-    }
-  }catch(e){
-    // Wi-Fi log poll errors are silent — don't spam the log panel
-  }
+    const r=await fetch('http://192.168.4.1/log?since='+wifiLogSeq,{cache:'no-store'});
+    const j=await r.json();if(!j.ok)return;wifiLogSeq=j.nextSeq;
+    if(j.lines&&j.lines.length>0){j.lines.forEach(entry=>{
+      const line=entry.text;
+      const cls=line.startsWith('[CAL]')?'lCAL':line.startsWith('[BOOT]')?'lBOOT':/^\[RC\]|^\[iBUS\]/.test(line)?'lRC':line.startsWith('[TUNE]')?'lTUNE':/^\[GPS\]/.test(line)?'lCAL':/^\[IMU\]|^\[NVS\]/.test(line)?'lIMU':/WARN|FAIL|FATAL|Timeout|ERROR/i.test(line)?'lWARN':/^\[/.test(line)?'lBOOT':/^[╔╚╠║╗╝╣═─]/.test(line)?'lCAL':/\|\s*R=/.test(line)?'lTELEM':'lOTHER';
+      addCalLog(line,cls);
+      if(line.startsWith('[CAL]')){const el=document.getElementById('calStage');el.textContent=line.replace('[CAL]','').trim();el.style.color=line.includes('✓')?'var(--green)':line.includes('GYRO')?'var(--amber)':line.includes('ACCEL')?'var(--cyan)':line.includes('MAG')?'var(--purple)':line.includes('COMPLETE')||line.includes('SAVED')?'var(--green)':'var(--cyan)';}
+    });}
+  }catch(e){}
 }
-
 function applyJson(j){
-  S.roll=+j.roll||0; S.pitch=+j.pitch||0; S.yaw=+j.yaw||0;
-  S.ax=+j.ax||0;  S.ay=+j.ay||0;  S.az=+j.az||0;
-  S.gx=+j.gx||0;  S.gy=+j.gy||0;  S.gz=+j.gz||0;
-  S.thr=+j.thr||0; S.rcRoll=+j.rcRoll||0; S.rcPitch=+j.rcPitch||0; S.rcYaw=+j.rcYaw||0;
-  S.rcHz=+j.rcHz||0; S.tick=+j.tick||0;
-  S.mode=(j.mode||'UNKNOWN').toUpperCase(); S.armed=!!j.armed;
-  S.motFL=+j.motFL||0; S.motFR=+j.motFR||0; S.motRL=+j.motRL||0; S.motRR=+j.motRR||0;
-  S.rpmFL=+j.rpmFL||0; S.rpmFR=+j.rpmFR||0; S.rpmRL=+j.rpmRL||0; S.rpmRR=+j.rpmRR||0;
-  S.bmpTemp=+j.bmpTempC; S.bmpPressure=+j.bmpPressureHpa; S.bmpAlt=+j.bmpAltitudeM;
-  S.bmpValid=!!j.bmpValid; S.cpu0=+j.cpuCore0; S.cpu1=+j.cpuCore1;
-
-  syncI('rKp',j.pidRollKp,4);   syncI('rKi',j.pidRollKi,5);  syncI('rKd',j.pidRollKd,4);
-  syncI('pKp',j.pidPitchKp,4);  syncI('pKi',j.pidPitchKi,5); syncI('pKd',j.pidPitchKd,4);
-  syncI('yKp',j.pidYawKp,4);    syncI('yKi',j.pidYawKi,5);   syncI('yKd',j.pidYawKd,4);
-  syncI('arKp',j.pidAngleRollKp,3); syncI('apKp',j.pidAnglePitchKp,3);
+  S.roll=+j.roll||0;S.pitch=+j.pitch||0;S.yaw=+j.yaw||0;
+  S.ax=+j.ax||0;S.ay=+j.ay||0;S.az=+j.az||0;
+  S.gx=+j.gx||0;S.gy=+j.gy||0;S.gz=+j.gz||0;
+  S.thr=+j.thr||0;S.rcRoll=+j.rcRoll||0;S.rcPitch=+j.rcPitch||0;S.rcYaw=+j.rcYaw||0;
+  S.rcHz=+j.rcHz||0;S.tick=+j.tick||0;
+  S.mode=(j.mode||'UNKNOWN').toUpperCase();S.armed=!!j.armed;
+  S.motFL=+j.motFL||0;S.motFR=+j.motFR||0;S.motRL=+j.motRL||0;S.motRR=+j.motRR||0;
+  S.rpmFL=+j.rpmFL||0;S.rpmFR=+j.rpmFR||0;S.rpmRL=+j.rpmRL||0;S.rpmRR=+j.rpmRR||0;
+  S.bmpTemp=+j.bmpTempC;S.bmpPressure=+j.bmpPressureHpa;S.bmpAlt=+j.bmpAltitudeM;
+  S.bmpValid=!!j.bmpValid;S.cpu0=+j.cpuCore0;S.cpu1=+j.cpuCore1;
+  // GPS
+  S.gpsValid=!!j.gpsValid;S.gpsLat=+j.gpsLat||0;S.gpsLon=+j.gpsLon||0;
+  S.gpsAlt=+j.gpsAltM||0;S.gpsSpd=+j.gpsSpeedKmh||0;S.gpsCrs=+j.gpsCourse||0;
+  S.gpsSats=+j.gpsSats||0;S.gpsHdop=+j.gpsHdop||0;S.gpsFix=+j.gpsQuality||0;
+  S.gpsH=+j.gpsHour||0;S.gpsM=+j.gpsMin||0;S.gpsSec=+j.gpsSec||0;
+  syncI('rKp',j.pidRollKp,4);syncI('rKi',j.pidRollKi,5);syncI('rKd',j.pidRollKd,4);
+  syncI('pKp',j.pidPitchKp,4);syncI('pKi',j.pidPitchKi,5);syncI('pKd',j.pidPitchKd,4);
+  syncI('yKp',j.pidYawKp,4);syncI('yKi',j.pidYawKi,5);syncI('yKd',j.pidYawKd,4);
+  syncI('arKp',j.pidAngleRollKp,3);syncI('apKp',j.pidAnglePitchKp,3);
   if(j.mahonyKp!=null){syncI('mKp',j.mahonyKp,4);setText('smKp',Number(j.mahonyKp).toFixed(4));}
   if(j.mahonyKi!=null){syncI('mKi',j.mahonyKi,5);setText('smKi',Number(j.mahonyKi).toFixed(5));}
-  if(j.pidRollKp!=null) setText('srKp',Number(j.pidRollKp).toFixed(4));
-
-  lastTelemMs=Date.now();
-  appendLogRow();
-  pushHist(); render();
+  if(j.pidRollKp!=null)setText('srKp',Number(j.pidRollKp).toFixed(4));
+  lastTelemMs=Date.now();appendLogRow();pushHist();render();
 }
-function syncI(id, val, dp){
-  if(val==null) return;
-  const el=document.getElementById(id);
-  if(el && document.activeElement!==el) el.value=Number(val).toFixed(dp);
-}
+function syncI(id,val,dp){if(val==null)return;const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=Number(val).toFixed(dp);}
 
-// ── Serial line parser ──────────────────────────
 function processLine(raw){
-  const line=raw.trim(); if(!line) return;
-
-  // Colour classification for the log
-  const cls =
-    line.startsWith('[CAL]')            ? 'lCAL'  :
-    line.startsWith('[BOOT]')           ? 'lBOOT' :
-    /^\[RC\]|^\[iBUS\]/.test(line)      ? 'lRC'   :
-    line.startsWith('[TUNE]')           ? 'lTUNE' :
-    /^\[IMU\]|^\[NVS\]/.test(line)      ? 'lIMU'  :
-    /WARN|FAIL|FATAL|Timeout|ERROR/i.test(line) ? 'lWARN' :
-    /^\[/.test(line)                    ? 'lBOOT' :
-    /^[╔╚╠║╗╝╣═─]/.test(line)          ? 'lCAL'  :
-    /\|\s*R=/.test(line)                ? 'lTELEM': 'lOTHER';
-
-  addCalLog(line, cls);
-
-  // Update calibration stage banner
-  if(line.startsWith('[CAL]')){
-    const el = document.getElementById('calStage');
-    el.textContent = line.replace('[CAL]','').trim();
-    el.style.color =
-      line.includes('✓')        ? 'var(--green)'  :
-      line.includes('GYRO')     ? 'var(--amber)'  :
-      line.includes('ACCEL')    ? 'var(--cyan)'   :
-      line.includes('MAG')      ? 'var(--purple)' :
-      line.includes('COMPLETE') ? 'var(--green)'  : 'var(--cyan)';
-  }
-
-  // Parse 1 Hz flight telemetry line from taskSerial
-  // Format: [tick] MODE | R=.. P=.. Y=.. | T=.. R=.. P=.. Y=.. | MOT .. .. .. .. | RC@..Hz | GX=.. GY=.. GZ=.. | AX=.. AY=.. AZ=.. | BMP ..C ..hPa ..m OK | CPU C0=..% C1=..% OK | mKp=..
+  const line=raw.trim();if(!line)return;
+  const cls=line.startsWith('[CAL]')?'lCAL':line.startsWith('[BOOT]')?'lBOOT':/^\[RC\]|^\[iBUS\]/.test(line)?'lRC':line.startsWith('[TUNE]')?'lTUNE':/^\[GPS\]/.test(line)?'lCAL':/^\[IMU\]|^\[NVS\]/.test(line)?'lIMU':/WARN|FAIL|FATAL|Timeout|ERROR/i.test(line)?'lWARN':/^\[/.test(line)?'lBOOT':/^[╔╚╠║╗╝╣═─]/.test(line)?'lCAL':/\|\s*R=/.test(line)?'lTELEM':'lOTHER';
+  addCalLog(line,cls);
+  if(line.startsWith('[CAL]')){const el=document.getElementById('calStage');el.textContent=line.replace('[CAL]','').trim();el.style.color=line.includes('✓')?'var(--green)':line.includes('GYRO')?'var(--amber)':line.includes('ACCEL')?'var(--cyan)':line.includes('MAG')?'var(--purple)':line.includes('COMPLETE')?'var(--green)':'var(--cyan)';}
+  // Parse GPS serial line from taskGPS
+  const gm=line.match(/\[GPS\]\s+Fix\s+Lat=([\-\d.]+)\s+Lon=([\-\d.]+)\s+Alt=([\d.]+)m\s+Sats=(\d+)\s+HDOP=([\d.]+)\s+Speed=([\d.]+)km\/h\s+UTC=(\d+):(\d+):(\d+)/);
+  if(gm){S.gpsValid=true;S.gpsLat=+gm[1];S.gpsLon=+gm[2];S.gpsAlt=+gm[3];S.gpsSats=+gm[4];S.gpsHdop=+gm[5];S.gpsSpd=+gm[6];S.gpsH=+gm[7];S.gpsM=+gm[8];S.gpsSec=+gm[9];S.gpsFix=1;}
+  const ngm=line.match(/\[GPS\]\s+No fix\s+Sats=(\d+)/);
+  if(ngm){S.gpsValid=false;S.gpsSats=+ngm[1];}
   const re=/\[\s*(\d+)\s*\]\s+(\S+)\s*\|.*R=\s*([+\-]?\d[\d.]*)\s+P=\s*([+\-]?\d[\d.]*)\s+Y=\s*([\d.]+).*T=([\d.]+)\s+R=([+\-]?\d[\d.]*)\s+P=([+\-]?\d[\d.]*)\s+Y=([+\-]?\d[\d.]*).*MOT\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+).*RC@([\d.]+)Hz/;
-  const m = line.match(re);
+  const m=line.match(re);
   if(m){
-    S.tick=+m[1]; S.mode=nMode(m[2]);
-    S.roll=+m[3]; S.pitch=+m[4]; S.yaw=+m[5];
-    S.thr=+m[6];  S.rcRoll=+m[7]; S.rcPitch=+m[8]; S.rcYaw=+m[9];
-    S.motFL=+m[10]; S.motFR=+m[11]; S.motRL=+m[12]; S.motRR=+m[13];
-    S.rcHz=+m[14];
-
-    // Gyro raw (°/s) — GX=±xx.xx GY=±xx.xx GZ=±xx.xx
-    const gm = line.match(/GX=([+\-]?[\d.]+)\s+GY=([+\-]?[\d.]+)\s+GZ=([+\-]?[\d.]+)/);
-    if(gm){ S.gx=+gm[1]; S.gy=+gm[2]; S.gz=+gm[3]; }
-
-    // Accel raw (g) — AX=±x.xxxx AY=±x.xxxx AZ=±x.xxxx
-    const am = line.match(/AX=([+\-]?[\d.]+)\s+AY=([+\-]?[\d.]+)\s+AZ=([+\-]?[\d.]+)/);
-    if(am){ S.ax=+am[1]; S.ay=+am[2]; S.az=+am[3]; }
-
-    // Estimate RPM from motor throttle (KV × Vbat × throttle)
-    const KV=2300, VBAT=11.1;
-    S.rpmFL=S.motFL*KV*VBAT; S.rpmFR=S.motFR*KV*VBAT;
-    S.rpmRL=S.motRL*KV*VBAT; S.rpmRR=S.motRR*KV*VBAT;
-
-    const bm = line.match(/BMP\s+([\d.]+)C\s+([\d.]+)hPa\s+([\d.]+)m\s+(OK|NO_BMP)/);
-    if(bm){S.bmpTemp=+bm[1];S.bmpPressure=+bm[2];S.bmpAlt=+bm[3];S.bmpValid=bm[4]==='OK';}
-
-    const cm = line.match(/CPU\s+C0=([\d.]+)%\s+C1=([\d.]+)%/);
-    if(cm){S.cpu0=+cm[1];S.cpu1=+cm[2];}
-
-    const mm = line.match(/mKp=([\d.]+)/);
-    if(mm) syncI('mKp', mm[1], 4);
-
-    setParser(true); lastTelemMs=Date.now();
-    appendLogRow();
-    pushHist(); render();
+    S.tick=+m[1];S.mode=nMode(m[2]);S.roll=+m[3];S.pitch=+m[4];S.yaw=+m[5];
+    S.thr=+m[6];S.rcRoll=+m[7];S.rcPitch=+m[8];S.rcYaw=+m[9];
+    S.motFL=+m[10];S.motFR=+m[11];S.motRL=+m[12];S.motRR=+m[13];S.rcHz=+m[14];
+    const gm2=line.match(/GX=([+\-]?[\d.]+)\s+GY=([+\-]?[\d.]+)\s+GZ=([+\-]?[\d.]+)/);if(gm2){S.gx=+gm2[1];S.gy=+gm2[2];S.gz=+gm2[3];}
+    const am=line.match(/AX=([+\-]?[\d.]+)\s+AY=([+\-]?[\d.]+)\s+AZ=([+\-]?[\d.]+)/);if(am){S.ax=+am[1];S.ay=+am[2];S.az=+am[3];}
+    const KV=2300,VBAT=11.1;S.rpmFL=S.motFL*KV*VBAT;S.rpmFR=S.motFR*KV*VBAT;S.rpmRL=S.motRL*KV*VBAT;S.rpmRR=S.motRR*KV*VBAT;
+    const bm=line.match(/BMP\s+([\d.]+)C\s+([\d.]+)hPa\s+([\d.]+)m\s+(OK|NO_BMP)/);if(bm){S.bmpTemp=+bm[1];S.bmpPressure=+bm[2];S.bmpAlt=+bm[3];S.bmpValid=bm[4]==='OK';}
+    const cm=line.match(/CPU\s+C0=([\d.]+)%\s+C1=([\d.]+)%/);if(cm){S.cpu0=+cm[1];S.cpu1=+cm[2];}
+    const mm=line.match(/mKp=([\d.]+)/);if(mm)syncI('mKp',mm[1],4);
+    setParser(true);lastTelemMs=Date.now();appendLogRow();pushHist();render();
   }
 }
-function nMode(x){
-  x=(x||'').toUpperCase();
-  return x==='DISARMD'?'DISARMED':x==='FAILSFE'?'FAILSAFE':x;
-}
-function setParser(ok){
-  const el=document.getElementById('sParse');
-  el.textContent=ok?'OK':'NO MATCH';
-  el.style.color=ok?'var(--green)':'var(--red)';
-}
+function nMode(x){x=(x||'').toUpperCase();return x==='DISARMD'?'DISARMED':x==='FAILSFE'?'FAILSAFE':x;}
+function setParser(ok){const el=document.getElementById('sParse');el.textContent=ok?'OK':'NO MATCH';el.style.color=ok?'var(--green)':'var(--red)';}
 
-// ── Calibration log panel ───────────────────────
-const MAX_LOG=400;
-let calCount=0;
-function addCalLog(text, cls='lOTHER'){
-  const el=document.getElementById('calLog');
-  const d=document.createElement('div');
-  d.className=cls; d.textContent=text;
-  el.appendChild(d);
-  calCount++;
+const MAX_LOG=400;let calCount=0;
+function addCalLog(text,cls='lOTHER'){
+  const el=document.getElementById('calLog');const d=document.createElement('div');d.className=cls;d.textContent=text;el.appendChild(d);calCount++;
   if(calCount>MAX_LOG){el.removeChild(el.firstChild);calCount--;}
-  if(el.scrollHeight-el.scrollTop < el.clientHeight+50) el.scrollTop=el.scrollHeight;
+  if(el.scrollHeight-el.scrollTop<el.clientHeight+50)el.scrollTop=el.scrollHeight;
 }
-function clearCalLog(){
-  document.getElementById('calLog').innerHTML='';
-  calCount=0;
-  document.getElementById('calStage').textContent='— Log cleared —';
-}
+function clearCalLog(){document.getElementById('calLog').innerHTML='';calCount=0;document.getElementById('calStage').textContent='— Log cleared —';}
 
-// ═══════════════════════════════════════════════
-//  Simulation
-// ═══════════════════════════════════════════════
+// ── Simulation ─────────────────────────────────
 function toggleSim(){
   const btn=document.getElementById('btnSim');
-  if(simTimer){
-    clearInterval(simTimer); simTimer=null; btn.classList.remove('on');
-    addCalLog('[SIM] Simulation stopped','lRC'); return;
-  }
-  btn.classList.add('on');
-  addCalLog('[SIM] Simulation started — synthetic ESP32 output','lBOOT');
-  // Inject fake calibration messages so the log panel is demonstrated
-  const msgs=[
-    ['[BOOT] MPU-9250... OK','lBOOT'],
-    ['[BOOT] BMP280... OK','lBOOT'],
-    ['[BOOT] NVS calibration... none — flip SWD UP to calibrate.','lBOOT'],
-    ['[BOOT] iBUS receiver ready.','lBOOT'],
-    ['[BOOT] All tasks running.','lBOOT'],
-    ['[CAL] ══ STAGE 1/3: GYRO ══','lCAL'],
-    ['[CAL] ACTION: Place drone FLAT and COMPLETELY STILL.','lCAL'],
-    ['[CAL] Waiting 3 s then sampling 5 s — do not touch...','lCAL'],
-    ['[CAL] Gyro bias: X=+0.0031  Y=-0.0012  Z=+0.0007  deg/s','lCAL'],
-    ['[CAL] ✓ GYRO complete.','lCAL'],
-    ['[CAL] ══ STAGE 2/3: ACCEL ══','lCAL'],
-    ['[CAL] Pos 1/6: +X UP (right side) — Flip SWC UP when steady','lCAL'],
-    ['[CAL] Got: ax=+0.9987  ay=+0.0023  az=-0.0011  g','lCAL'],
-    ['[CAL] ✓ Position captured. Flip SWC DOWN for next...','lCAL'],
-    ['[CAL] Pos 6/6: -Z UP (inverted) — Flip SWC UP when steady','lCAL'],
-    ['[CAL] Accel bias: X=+0.0012  Y=-0.0008  Z=-0.0031','lCAL'],
-    ['[CAL] ✓ ACCEL complete.','lCAL'],
-    ['[CAL] ══ STAGE 3/3: MAG ══','lCAL'],
-    ['[CAL] Rotate drone figure-8 for 30 s','lCAL'],
-    ['[CAL] Mag — 20 s remaining — keep rotating','lCAL'],
-    ['[CAL] Mag bias: X=+12.34  Y=-8.90  Z=+3.21  µT','lCAL'],
-    ['[CAL] ✓ MAG complete.','lCAL'],
-    ['[NVS] Calibration saved.','lIMU'],
-  ];
-  let mi=0;
-  const inj=setInterval(()=>{
-    if(mi<msgs.length){addCalLog(msgs[mi][0],msgs[mi][1]);mi++;}
-    else clearInterval(inj);
-  }, 220);
-
+  if(simTimer){clearInterval(simTimer);simTimer=null;btn.classList.remove('on');addCalLog('[SIM] Simulation stopped','lRC');return;}
+  btn.classList.add('on');addCalLog('[SIM] Simulation started — synthetic ESP32 + GPS output','lBOOT');
+  const msgs=[['[BOOT] MPU-9250... OK','lBOOT'],['[BOOT] BMP280... OK','lBOOT'],['[BOOT] GPS (GY-GPS6MV2) — UART1 GPIO13  9600 baud','lBOOT'],['[GPS] No fix  Sats=0  Sentences=0','lCAL'],['[GPS] No fix  Sats=3  Sentences=12','lCAL'],['[CAL] ══ STAGE 1/3: GYRO ══','lCAL'],['[CAL] Gyro bias: X=+0.0031  Y=-0.0012  Z=+0.0007  deg/s','lCAL'],['[CAL] ✓ GYRO complete.','lCAL'],['[GPS] Fix  Lat=43.653200  Lon=-79.383200  Alt=76.4m  Sats=8  HDOP=1.20  Speed=0.1km/h  UTC=14:22:05','lCAL']];
+  let mi=0;const inj=setInterval(()=>{if(mi<msgs.length){addCalLog(msgs[mi][0],msgs[mi][1]);mi++;}else clearInterval(inj);},220);
+  const HOME_LAT=43.6532,HOME_LON=-79.3832;let gpsT=0;
   simTimer=setInterval(()=>{
-    simT+=0.1;
-    S.roll=28*Math.sin(simT); S.pitch=14*Math.cos(simT*.8); S.yaw=(simT*22)%360;
-    S.gx=20*Math.sin(simT*1.4); S.gy=12*Math.cos(simT*.9); S.gz=7*Math.sin(simT*.55);
-    S.ax=0.06*Math.sin(simT*1.1); S.ay=0.05*Math.cos(simT*.85); S.az=1+0.02*Math.sin(simT);
-    S.thr=0.45+0.22*Math.sin(simT*.4);
-    S.rcRoll=0.35*Math.sin(simT*.6); S.rcPitch=0.25*Math.cos(simT*.7); S.rcYaw=0.12*Math.sin(simT);
-    S.rcHz=138+9*Math.sin(simT*.3); S.mode='ANGLE'; S.armed=S.thr>0.05;
-    const kv=2300, vb=11.1;
-    S.motFL=clamp(S.thr+S.rcRoll*0.1,0,1); S.motFR=clamp(S.thr-S.rcRoll*0.1,0,1);
-    S.motRL=clamp(S.thr+S.rcPitch*0.1,0,1); S.motRR=clamp(S.thr-S.rcPitch*0.1,0,1);
-    S.rpmFL=S.motFL*kv*vb; S.rpmFR=S.motFR*kv*vb;
-    S.rpmRL=S.motRL*kv*vb; S.rpmRR=S.motRR*kv*vb;
-    S.bmpTemp=24.5+1.5*Math.sin(simT*.3); S.bmpPressure=1013.25-1.8*Math.sin(simT*.2);
-    S.bmpAlt=44330*(1-Math.pow(S.bmpPressure/1013.25,0.19029)); S.bmpValid=true;
-    S.cpu0=20+13*Math.sin(simT*.26); S.cpu1=36+17*Math.cos(simT*.23);
-    setParser(true); lastTelemMs=Date.now();
-    appendLogRow(); pushHist(); render();
-  }, 100);
+    simT+=0.1;gpsT+=0.1;
+    S.roll=28*Math.sin(simT);S.pitch=14*Math.cos(simT*.8);S.yaw=(simT*22)%360;
+    S.gx=20*Math.sin(simT*1.4);S.gy=12*Math.cos(simT*.9);S.gz=7*Math.sin(simT*.55);
+    S.ax=0.06*Math.sin(simT*1.1);S.ay=0.05*Math.cos(simT*.85);S.az=1+0.02*Math.sin(simT);
+    S.thr=0.45+0.22*Math.sin(simT*.4);S.rcRoll=0.35*Math.sin(simT*.6);S.rcPitch=0.25*Math.cos(simT*.7);S.rcYaw=0.12*Math.sin(simT);
+    S.rcHz=138+9*Math.sin(simT*.3);S.mode='ANGLE';S.armed=S.thr>0.05;
+    const kv=2300,vb=11.1;
+    S.motFL=clamp(S.thr+S.rcRoll*.1,0,1);S.motFR=clamp(S.thr-S.rcRoll*.1,0,1);
+    S.motRL=clamp(S.thr+S.rcPitch*.1,0,1);S.motRR=clamp(S.thr-S.rcPitch*.1,0,1);
+    S.rpmFL=S.motFL*kv*vb;S.rpmFR=S.motFR*kv*vb;S.rpmRL=S.motRL*kv*vb;S.rpmRR=S.motRR*kv*vb;
+    S.bmpTemp=24.5+1.5*Math.sin(simT*.3);S.bmpPressure=1013.25-1.8*Math.sin(simT*.2);
+    S.bmpAlt=44330*(1-Math.pow(S.bmpPressure/1013.25,0.19029));S.bmpValid=true;
+    S.cpu0=20+13*Math.sin(simT*.26);S.cpu1=36+17*Math.cos(simT*.23);
+    if(gpsT>3){const r=0.0005;S.gpsValid=true;S.gpsLat=HOME_LAT+r*Math.sin(gpsT*.15);S.gpsLon=HOME_LON+r*Math.cos(gpsT*.15);S.gpsAlt=76+2*Math.sin(gpsT*.3);S.gpsSpd=3.5+1.5*Math.sin(gpsT*.2);S.gpsCrs=(gpsT*18)%360;S.gpsSats=8;S.gpsHdop=1.2;S.gpsFix=1;S.gpsH=14;S.gpsM=22;S.gpsSec=Math.floor(gpsT)%60;}
+    setParser(true);lastTelemMs=Date.now();appendLogRow();pushHist();render();
+  },100);
 }
 
-// ═══════════════════════════════════════════════
-//  Gain tuning
-// ═══════════════════════════════════════════════
-async function sendSingle(key, inputId){
-  const val=parseFloat(document.getElementById(inputId).value);
-  if(isNaN(val)){setTuneErr('Invalid value for '+key);return;}
-  await postTune({[key]:val});
-}
+// ── Gain tuning ────────────────────────────────
+async function sendSingle(key,inputId){const val=parseFloat(document.getElementById(inputId).value);if(isNaN(val)){setTuneErr('Invalid value for '+key);return;}await postTune({[key]:val});}
 async function sendAllGains(){
-  const map={pid_roll_kp:'rKp',pid_roll_ki:'rKi',pid_roll_kd:'rKd',
-             pid_pitch_kp:'pKp',pid_pitch_ki:'pKi',pid_pitch_kd:'pKd',
-             pid_yaw_kp:'yKp',pid_yaw_ki:'yKi',pid_yaw_kd:'yKd',
-             pid_angle_roll_kp:'arKp',pid_angle_pitch_kp:'apKp',
-             mahony_kp:'mKp',mahony_ki:'mKi'};
-  const payload={};
-  Object.entries(map).forEach(([k,id])=>{
-    const v=parseFloat(document.getElementById(id).value);
-    if(!isNaN(v)) payload[k]=v;
-  });
-  await postTune(payload);
+  const map={pid_roll_kp:'rKp',pid_roll_ki:'rKi',pid_roll_kd:'rKd',pid_pitch_kp:'pKp',pid_pitch_ki:'pKi',pid_pitch_kd:'pKd',pid_yaw_kp:'yKp',pid_yaw_ki:'yKi',pid_yaw_kd:'yKd',pid_angle_roll_kp:'arKp',pid_angle_pitch_kp:'apKp',mahony_kp:'mKp',mahony_ki:'mKi'};
+  const payload={};Object.entries(map).forEach(([k,id])=>{const v=parseFloat(document.getElementById(id).value);if(!isNaN(v))payload[k]=v;});await postTune(payload);
 }
 async function postTune(payload){
-  const s=document.getElementById('tuneStatus');
-  s.textContent='Sending...'; s.style.color='var(--amber)';
-  try{
-    const r=await fetch(tuneUrl,{method:'POST',
-      headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-    const j=await r.json();
-    if(j.ok){
-      s.textContent='✓ Applied'; s.style.color='var(--green)';
-      addCalLog('[TUNE] Gains applied: '+JSON.stringify(payload),'lTUNE');
-    } else { setTuneErr('ESP32: '+(j.error||'unknown')); }
-  }catch(e){ setTuneErr('POST failed — Wi-Fi connected? '+e.message); }
+  const s=document.getElementById('tuneStatus');s.textContent='Sending...';s.style.color='var(--amber)';
+  try{const r=await fetch(tuneUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();if(j.ok){s.textContent='✓ Applied';s.style.color='var(--green)';addCalLog('[TUNE] Gains applied: '+JSON.stringify(payload),'lTUNE');}else setTuneErr('ESP32: '+(j.error||'unknown'));}
+  catch(e){setTuneErr('POST failed — '+e.message);}
   setTimeout(()=>{s.textContent='Ready';s.style.color='var(--text)';},3000);
 }
-function setTuneErr(m){
-  const s=document.getElementById('tuneStatus');
-  s.textContent='ERR: '+m; s.style.color='var(--red)';
-  addCalLog('[TUNE] Error: '+m,'lWARN');
-}
+function setTuneErr(m){const s=document.getElementById('tuneStatus');s.textContent='ERR: '+m;s.style.color='var(--red)';addCalLog('[TUNE] Error: '+m,'lWARN');}
 
-// ═══════════════════════════════════════════════
-//  Render
-// ═══════════════════════════════════════════════
-const modeCol={
-  DISARMED:['#081a0e','#22c55e'], ANGLE:['#041220','#2d8fcf'],
-  ACRO:    ['#1a0808','#ef4444'], FAILSAFE:['#160c00','#f59e0b'],
-  UNKNOWN: ['#0a0a0a','#444']
-};
+// ── Render ─────────────────────────────────────
+const modeCol={DISARMED:['#081a0e','#22c55e'],ANGLE:['#041220','#2d8fcf'],ACRO:['#1a0808','#ef4444'],FAILSAFE:['#160c00','#f59e0b'],UNKNOWN:['#0a0a0a','#444']};
 function render(){
   const mc=modeCol[S.mode]||modeCol.UNKNOWN;
-  const b=document.getElementById('badge');
-  b.textContent=S.mode; b.style.background=mc[0];
-  b.style.borderColor=mc[1]; b.style.color=mc[1];
-
-  // RC
-  setText('vthr',Math.round(S.thr*100)+' %');
-  setBar('bthr',S.thr*100, S.thr>.7?'var(--red)':S.thr>.3?'var(--amber)':'var(--green)');
-  setText('vrll',fmt(S.rcRoll,2));  setBar('brll',50+S.rcRoll*50,'var(--accent)');
-  setText('vpch',fmt(S.rcPitch,2)); setBar('bpch',50+S.rcPitch*50,'var(--accent)');
-  setText('vyaw',fmt(S.rcYaw,2));   setBar('byaw',50+S.rcYaw*50,'var(--accent)');
-
+  const b=document.getElementById('badge');b.textContent=S.mode;b.style.background=mc[0];b.style.borderColor=mc[1];b.style.color=mc[1];
+  setText('vthr',Math.round(S.thr*100)+' %');setBar('bthr',S.thr*100,S.thr>.7?'var(--red)':S.thr>.3?'var(--amber)':'var(--green)');
+  setText('vrll',fmt(S.rcRoll,2));setBar('brll',50+S.rcRoll*50,'var(--accent)');
+  setText('vpch',fmt(S.rcPitch,2));setBar('bpch',50+S.rcPitch*50,'var(--accent)');
+  setText('vyaw',fmt(S.rcYaw,2));setBar('byaw',50+S.rcYaw*50,'var(--accent)');
   drawGauge(S.rcHz);
-
-  // Motors
-  [['FL',S.motFL,S.rpmFL],['FR',S.motFR,S.rpmFR],['RL',S.motRL,S.rpmRL],['RR',S.motRR,S.rpmRR]]
-  .forEach(([id,v,rpm])=>{
-    const pct=Math.round(v*100);
-    const el=document.getElementById('m'+id);
+  [['FL',S.motFL,S.rpmFL],['FR',S.motFR,S.rpmFR],['RL',S.motRL,S.rpmRL],['RR',S.motRR,S.rpmRR]].forEach(([id,v,rpm])=>{
+    const pct=Math.round(v*100),el=document.getElementById('m'+id);
     el.textContent=pct+' %'+(rpm>10?'  '+Math.round(rpm)+' rpm':'');
-    const c=pct>70?'var(--red)':pct>30?'var(--amber)':pct>0?'var(--green)':'var(--dim)';
-    el.style.color=c; setBar('bm'+id,pct,c);
+    const c=pct>70?'var(--red)':pct>30?'var(--amber)':pct>0?'var(--green)':'var(--dim)';el.style.color=c;setBar('bm'+id,pct,c);
   });
-
-  // BMP
-  setText('vbt', isFinite(S.bmpTemp)?S.bmpTemp.toFixed(1)+' °C':'— °C');
-  setText('vbp', isFinite(S.bmpPressure)?S.bmpPressure.toFixed(2)+' hPa':'— hPa');
-  setText('vba', isFinite(S.bmpAlt)?S.bmpAlt.toFixed(1)+' m':'— m');
-
-  // CPU
-  if(isFinite(S.cpu0)){
-    setText('vcpu0',S.cpu0.toFixed(0)+' %'); setText('vcpu1',S.cpu1.toFixed(0)+' %');
-    const c0=S.cpu0>80?'var(--red)':S.cpu0>55?'var(--amber)':'var(--green)';
-    const c1=S.cpu1>80?'var(--red)':S.cpu1>55?'var(--amber)':'var(--green)';
-    setBar('bcpu0',S.cpu0,c0); setBar('bcpu1',S.cpu1,c1);
-  }
-
-  // Attitude
-  setText('eR',(S.roll>=0?'+':'')+S.roll.toFixed(1)+'°');
-  setText('eP',(S.pitch>=0?'+':'')+S.pitch.toFixed(1)+'°');
-  setText('eY',S.yaw.toFixed(1)+'°');
-  drawAI(S.roll,S.pitch); drawCompass(S.yaw);
-  drawStick('sL',S.rcYaw,S.thr*2-1); drawStick('sR',S.rcRoll,S.rcPitch);
-
-  // Telemetry status
-  setText('stk',S.tick);
-  setText('shz',S.rcHz.toFixed(0)+' Hz');
-
-  // Plots
-  drawImuPlot(); drawRpmGauges();
+  setText('vbt',isFinite(S.bmpTemp)?S.bmpTemp.toFixed(1)+' °C':'— °C');
+  setText('vbp',isFinite(S.bmpPressure)?S.bmpPressure.toFixed(2)+' hPa':'— hPa');
+  setText('vba',isFinite(S.bmpAlt)?S.bmpAlt.toFixed(1)+' m':'— m');
+  if(isFinite(S.cpu0)){setText('vcpu0',S.cpu0.toFixed(0)+' %');setText('vcpu1',S.cpu1.toFixed(0)+' %');const c0=S.cpu0>80?'var(--red)':S.cpu0>55?'var(--amber)':'var(--green)';const c1=S.cpu1>80?'var(--red)':S.cpu1>55?'var(--amber)':'var(--green)';setBar('bcpu0',S.cpu0,c0);setBar('bcpu1',S.cpu1,c1);}
+  setText('eR',(S.roll>=0?'+':'')+S.roll.toFixed(1)+'°');setText('eP',(S.pitch>=0?'+':'')+S.pitch.toFixed(1)+'°');setText('eY',S.yaw.toFixed(1)+'°');
+  drawAI(S.roll,S.pitch);drawCompass(S.yaw);drawStick('sL',S.rcYaw,S.thr*2-1);drawStick('sR',S.rcRoll,S.rcPitch);
+  setText('stk',S.tick);setText('shz',S.rcHz.toFixed(0)+' Hz');
+  drawImuPlot();drawRpmGauges();
+  renderGps();
 }
 
-// ─── RC Hz speedometer gauge ──────────────────
 function drawGauge(hz){
-  const c=document.getElementById('rcGauge'),ctx=c.getContext('2d');
-  const W=c.width,H=c.height,cx=W/2,cy=H-8,R=Math.min(cx-6,H-10);
-  ctx.clearRect(0,0,W,H);
-
-  const MAX=200, frac=clamp(hz/MAX,0,1);
-  const col=hz>130?'var(--green)':hz>70?'var(--amber)':'var(--red)';
-
-  // Track
-  ctx.beginPath(); ctx.arc(cx,cy,R,Math.PI,0,false);
-  ctx.lineWidth=11; ctx.strokeStyle='#0c1e30'; ctx.stroke();
-
-  // Fill
-  ctx.beginPath(); ctx.arc(cx,cy,R,Math.PI,Math.PI*(1+frac),false);
-  ctx.lineWidth=11; ctx.strokeStyle=col; ctx.stroke();
-
-  // Tick marks + labels every 50 Hz
+  const c=document.getElementById('rcGauge'),ctx=c.getContext('2d'),W=c.width,H=c.height,cx=W/2,cy=H-8,R=Math.min(cx-6,H-10);
+  ctx.clearRect(0,0,W,H);const MAX=200,frac=clamp(hz/MAX,0,1);const col=hz>130?'var(--green)':hz>70?'var(--amber)':'var(--red)';
+  ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,0,false);ctx.lineWidth=11;ctx.strokeStyle='#0c1e30';ctx.stroke();
+  ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,Math.PI*(1+frac),false);ctx.lineWidth=11;ctx.strokeStyle=col;ctx.stroke();
   ctx.font='9px monospace';
-  for(let v=0;v<=MAX;v+=50){
-    const a=Math.PI*(1-v/MAX);
-    const cos=Math.cos(a),sin=Math.sin(a);  // note: arc goes left→right, angle from LEFT
-    // arc(cx,cy,R,PI,0) means angle=PI is left, angle=0 is right
-    // for parametric point on the arc: x=cx+R*cos(PI-a_norm), y=cy-R*sin(PI-a_norm)
-    const an = Math.PI*(1-v/MAX);
-    const x1=cx+R*Math.cos(an-Math.PI),  y1=cy-R*Math.sin(an-Math.PI);
-    const x2=cx+(R-15)*Math.cos(an-Math.PI), y2=cy-(R-15)*Math.sin(an-Math.PI);
-    // Actually simpler: use the original arc angle directly
-    // arc goes from π to 0, so param t=v/MAX maps to angle = π - t*π = π*(1-t)
-    const ang=Math.PI*(1-v/MAX);
-    const px1=cx+R*Math.cos(ang),     py1=cy-R*Math.sin(ang);
-    const px2=cx+(R-14)*Math.cos(ang),py2=cy-(R-14)*Math.sin(ang);
-    const lx =cx+(R-24)*Math.cos(ang),ly =cy-(R-24)*Math.sin(ang);
-    ctx.beginPath(); ctx.moveTo(px1,py1); ctx.lineTo(px2,py2);
-    ctx.lineWidth=1.5; ctx.strokeStyle='#1a3856'; ctx.stroke();
-    ctx.fillStyle='#4a7090'; ctx.textAlign='center';
-    ctx.fillText(v, lx, ly+4);
-  }
-
-  // Needle
-  const nAng=Math.PI*(1-frac);
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(cx+(R-8)*Math.cos(nAng), cy-(R-8)*Math.sin(nAng));
-  ctx.lineWidth=2.5; ctx.strokeStyle='#f0d040'; ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx,cy,4.5,0,Math.PI*2);
-  ctx.fillStyle='#f0d040'; ctx.fill();
-
-  setText('gaugeVal', hz.toFixed(0)+' Hz');
-  document.getElementById('gaugeVal').style.color=col;
+  for(let v=0;v<=MAX;v+=50){const ang=Math.PI*(1-v/MAX);const px1=cx+R*Math.cos(ang),py1=cy-R*Math.sin(ang);const px2=cx+(R-14)*Math.cos(ang),py2=cy-(R-14)*Math.sin(ang);const lx=cx+(R-24)*Math.cos(ang),ly=cy-(R-24)*Math.sin(ang);ctx.beginPath();ctx.moveTo(px1,py1);ctx.lineTo(px2,py2);ctx.lineWidth=1.5;ctx.strokeStyle='#1a3856';ctx.stroke();ctx.fillStyle='#4a7090';ctx.textAlign='center';ctx.fillText(v,lx,ly+4);}
+  const nAng=Math.PI*(1-frac);ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+(R-8)*Math.cos(nAng),cy-(R-8)*Math.sin(nAng));ctx.lineWidth=2.5;ctx.strokeStyle='#f0d040';ctx.stroke();ctx.beginPath();ctx.arc(cx,cy,4.5,0,Math.PI*2);ctx.fillStyle='#f0d040';ctx.fill();
+  setText('gaugeVal',hz.toFixed(0)+' Hz');document.getElementById('gaugeVal').style.color=col;
 }
-
-// ─── Artificial horizon ───────────────────────
 function drawAI(roll,pitch){
-  const c=document.getElementById('ai'),ctx=c.getContext('2d'),
-        w=c.width,h=c.height,cx=w/2,cy=h/2,r=w/2-2;
-  ctx.clearRect(0,0,w,h); ctx.save();
-  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
-  ctx.translate(cx,cy); ctx.rotate(-roll*Math.PI/180);
-  ctx.translate(0,(pitch/90)*r*1.4);
-  ctx.fillStyle='#1a5490'; ctx.fillRect(-w,-h*2,w*2,h*2);
-  ctx.fillStyle='#5a3820'; ctx.fillRect(-w,0,w*2,h*2);
-  ctx.strokeStyle='#c8a060'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(-w,0); ctx.lineTo(w,0); ctx.stroke();
-  for(let d=-80;d<=80;d+=10){
-    if(!d)continue;
-    const y=-(d/90)*r*1.4, lw=d%30?17:30;
-    ctx.strokeStyle='#c8a060'; ctx.lineWidth=d%30?1:1.5;
-    ctx.beginPath(); ctx.moveTo(-lw,y); ctx.lineTo(lw,y); ctx.stroke();
-    if(!(d%30)){
-      ctx.fillStyle='#c8a060'; ctx.font='9px monospace'; ctx.textAlign='left';
-      ctx.fillText((d>0?'+':'')+d, lw+3, y+4);
-    }
-  }
-  ctx.restore(); ctx.save(); ctx.translate(cx,cy);
-  ctx.strokeStyle='#f0d040'; ctx.lineWidth=2.5; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(-42,0); ctx.lineTo(-16,0); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(16,0);  ctx.lineTo(42,0); ctx.stroke();
-  ctx.fillStyle='#f0d040'; ctx.beginPath(); ctx.arc(0,0,3.5,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='var(--accent)'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke();
-  const ra=(-roll-90)*Math.PI/180;
-  ctx.fillStyle='#f0d040'; ctx.beginPath();
-  ctx.moveTo((r-2)*Math.cos(ra),(r-2)*Math.sin(ra));
-  ctx.lineTo((r-12)*Math.cos(ra-.055),(r-12)*Math.sin(ra-.055));
-  ctx.lineTo((r-12)*Math.cos(ra+.055),(r-12)*Math.sin(ra+.055));
-  ctx.closePath(); ctx.fill(); ctx.restore();
+  const c=document.getElementById('ai'),ctx=c.getContext('2d'),w=c.width,h=c.height,cx=w/2,cy=h/2,r=w/2-2;
+  ctx.clearRect(0,0,w,h);ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.clip();
+  ctx.translate(cx,cy);ctx.rotate(-roll*Math.PI/180);ctx.translate(0,(pitch/90)*r*1.4);
+  ctx.fillStyle='#1a5490';ctx.fillRect(-w,-h*2,w*2,h*2);ctx.fillStyle='#5a3820';ctx.fillRect(-w,0,w*2,h*2);
+  ctx.strokeStyle='#c8a060';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-w,0);ctx.lineTo(w,0);ctx.stroke();
+  for(let d=-80;d<=80;d+=10){if(!d)continue;const y=-(d/90)*r*1.4,lw=d%30?17:30;ctx.strokeStyle='#c8a060';ctx.lineWidth=d%30?1:1.5;ctx.beginPath();ctx.moveTo(-lw,y);ctx.lineTo(lw,y);ctx.stroke();if(!(d%30)){ctx.fillStyle='#c8a060';ctx.font='9px monospace';ctx.textAlign='left';ctx.fillText((d>0?'+':'')+d,lw+3,y+4);}}
+  ctx.restore();ctx.save();ctx.translate(cx,cy);ctx.strokeStyle='#f0d040';ctx.lineWidth=2.5;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-42,0);ctx.lineTo(-16,0);ctx.stroke();ctx.beginPath();ctx.moveTo(16,0);ctx.lineTo(42,0);ctx.stroke();
+  ctx.fillStyle='#f0d040';ctx.beginPath();ctx.arc(0,0,3.5,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='var(--accent)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
+  const ra=(-roll-90)*Math.PI/180;ctx.fillStyle='#f0d040';ctx.beginPath();ctx.moveTo((r-2)*Math.cos(ra),(r-2)*Math.sin(ra));ctx.lineTo((r-12)*Math.cos(ra-.055),(r-12)*Math.sin(ra-.055));ctx.lineTo((r-12)*Math.cos(ra+.055),(r-12)*Math.sin(ra+.055));ctx.closePath();ctx.fill();ctx.restore();
 }
-
-// ─── Compass ─────────────────────────────────
 function drawCompass(yaw){
   const c=document.getElementById('cmp'),ctx=c.getContext('2d'),w=c.width,h=c.height;
-  ctx.clearRect(0,0,w,h); ctx.fillStyle='var(--surface)'; ctx.fillRect(0,0,w,h);
-  const px=w/80;
-  for(let d=-50;d<=130;d+=10){
-    const deg=((Math.round(yaw/10)*10+d)%360+360)%360, x=w/2+d*px;
-    if(x<2||x>w-2) continue;
-    const maj=!(deg%30);
-    ctx.strokeStyle=maj?'var(--accent)':'var(--border)'; ctx.lineWidth=maj?1.5:1;
-    ctx.beginPath(); ctx.moveTo(x,maj?0:8); ctx.lineTo(x,22); ctx.stroke();
-    if(maj){
-      const lb={0:'N',90:'E',180:'S',270:'W'}[deg]??deg;
-      ctx.fillStyle=[0,90,180,270].includes(deg)?'var(--accent)':'var(--dim)';
-      ctx.font=([0,90,180,270].includes(deg)?'bold ':'')+'10px monospace';
-      ctx.textAlign='center'; ctx.fillText(lb,x,36);
-    }
-  }
-  ctx.strokeStyle='#f0d040'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(w/2,0); ctx.lineTo(w/2,18); ctx.stroke();
-  ctx.fillStyle='#f0d040'; ctx.beginPath();
-  ctx.moveTo(w/2,0); ctx.lineTo(w/2-5,9); ctx.lineTo(w/2+5,9); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='var(--bright)'; ctx.font='bold 13px monospace'; ctx.textAlign='center';
-  ctx.fillText(yaw.toFixed(1)+'°',w/2,58);
-  ctx.fillStyle='var(--dim)'; ctx.font='9px monospace'; ctx.fillText('HEADING',w/2,70);
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='var(--surface)';ctx.fillRect(0,0,w,h);const px=w/80;
+  for(let d=-50;d<=130;d+=10){const deg=((Math.round(yaw/10)*10+d)%360+360)%360,x=w/2+d*px;if(x<2||x>w-2)continue;const maj=!(deg%30);ctx.strokeStyle=maj?'var(--accent)':'var(--border)';ctx.lineWidth=maj?1.5:1;ctx.beginPath();ctx.moveTo(x,maj?0:8);ctx.lineTo(x,22);ctx.stroke();if(maj){const lb={0:'N',90:'E',180:'S',270:'W'}[deg]??deg;ctx.fillStyle=[0,90,180,270].includes(deg)?'var(--accent)':'var(--dim)';ctx.font=([0,90,180,270].includes(deg)?'bold ':'')+'10px monospace';ctx.textAlign='center';ctx.fillText(lb,x,36);}}
+  ctx.strokeStyle='#f0d040';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,18);ctx.stroke();ctx.fillStyle='#f0d040';ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2-5,9);ctx.lineTo(w/2+5,9);ctx.closePath();ctx.fill();
+  ctx.fillStyle='var(--bright)';ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillText(yaw.toFixed(1)+'°',w/2,58);ctx.fillStyle='var(--dim)';ctx.font='9px monospace';ctx.fillText('HEADING',w/2,70);
 }
-
-// ─── Stick visualiser ─────────────────────────
 function drawStick(id,x,y){
   const c=document.getElementById(id),ctx=c.getContext('2d'),w=c.width,h=c.height;
-  ctx.clearRect(0,0,w,h); ctx.fillStyle='#04090f'; ctx.fillRect(0,0,w,h);
-  ctx.strokeStyle='var(--border)'; ctx.strokeRect(0,0,w,h);
-  ctx.strokeStyle='#0d1e30'; ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
-  const sx=w/2+clamp(x,-1,1)*(w/2-9), sy=h/2-clamp(y,-1,1)*(h/2-9);
-  ctx.fillStyle='var(--accent)'; ctx.shadowColor='var(--accent)'; ctx.shadowBlur=9;
-  ctx.beginPath(); ctx.arc(sx,sy,6,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#04090f';ctx.fillRect(0,0,w,h);ctx.strokeStyle='var(--border)';ctx.strokeRect(0,0,w,h);
+  ctx.strokeStyle='#0d1e30';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
+  const sx=w/2+clamp(x,-1,1)*(w/2-9),sy=h/2-clamp(y,-1,1)*(h/2-9);
+  ctx.fillStyle='var(--accent)';ctx.shadowColor='var(--accent)';ctx.shadowBlur=9;ctx.beginPath();ctx.arc(sx,sy,6,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
 }
-
-// ─── IMU Signal Plot (scaled Y axis) ─────────
 function drawImuPlot(){
-  const c=document.getElementById('imuPlot');
-  if(!c||!c.parentElement) return;
-  const pw=c.parentElement.clientWidth, ph=c.parentElement.clientHeight;
-  if(!pw||!ph) return;
-  c.width=pw; c.height=ph;
-  const ctx=c.getContext('2d'), w=pw, h=ph;
-
+  const c=document.getElementById('imuPlot');if(!c||!c.parentElement)return;
+  const pw=c.parentElement.clientWidth,ph=c.parentElement.clientHeight;if(!pw||!ph)return;
+  c.width=pw;c.height=ph;const ctx=c.getContext('2d'),w=pw,h=ph;
   const mode=document.getElementById('imuAxis').value;
-  const MARGIN_L=40, MARGIN_B=18, MARGIN_T=6;
-  const pw2=w-MARGIN_L, ph2=h-MARGIN_B-MARGIN_T;
-
-  // Choose Y scale based on mode
-  let yMax=180;
-  if(mode==='gyro')   yMax=250;
-  if(mode==='accel')  yMax=180; // accel is already ×90
-  if(mode==='all')    yMax=250;
+  const ML=40,MB=18,MT=6,pw2=w-ML,ph2=h-MB-MT;
+  let yMax=mode==='gyro'?250:180;if(mode==='all')yMax=250;
   const yMin=-yMax;
-
-  const mapX=(i)=>MARGIN_L+(i/(BUF-1))*pw2;
-  const mapY=(v)=>MARGIN_T+ph2*(1-(v-yMin)/(yMax-yMin));
-
-  // Background
-  ctx.fillStyle='#04090f'; ctx.fillRect(0,0,w,h);
-
-  // Grid + Y-axis scale
-  const ySteps=5;
-  ctx.strokeStyle='#0d1a28'; ctx.lineWidth=1;
-  ctx.fillStyle='#4a7090'; ctx.font='9px monospace'; ctx.textAlign='right';
-  for(let i=0;i<=ySteps;i++){
-    const v=yMin+(yMax-yMin)*i/ySteps;
-    const yp=mapY(v);
-    ctx.beginPath(); ctx.moveTo(MARGIN_L,yp); ctx.lineTo(w,yp); ctx.stroke();
-    ctx.fillText(v.toFixed(0), MARGIN_L-3, yp+4);
-  }
-
-  // Y axis label
-  ctx.save(); ctx.translate(11,h/2); ctx.rotate(-Math.PI/2);
-  ctx.textAlign='center'; ctx.fillStyle='#3a6080'; ctx.font='9px monospace';
-  const unit = mode==='gyro'?'°/s':mode==='accel'?'°×90':'°';
-  ctx.fillText(unit,0,0); ctx.restore();
-
-  // Zero line
-  ctx.strokeStyle='#1e3a58'; ctx.lineWidth=1.5;
-  const z=mapY(0);
-  ctx.beginPath(); ctx.moveTo(MARGIN_L,z); ctx.lineTo(w,z); ctx.stroke();
-
-  function plotLine(arr,color,dash=[],alpha=1){
-    ctx.save(); ctx.globalAlpha=alpha;
-    ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.setLineDash(dash);
-    ctx.beginPath();
-    for(let i=0;i<BUF;i++){
-      const idx=(histIdx+i)%BUF;
-      const x=mapX(i), y=mapY(clamp(arr[idx],yMin,yMax));
-      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-    }
-    ctx.stroke(); ctx.restore();
-  }
-
-  if(mode==='rpy'||mode==='all'){
-    plotLine(hist.roll, '#2d8fcf');
-    plotLine(hist.pitch,'#22c55e');
-    plotLine(hist.yaw,  '#a855f7');
-  }
-  if(mode==='gyro'||mode==='all'){
-    plotLine(hist.gx,'#f59e0b',[],mode==='all'?.75:1);
-    plotLine(hist.gy,'#ef4444',[],mode==='all'?.75:1);
-    plotLine(hist.gz,'#06b6d4',[],mode==='all'?.75:1);
-  }
-  if(mode==='accel'||mode==='all'){
-    plotLine(hist.ax,'#2d8fcf',[5,3],mode==='all'?.45:1);
-    plotLine(hist.ay,'#22c55e',[5,3],mode==='all'?.45:1);
-    plotLine(hist.az,'#a855f7',[5,3],mode==='all'?.45:1);
-  }
-
-  // X axis label
-  ctx.fillStyle='#3a6080'; ctx.font='9px monospace'; ctx.textAlign='center';
-  ctx.fillText('← '+BUF+' samples →', w/2, h-3);
+  const mapX=(i)=>ML+(i/(BUF-1))*pw2,mapY=(v)=>MT+ph2*(1-(v-yMin)/(yMax-yMin));
+  ctx.fillStyle='#04090f';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#0d1a28';ctx.lineWidth=1;ctx.fillStyle='#4a7090';ctx.font='9px monospace';ctx.textAlign='right';
+  for(let i=0;i<=5;i++){const v=yMin+(yMax-yMin)*i/5,yp=mapY(v);ctx.beginPath();ctx.moveTo(ML,yp);ctx.lineTo(w,yp);ctx.stroke();ctx.fillText(v.toFixed(0),ML-3,yp+4);}
+  ctx.save();ctx.translate(11,h/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillStyle='#3a6080';ctx.font='9px monospace';ctx.fillText(mode==='gyro'?'°/s':mode==='accel'?'°×90':'°',0,0);ctx.restore();
+  ctx.strokeStyle='#1e3a58';ctx.lineWidth=1.5;const z=mapY(0);ctx.beginPath();ctx.moveTo(ML,z);ctx.lineTo(w,z);ctx.stroke();
+  function plotLine(arr,color,dash=[],alpha=1){ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.setLineDash(dash);ctx.beginPath();for(let i=0;i<BUF;i++){const idx=(histIdx+i)%BUF,x=mapX(i),y=mapY(clamp(arr[idx],yMin,yMax));i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();ctx.restore();}
+  if(mode==='rpy'||mode==='all'){plotLine(hist.roll,'#2d8fcf');plotLine(hist.pitch,'#22c55e');plotLine(hist.yaw,'#a855f7');}
+  if(mode==='gyro'||mode==='all'){plotLine(hist.gx,'#f59e0b',[],mode==='all'?.75:1);plotLine(hist.gy,'#ef4444',[],mode==='all'?.75:1);plotLine(hist.gz,'#06b6d4',[],mode==='all'?.75:1);}
+  if(mode==='accel'||mode==='all'){plotLine(hist.ax,'#2d8fcf',[5,3],mode==='all'?.45:1);plotLine(hist.ay,'#22c55e',[5,3],mode==='all'?.45:1);plotLine(hist.az,'#a855f7',[5,3],mode==='all'?.45:1);}
+  ctx.fillStyle='#3a6080';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('← '+BUF+' samples →',w/2,h-3);
 }
-
-// ─── RPM Gauges — four arc gauges, one per motor ─────
-const MAX_RPM = 25000; // max expected RPM (2300 KV × 11.1 V × 1.0 thr ≈ 25530)
-
-function drawRpmGauge(canvasId, valId, rpm, color){
-  const c = document.getElementById(canvasId);
-  if(!c) return;
-  // Set internal resolution based on display size
-  const disp = c.parentElement ? c.parentElement.clientWidth : 130;
-  const SZ = Math.max(60, Math.min(130, disp));
-  c.width = SZ; c.height = Math.round(SZ * 0.62);
-  const ctx = c.getContext('2d');
-  const W=c.width, H=c.height, cx=W/2, cy=H-6, R=Math.min(cx-5, H-8);
-
-  ctx.clearRect(0,0,W,H);
-
-  const frac = clamp(rpm / MAX_RPM, 0, 1);
-  const col = frac > 0.8 ? '#ef4444' : frac > 0.55 ? '#f59e0b' : color;
-
-  // Background arc
-  ctx.beginPath(); ctx.arc(cx,cy,R,Math.PI,0,false);
-  ctx.lineWidth=8; ctx.strokeStyle='#0c1e30'; ctx.stroke();
-
-  // Filled arc
-  if(frac > 0){
-    ctx.beginPath(); ctx.arc(cx,cy,R,Math.PI,Math.PI*(1+frac),false);
-    ctx.lineWidth=8; ctx.strokeStyle=col; ctx.stroke();
-  }
-
-  // Tick marks at 0, 25%, 50%, 75%, 100%
-  const ticks=[0,0.25,0.5,0.75,1.0];
-  ticks.forEach(t=>{
-    const ang = Math.PI*(1-t);
-    const x1=cx+R*Math.cos(ang),     y1=cy-R*Math.sin(ang);
-    const x2=cx+(R-10)*Math.cos(ang),y2=cy-(R-10)*Math.sin(ang);
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
-    ctx.lineWidth=1.5; ctx.strokeStyle='#1e3a56'; ctx.stroke();
-    // Label at 0%, 50%, 100%
-    if(t===0||t===0.5||t===1.0){
-      const lx=cx+(R-18)*Math.cos(ang), ly=cy-(R-18)*Math.sin(ang);
-      ctx.fillStyle='#3a6080'; ctx.font='7px monospace'; ctx.textAlign='center';
-      ctx.fillText(Math.round(t*MAX_RPM/1000)+'k', lx, ly+3);
-    }
-  });
-
-  // Needle
-  const nAng = Math.PI*(1-frac);
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(cx+(R-5)*Math.cos(nAng), cy-(R-5)*Math.sin(nAng));
-  ctx.lineWidth=2; ctx.strokeStyle='#f0d040'; ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx,cy,3.5,0,Math.PI*2);
-  ctx.fillStyle='#f0d040'; ctx.fill();
-
-  // Value label
-  const el=document.getElementById(valId);
-  if(el){ el.textContent=rpm>10?Math.round(rpm)+' rpm':'0 rpm'; el.style.color=col; }
+const MAX_RPM=25000;
+function drawRpmGauge(canvasId,valId,rpm,color){
+  const c=document.getElementById(canvasId);if(!c)return;const disp=c.parentElement?c.parentElement.clientWidth:130;const SZ=Math.max(60,Math.min(130,disp));c.width=SZ;c.height=Math.round(SZ*.62);
+  const ctx=c.getContext('2d'),W=c.width,H=c.height,cx=W/2,cy=H-6,R=Math.min(cx-5,H-8);ctx.clearRect(0,0,W,H);
+  const frac=clamp(rpm/MAX_RPM,0,1);const col=frac>.8?'#ef4444':frac>.55?'#f59e0b':color;
+  ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,0,false);ctx.lineWidth=8;ctx.strokeStyle='#0c1e30';ctx.stroke();
+  if(frac>0){ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,Math.PI*(1+frac),false);ctx.lineWidth=8;ctx.strokeStyle=col;ctx.stroke();}
+  [0,.25,.5,.75,1].forEach(t=>{const ang=Math.PI*(1-t);const x1=cx+R*Math.cos(ang),y1=cy-R*Math.sin(ang);const x2=cx+(R-10)*Math.cos(ang),y2=cy-(R-10)*Math.sin(ang);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.lineWidth=1.5;ctx.strokeStyle='#1e3a56';ctx.stroke();if(t===0||t===0.5||t===1){const lx=cx+(R-18)*Math.cos(ang),ly=cy-(R-18)*Math.sin(ang);ctx.fillStyle='#3a6080';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(Math.round(t*MAX_RPM/1000)+'k',lx,ly+3);}});
+  const nAng=Math.PI*(1-frac);ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+(R-5)*Math.cos(nAng),cy-(R-5)*Math.sin(nAng));ctx.lineWidth=2;ctx.strokeStyle='#f0d040';ctx.stroke();ctx.beginPath();ctx.arc(cx,cy,3.5,0,Math.PI*2);ctx.fillStyle='#f0d040';ctx.fill();
+  const el=document.getElementById(valId);if(el){el.textContent=rpm>10?Math.round(rpm)+' rpm':'0 rpm';el.style.color=col;}
 }
+function drawRpmGauges(){drawRpmGauge('rpmGaugeFL','rpmValFL',S.rpmFL,'#2d8fcf');drawRpmGauge('rpmGaugeFR','rpmValFR',S.rpmFR,'#22c55e');drawRpmGauge('rpmGaugeRL','rpmValRL',S.rpmRL,'#f59e0b');drawRpmGauge('rpmGaugeRR','rpmValRR',S.rpmRR,'#ef4444');}
 
-function drawRpmGauges(){
-  drawRpmGauge('rpmGaugeFL','rpmValFL',S.rpmFL,'#2d8fcf');
-  drawRpmGauge('rpmGaugeFR','rpmValFR',S.rpmFR,'#22c55e');
-  drawRpmGauge('rpmGaugeRL','rpmValRL',S.rpmRL,'#f59e0b');
-  drawRpmGauge('rpmGaugeRR','rpmValRR',S.rpmRR,'#ef4444');
-}
-
-// ─── Utilities ────────────────────────────────
 function setText(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
-function setBar(id,pct,col){const el=document.getElementById(id);if(!el)return;
-  el.style.width=clamp(pct,0,100)+'%'; if(col)el.style.background=col;}
+function setBar(id,pct,col){const el=document.getElementById(id);if(!el)return;el.style.width=clamp(pct,0,100)+'%';if(col)el.style.background=col;}
 function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
 function fmt(v,dp){return(v>=0?'+':'')+Number(v).toFixed(dp);}
 
-// Redraw plots on resize
 const ro=new ResizeObserver(()=>{drawImuPlot();drawRpmGauges();});
 ro.observe(document.getElementById('pIMU'));
 
-// Boot message
-addCalLog('[GS] Ground Station v2.2 ready','lBOOT');
-addCalLog('[GS] Connect Serial (Chrome/Edge) or Wi-Fi (192.168.4.1)','lBOOT');
-addCalLog('[GS] Wi-Fi: calibration messages stream via /log endpoint (2 Hz)','lBOOT');
-addCalLog('[GS] Press ⏺ LOG to start CSV data logging','lBOOT');
+setTimeout(()=>{initMap();updateSatDots(0);},150);
+
+addCalLog('[GS] Ground Station v2.3 ready','lBOOT');
+addCalLog('[GS] Serial (Chrome/Edge) · Wi-Fi (192.168.4.1) · or SIM','lBOOT');
+addCalLog('[GS] GPS column added — map tiles need internet, track renders offline','lBOOT');
+addCalLog('[GS] Cold GPS fix: 30–90 s outdoors. Press SIM to demo GPS track.','lBOOT');
+addCalLog('[GS] Press ⏺ LOG to start CSV logging (GPS columns included)','lBOOT');
 render();
 </script>
 </body>
