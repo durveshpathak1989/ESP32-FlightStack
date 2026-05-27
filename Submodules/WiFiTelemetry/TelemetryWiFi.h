@@ -1,7 +1,7 @@
 /**
  * ============================================================
  *  TelemetryWiFi.h — ESP32 Wi-Fi Hotspot Telemetry Subsystem
- *  v2.3 — adds GPS fields to TelemetryPacket + /log endpoint
+ *  v2.4 — adds /timing, /timing/reset, /timing/csv endpoints
  * ============================================================
  */
 
@@ -18,7 +18,7 @@
 #define WIFI_LOG_LINE_LEN  140
 
 // ─────────────────────────────────────────────────────────────
-//  Telemetry packet — v2.3 adds GPS block
+//  Telemetry packet
 // ─────────────────────────────────────────────────────────────
 struct TelemetryPacket {
     uint32_t tick;
@@ -48,21 +48,21 @@ struct TelemetryPacket {
     float pid_angle_roll_kp, pid_angle_pitch_kp;
     float mahony_kp, mahony_ki;
 
-    // ── GPS block (new in v2.3) ──────────────────────────────
-    double  gps_lat;          // decimal degrees
-    double  gps_lon;          // decimal degrees
-    float   gps_altitude_m;   // metres MSL
+    // GPS block
+    double  gps_lat;
+    double  gps_lon;
+    float   gps_altitude_m;
     float   gps_speed_kmh;
     float   gps_course_deg;
     uint8_t gps_satellites;
     float   gps_hdop;
-    uint8_t gps_fix_quality;  // 0=none 1=GPS 2=DGPS
+    uint8_t gps_fix_quality;
     bool    gps_valid;
     uint8_t gps_hour, gps_minute, gps_second;
 };
 
 // ─────────────────────────────────────────────────────────────
-//  Tune packet — unchanged
+//  Tune packet
 // ─────────────────────────────────────────────────────────────
 struct TunePacket {
     bool has_pid_roll_kp,  has_pid_roll_ki,  has_pid_roll_kd;
@@ -93,8 +93,14 @@ public:
 
     void update();
 
+    // Providers / handlers registered by the main sketch
     void setTelemetryProvider(bool (*provider)(TelemetryPacket& out));
     void setTuneHandler(void (*handler)(const TunePacket& in));
+
+    // v2.4 — timing endpoint providers
+    void setTimingProvider(String (*provider)());
+    void setTimingCsvProvider(String (*provider)());
+    void setTimingResetHandler(void (*handler)());
 
     void pushLog(const char* line);
     void pushLog(const String& line) { pushLog(line.c_str()); }
@@ -106,6 +112,12 @@ private:
     WebServer  _server;
     bool     (*_provider)(TelemetryPacket& out);
     void     (*_tuneHandler)(const TunePacket& in);
+
+    // v2.4 timing callbacks
+    String   (*_timingProvider)();
+    String   (*_timingCsvProvider)();
+    void     (*_timingResetHandler)();
+
     uint32_t   _requestCount;
 
     struct LogEntry {
@@ -124,6 +136,9 @@ private:
     void _handleTelemetry();
     void _handleTune();
     void _handleLog();
+    void _handleTiming();
+    void _handleTimingReset();
+    void _handleTimingCsv();
     void _handleOptions();
     void _handleNotFound();
 

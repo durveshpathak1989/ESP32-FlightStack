@@ -1,6 +1,6 @@
 /**
  * ============================================================
- *  TelemetryWiFi.cpp — v2.3  (GPS fields added)
+ *  TelemetryWiFi.cpp — v2.4  (timing endpoints added)
  * ============================================================
  */
 
@@ -9,7 +9,13 @@
 TelemetryWiFi telemetryWiFi(80);
 
 TelemetryWiFi::TelemetryWiFi(uint16_t port)
-    : _server(port), _provider(nullptr), _tuneHandler(nullptr), _requestCount(0)
+    : _server(port),
+      _provider(nullptr),
+      _tuneHandler(nullptr),
+      _timingProvider(nullptr),
+      _timingCsvProvider(nullptr),
+      _timingResetHandler(nullptr),
+      _requestCount(0)
 {
     memset(_logBuf, 0, sizeof(_logBuf));
 }
@@ -19,8 +25,12 @@ bool TelemetryWiFi::begin(const char* ssid, const char* password,
 {
     WiFi.mode(WIFI_AP);
     WiFi.setSleep(false);
-    if (!WiFi.softAPConfig(localIp, gateway, subnet)) { Serial.println(F("[WiFi] softAPConfig failed")); return false; }
-    if (!WiFi.softAP(ssid, password))                 { Serial.println(F("[WiFi] softAP failed"));       return false; }
+    if (!WiFi.softAPConfig(localIp, gateway, subnet)) {
+        Serial.println(F("[WiFi] softAPConfig failed")); return false;
+    }
+    if (!WiFi.softAP(ssid, password)) {
+        Serial.println(F("[WiFi] softAP failed")); return false;
+    }
     _setupRoutes();
     _server.begin();
     Serial.printf("[WiFi] SSID=%s  PASS=%s\n", ssid, password);
@@ -28,8 +38,11 @@ bool TelemetryWiFi::begin(const char* ssid, const char* password,
     return true;
 }
 
-void TelemetryWiFi::setTelemetryProvider(bool (*p)(TelemetryPacket& out)) { _provider    = p; }
-void TelemetryWiFi::setTuneHandler(void (*h)(const TunePacket& in))       { _tuneHandler = h; }
+void TelemetryWiFi::setTelemetryProvider(bool (*p)(TelemetryPacket& out)) { _provider             = p; }
+void TelemetryWiFi::setTuneHandler(void (*h)(const TunePacket& in))       { _tuneHandler          = h; }
+void TelemetryWiFi::setTimingProvider(String (*p)())                       { _timingProvider       = p; }
+void TelemetryWiFi::setTimingCsvProvider(String (*p)())                    { _timingCsvProvider    = p; }
+void TelemetryWiFi::setTimingResetHandler(void (*h)())                     { _timingResetHandler   = h; }
 void TelemetryWiFi::update()                                               { _server.handleClient(); }
 IPAddress TelemetryWiFi::ip()           const { return WiFi.softAPIP(); }
 uint32_t  TelemetryWiFi::requestCount() const { return _requestCount; }
@@ -54,14 +67,21 @@ void TelemetryWiFi::pushLog(const char* line)
 
 void TelemetryWiFi::_setupRoutes()
 {
-    _server.on("/",          HTTP_GET,     [this]() { _handleRoot(); });
-    _server.on("/telemetry", HTTP_GET,     [this]() { _handleTelemetry(); });
-    _server.on("/telemetry", HTTP_OPTIONS, [this]() { _handleOptions(); });
-    _server.on("/tune",      HTTP_POST,    [this]() { _handleTune(); });
-    _server.on("/tune",      HTTP_OPTIONS, [this]() { _handleOptions(); });
-    _server.on("/log",       HTTP_GET,     [this]() { _handleLog(); });
-    _server.on("/log",       HTTP_OPTIONS, [this]() { _handleOptions(); });
-    _server.onNotFound(                   [this]() { _handleNotFound(); });
+    _server.on("/",               HTTP_GET,     [this]() { _handleRoot(); });
+    _server.on("/telemetry",      HTTP_GET,     [this]() { _handleTelemetry(); });
+    _server.on("/telemetry",      HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.on("/tune",           HTTP_POST,    [this]() { _handleTune(); });
+    _server.on("/tune",           HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.on("/log",            HTTP_GET,     [this]() { _handleLog(); });
+    _server.on("/log",            HTTP_OPTIONS, [this]() { _handleOptions(); });
+    // v2.4 timing endpoints
+    _server.on("/timing",         HTTP_GET,     [this]() { _handleTiming(); });
+    _server.on("/timing",         HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.on("/timing/reset",   HTTP_POST,    [this]() { _handleTimingReset(); });
+    _server.on("/timing/reset",   HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.on("/timing/csv",     HTTP_GET,     [this]() { _handleTimingCsv(); });
+    _server.on("/timing/csv",     HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.onNotFound(                         [this]() { _handleNotFound(); });
 }
 
 void TelemetryWiFi::_sendCorsHeaders()
@@ -76,20 +96,57 @@ void TelemetryWiFi::_handleRoot()
 {
     _sendCorsHeaders();
     _server.send(200, "text/plain",
-        "ESP32 Drone Telemetry v2.3\n"
-        "GET  /telemetry      — full state JSON (incl. GPS)\n"
-        "POST /tune           — apply PID/Mahony gains\n"
-        "GET  /log?since=N    — calibration log lines\n");
+        "ESP32 Drone Telemetry v2.4\n"
+        "GET  /telemetry        — full state JSON\n"
+        "POST /tune             — apply PID/Mahony gains (disarmed only)\n"
+        "GET  /log?since=N      — calibration log lines\n"
+        "GET  /timing           — IMU jitter stats (Welford)\n"
+        "POST /timing/reset     — reset jitter stats\n"
+        "GET  /timing/csv       — download raw period_us ring buffer\n");
 }
 
 void TelemetryWiFi::_handleTelemetry()
 {
     _requestCount++;
     _sendCorsHeaders();
-    if (!_provider) { _server.send(503, "application/json", "{\"ok\":false,\"error\":\"no provider\"}"); return; }
+    if (!_provider) {
+        _server.send(503, "application/json", "{\"ok\":false,\"error\":\"no provider\"}");
+        return;
+    }
     TelemetryPacket p; memset(&p, 0, sizeof(p));
-    if (!_provider(p)) { _server.send(503, "application/json", "{\"ok\":false,\"error\":\"unavailable\"}"); return; }
+    if (!_provider(p)) {
+        _server.send(503, "application/json", "{\"ok\":false,\"error\":\"unavailable\"}");
+        return;
+    }
     _server.send(200, "application/json", _jsonFromPacket(p));
+}
+
+void TelemetryWiFi::_handleTiming()
+{
+    _sendCorsHeaders();
+    if (!_timingProvider) {
+        _server.send(503, "application/json", "{\"ok\":false,\"error\":\"no timing provider\"}");
+        return;
+    }
+    _server.send(200, "application/json", _timingProvider());
+}
+
+void TelemetryWiFi::_handleTimingReset()
+{
+    _sendCorsHeaders();
+    if (_timingResetHandler) _timingResetHandler();
+    _server.send(200, "application/json", "{\"ok\":true,\"msg\":\"timing stats reset\"}");
+}
+
+void TelemetryWiFi::_handleTimingCsv()
+{
+    _sendCorsHeaders();
+    if (!_timingCsvProvider) {
+        _server.send(503, "text/plain", "no csv provider");
+        return;
+    }
+    _server.sendHeader("Content-Disposition", "attachment; filename=\"timing.csv\"");
+    _server.send(200, "text/csv", _timingCsvProvider());
 }
 
 void TelemetryWiFi::_handleLog()
@@ -138,9 +195,15 @@ void TelemetryWiFi::_handleLog()
 void TelemetryWiFi::_handleTune()
 {
     _sendCorsHeaders();
-    if (!_tuneHandler) { _server.send(503, "application/json", "{\"ok\":false,\"error\":\"no handler\"}"); return; }
+    if (!_tuneHandler) {
+        _server.send(503, "application/json", "{\"ok\":false,\"error\":\"no handler\"}");
+        return;
+    }
     String body = _server.arg("plain");
-    if (body.length() == 0) { _server.send(400, "application/json", "{\"ok\":false,\"error\":\"empty body\"}"); return; }
+    if (body.length() == 0) {
+        _server.send(400, "application/json", "{\"ok\":false,\"error\":\"empty body\"}");
+        return;
+    }
     TunePacket t; memset(&t, 0, sizeof(t));
     auto tryF = [&](const char* key, bool& has, float& val) {
         float tmp; if (_jsonGetFloat(body, key, tmp)) { has = true; val = tmp; }
@@ -163,10 +226,13 @@ void TelemetryWiFi::_handleTune()
 }
 
 void TelemetryWiFi::_handleOptions() { _sendCorsHeaders(); _server.send(204); }
-void TelemetryWiFi::_handleNotFound() { _sendCorsHeaders(); _server.send(404, "application/json", "{\"ok\":false,\"error\":\"not found\"}"); }
+void TelemetryWiFi::_handleNotFound() {
+    _sendCorsHeaders();
+    _server.send(404, "application/json", "{\"ok\":false,\"error\":\"not found\"}");
+}
 
 // ─────────────────────────────────────────────────────────────
-//  JSON serialiser — v2.3 adds GPS block
+//  JSON serialiser
 // ─────────────────────────────────────────────────────────────
 String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
 {
@@ -221,8 +287,6 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"mahonyKi\":"        + String(p.mahony_ki,          5);
     j += ",\"clients\":"         + String(WiFi.softAPgetStationNum());
     j += ",\"requests\":"        + String(_requestCount);
-
-    // ── GPS block ────────────────────────────────────────────
     j += ",\"gpsValid\":"    + String(p.gps_valid ? "true" : "false");
     j += ",\"gpsLat\":"      + String(p.gps_lat,        6);
     j += ",\"gpsLon\":"      + String(p.gps_lon,        6);
@@ -235,7 +299,6 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"gpsHour\":"     + String(p.gps_hour);
     j += ",\"gpsMin\":"      + String(p.gps_minute);
     j += ",\"gpsSec\":"      + String(p.gps_second);
-
     j += "}";
     return j;
 }
