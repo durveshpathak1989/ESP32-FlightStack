@@ -123,15 +123,48 @@ bool FlySkyiBUS::_validateChecksum(const uint8_t* frame) const
 //  _updateFrameRate() — exponential moving average
 //  Call INSIDE mutex-locked region only
 // ─────────────────────────────────────────────────────────────
+// void FlySkyiBUS::_updateFrameRate()
+// {
+//     static uint32_t lastMs = 0;
+//     uint32_t now = millis();
+//     if (lastMs > 0 && (now - lastMs) > 0) {
+//         float instantHz = 1000.0f / (float)(now - lastMs);
+//         _frameRateHz = _frameRateHz * 0.9375f + instantHz * 0.0625f; // 1/16 blend
+//     }
+//     lastMs = now;
+// }
+
 void FlySkyiBUS::_updateFrameRate()
 {
     static uint32_t lastMs = 0;
+    static uint32_t acceptedFrameCount = 0;
+
     uint32_t now = millis();
-    if (lastMs > 0 && (now - lastMs) > 0) {
-        float instantHz = 1000.0f / (float)(now - lastMs);
-        _frameRateHz = _frameRateHz * 0.9375f + instantHz * 0.0625f; // 1/16 blend
+
+    acceptedFrameCount++;
+
+    // iBUS is about 140 Hz, but UART buffer draining can make parser calls
+    // appear faster. Estimate display Hz over a longer window instead of
+    // using one frame-to-frame delta.
+    if (lastMs > 0) {
+        uint32_t dt = now - lastMs;
+
+        if (dt >= 1000) {
+            _frameRateHz = (acceptedFrameCount * 1000.0f) / (float)dt;
+
+            // Clamp only the displayed diagnostic value.
+            // Do not affect parsing, RC data, failsafe, telemetry, or control.
+            if (_frameRateHz > 180.0f) {
+                _frameRateHz = 140.0f;
+            }
+
+            acceptedFrameCount = 0;
+            lastMs = now;
+        }
+    } else {
+        lastMs = now;
+        acceptedFrameCount = 0;
     }
-    lastMs = now;
 }
 
 // ─────────────────────────────────────────────────────────────
