@@ -151,6 +151,7 @@ public:
      * This is the primary interface for the flight controller.
      */
     RCCommand getCommand() const;
+    bool getCommandFast(RCCommand& cmd) const;
 
     /**
      * isArmed() — true when CH5 (FLIGHTMODE) exceeds ARM_THRESHOLD.

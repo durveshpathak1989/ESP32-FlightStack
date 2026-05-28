@@ -272,6 +272,38 @@ RCCommand FlySkyiBUS::getCommand() const
     return cmd;
 }
 
+bool FlySkyiBUS::getCommandFast(RCCommand& cmd) const
+{
+    memset(&cmd, 0, sizeof(cmd));
+    if (xSemaphoreTake(_mutex, 0) != pdTRUE) return false;
+
+    bool valid = _signalValid;
+    uint16_t ch[IBUS_CHANNELS];
+    memcpy(ch, _channels, sizeof(ch));
+    xSemaphoreGive(_mutex);
+
+    for (int i = 0; i < IBUS_CHANNELS; i++) cmd.raw[i] = ch[i];
+
+    if (!valid) {
+        cmd.mode  = FlightMode::FAILSAFE;
+        cmd.valid = false;
+        return true;
+    }
+
+    cmd.roll     =  _mapChannel(ch[RC_CH_ROLL]);
+    cmd.pitch    = -_mapChannel(ch[RC_CH_PITCH]);
+    cmd.throttle =  _mapThrottle(ch[RC_CH_THROTTLE]);
+    cmd.yaw      =  _mapChannel(ch[RC_CH_YAW]);
+
+    bool armed = (ch[RC_CH_FLIGHTMODE] >= RC_ARM_THRESHOLD);
+    bool acro  = (ch[RC_CH_AUX2] >= RC_ARM_THRESHOLD);
+    cmd.mode   = armed ? (acro ? FlightMode::ACRO : FlightMode::ANGLE)
+                       : FlightMode::DISARMED;
+    cmd.swdHigh = (ch[RC_CH_AUX4] >= RC_SWD_THRESHOLD);
+    cmd.valid = true;
+    return true;
+}
+
 // ─────────────────────────────────────────────────────────────
 //  printChannels() — debug
 // ─────────────────────────────────────────────────────────────

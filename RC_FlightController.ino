@@ -115,6 +115,15 @@ struct TimingStats {
     uint32_t jitterViolations;
     double   jMean;
     double   jM2;
+
+    // Additional diagnostics separating scheduler release delay and execution cost
+    int32_t  lastPeriodErrorUs;
+    int32_t  lastReleaseLatenessUs;
+    uint32_t lastExecUs;
+    uint32_t execMaxUs;
+    int32_t  releaseLatenessMaxUs;
+    uint32_t deadlineMisses;
+
     // Ring buffer for p99 and CSV export (chronological, head = next write)
     uint16_t buf[TIMING_BUF_SIZE];
     uint16_t bufHead;
@@ -669,101 +678,77 @@ static void taskRC(void* /*pv*/)
 // ─────────────────────────────────────────────────────────────
 static void taskControl(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(3);   // 400 Hz (rounding: 2.5→3 ms tick)
-    // Note: FreeRTOS tick is 1 ms. pdMS_TO_TICKS(3) = 3 ticks → 333 Hz at tick resolution.
-    // For true 400 Hz use pdMS_TO_TICKS(2) + manual micros() guard (see below).
-    // We use a micros()-gated approach: vTaskDelay(1) keeps the RTOS happy while
-    // micros() controls the actual loop rate precisely.
-    TickType_t lastWake = xTaskGetTickCount();
-    uint32_t lastUs = micros();
     const uint32_t TARGET_US = TIMING_TARGET_US;   // 2500 µs = 400 Hz
+    const uint32_t YIELD_GUARD_US = 150;           // short final spin window
+    const int32_t RELEASE_RESYNC_US = 5000;        // large release miss threshold
+
+    uint32_t lastStartUs = micros();
+    uint32_t nextReleaseUs = lastStartUs + TARGET_US;
+    RCCommand lastCmd{};
+    lastCmd.mode = FlightMode::FAILSAFE;
 
     // PID state (declared here so they reset cleanly after calibration)
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
 
     for (;;) {
-        // ── Apply pending gain update ─────────────────────────
+        while ((int32_t)(nextReleaseUs - micros()) > (int32_t)YIELD_GUARD_US) {
+            vTaskDelay(1);
+        }
+        while ((int32_t)(nextReleaseUs - micros()) > 0) { }
+
+        uint32_t startUs = micros();
+        uint32_t periodUs = startUs - lastStartUs;
+        int32_t periodErrorUs = (int32_t)periodUs - (int32_t)TARGET_US;
+        int32_t releaseLatenessUs = (int32_t)(startUs - nextReleaseUs);
+
+        lastStartUs = startUs;
+        nextReleaseUs += TARGET_US;
+        if (releaseLatenessUs > RELEASE_RESYNC_US) {
+            nextReleaseUs = startUs + TARGET_US;
+        }
+
         if (g_tuning.dirty) applyTuningToObjects();
 
-        // ── Calibration (blocks this task; motors already off) ─
         if (g_calibState == CalibState::REQUESTED) {
             motorsOff();
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
             runAutonomousCalibration();
             g_calibState = CalibState::IDLE;
-            // Re-anchor timing after the long calibration block
-            lastUs   = micros();
-            lastWake = xTaskGetTickCount();
+            lastStartUs = micros();
+            nextReleaseUs = lastStartUs + TARGET_US;
             continue;
         }
-
-        // ── Precise 400 Hz gate using micros() ───────────────
-        // vTaskDelayUntil(2) would give 500 Hz at 1 ms tick resolution
-        // but two tasks at 500 Hz overwhelmed Core 1.
-        // We yield for 1 tick to allow Core 0 tasks to run, then spin
-        // until exactly TARGET_US has elapsed since the last cycle start.
-        // This gives true 400 Hz without tick-resolution rounding errors.
-        vTaskDelay(1);   // yield — allows WiFi, BMP, GPS, Serial to run
-        while ((micros() - lastUs) < TARGET_US) { }   // busy-wait remainder
-
-        // ── Measure actual period ─────────────────────────────
-        uint32_t nowUs    = micros();
-        uint32_t periodUs = nowUs - lastUs;
-        lastUs = nowUs;
-        lastWake = xTaskGetTickCount();   // re-sync after yield+spin
 
         float dt = (float)periodUs * 1e-6f;
         if (dt <= 0.0f || dt > 0.05f) {
             dt = (float)TARGET_US * 1e-6f;
             periodUs = TARGET_US;
+            periodErrorUs = 0;
         }
 
-        // ── Welford timing accumulator (Test 7.1) ────────────
-        if (xSemaphoreTake(g_timingMutex, 0) == pdTRUE) {
-            uint32_t n = ++g_timing.count;
-
-            double delta  = (double)periodUs - g_timing.wMean;
-            g_timing.wMean += delta / n;
-            g_timing.wM2   += delta * ((double)periodUs - g_timing.wMean);
-
-            uint32_t jit = (periodUs >= TARGET_US)
-                         ? (periodUs - TARGET_US)
-                         : (TARGET_US - periodUs);
-
-            double jdelta  = (double)jit - g_timing.jMean;
-            g_timing.jMean += jdelta / n;
-            g_timing.jM2   += jdelta * ((double)jit - g_timing.jMean);
-
-            if (jit > g_timing.jitterMax)  g_timing.jitterMax = jit;
-            if (jit > JITTER_VIOLATION_US) g_timing.jitterViolations++;
-
-            g_timing.buf[g_timing.bufHead] = (uint16_t)min(periodUs, (uint32_t)65535);
-            g_timing.bufHead = (g_timing.bufHead + 1) % TIMING_BUF_SIZE;
-            if (g_timing.bufHead == 0) g_timing.bufFull = true;
-
-            xSemaphoreGive(g_timingMutex);
-        }
-
-        // ── IMU read + Mahony AHRS ────────────────────────────
         MPU_SensorData s;
         MPU_Attitude   att;
-        bool imuOk = imu.readScaled(s);
+        bool imuOk = imu.readScaled(s); // TODO: optional 6DOF fast path for 400 Hz loop
         if (imuOk) {
             imu.mahonyUpdate(s, dt, att);
         }
 
-        // ── Get RC command ────────────────────────────────────
-        RCCommand cmd = rcReceiver.getCommand();
+        RCCommand cmd;
+        if (!rcReceiver.getCommandFast(cmd)) {
+            if (lastCmd.valid) cmd = lastCmd;
+            else { cmd = RCCommand{}; cmd.mode = FlightMode::FAILSAFE; cmd.valid = false; }
+        } else {
+            lastCmd = cmd;
+        }
 
-        // ── PID + motor mix ───────────────────────────────────
         if (cmd.mode == FlightMode::DISARMED || cmd.mode == FlightMode::FAILSAFE) {
             motorsOff();
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
 
-            if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+            if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
                 g_state.armed   = false;
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
                 g_state.rc      = cmd;
@@ -777,10 +762,22 @@ static void taskControl(void* /*pv*/)
                 }
                 xSemaphoreGive(g_flightMutex);
             }
+            uint32_t execUs = micros() - startUs;
+            if (xSemaphoreTake(g_timingMutex, 0) == pdTRUE) {
+                uint32_t n = ++g_timing.count;
+                double delta=(double)periodUs-g_timing.wMean; g_timing.wMean+=delta/n; g_timing.wM2+=delta*((double)periodUs-g_timing.wMean);
+                uint32_t jit = (periodUs>=TARGET_US)?(periodUs-TARGET_US):(TARGET_US-periodUs);
+                double jdelta=(double)jit-g_timing.jMean; g_timing.jMean+=jdelta/n; g_timing.jM2+=jdelta*((double)jit-g_timing.jMean);
+                if (jit>g_timing.jitterMax) g_timing.jitterMax=jit; if (jit>JITTER_VIOLATION_US) g_timing.jitterViolations++;
+                g_timing.lastPeriodErrorUs=periodErrorUs; g_timing.lastReleaseLatenessUs=releaseLatenessUs; g_timing.lastExecUs=execUs;
+                if (execUs>g_timing.execMaxUs) g_timing.execMaxUs=execUs; if (releaseLatenessUs>g_timing.releaseLatenessMaxUs) g_timing.releaseLatenessMaxUs=releaseLatenessUs;
+                if (execUs>TARGET_US) g_timing.deadlineMisses++;
+                g_timing.buf[g_timing.bufHead]=(uint16_t)min(periodUs,(uint32_t)65535); g_timing.bufHead=(g_timing.bufHead+1)%TIMING_BUF_SIZE; if (g_timing.bufHead==0) g_timing.bufFull=true;
+                xSemaphoreGive(g_timingMutex);
+            }
             continue;
         }
 
-        // Armed — run cascaded PID using fresh AHRS data from this same cycle
         float roll  = imuOk ? att.roll  : 0.0f;
         float pitch = imuOk ? att.pitch : 0.0f;
         float gx    = imuOk ? s.gx_dps : 0.0f;
@@ -797,7 +794,7 @@ static void taskControl(void* /*pv*/)
             rO = pidRateRoll .update(rSP - gx, dt);
             pO = pidRatePitch.update(pSP - gy, dt);
             yO = pidRateYaw  .update(cmd.yaw*MAX_RATE_DPS - gz, dt);
-        } else {   // ACRO
+        } else {
             rO = pidRateRoll .update(cmd.roll *MAX_RATE_DPS - gx, dt);
             pO = pidRatePitch.update(cmd.pitch*MAX_RATE_DPS - gy, dt);
             yO = pidRateYaw  .update(cmd.yaw  *MAX_RATE_DPS - gz, dt);
@@ -815,10 +812,7 @@ static void taskControl(void* /*pv*/)
 
         writeMotors(fl, fr, rl, rr);
 
-        // ── Publish flight state ──────────────────────────────
-        // Single mutex write covering both AHRS and PID output —
-        // WiFi task sees a consistent snapshot with no torn reads.
-        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+        if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
             if (imuOk) {
                 g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
                 g_state.yaw_deg  = att.yaw;
@@ -831,6 +825,20 @@ static void taskControl(void* /*pv*/)
             g_state.motorRL=rl; g_state.motorRR=rr;
             g_state.armed=true; g_state.rc=cmd;
             xSemaphoreGive(g_flightMutex);
+        }
+
+        uint32_t execUs = micros() - startUs;
+        if (xSemaphoreTake(g_timingMutex, 0) == pdTRUE) {
+            uint32_t n = ++g_timing.count;
+            double delta=(double)periodUs-g_timing.wMean; g_timing.wMean+=delta/n; g_timing.wM2+=delta*((double)periodUs-g_timing.wMean);
+            uint32_t jit = (periodUs>=TARGET_US)?(periodUs-TARGET_US):(TARGET_US-periodUs);
+            double jdelta=(double)jit-g_timing.jMean; g_timing.jMean+=jdelta/n; g_timing.jM2+=jdelta*((double)jit-g_timing.jMean);
+            if (jit>g_timing.jitterMax) g_timing.jitterMax=jit; if (jit>JITTER_VIOLATION_US) g_timing.jitterViolations++;
+            g_timing.lastPeriodErrorUs=periodErrorUs; g_timing.lastReleaseLatenessUs=releaseLatenessUs; g_timing.lastExecUs=execUs;
+            if (execUs>g_timing.execMaxUs) g_timing.execMaxUs=execUs; if (releaseLatenessUs>g_timing.releaseLatenessMaxUs) g_timing.releaseLatenessMaxUs=releaseLatenessUs;
+            if (execUs>TARGET_US) g_timing.deadlineMisses++;
+            g_timing.buf[g_timing.bufHead]=(uint16_t)min(periodUs,(uint32_t)65535); g_timing.bufHead=(g_timing.bufHead+1)%TIMING_BUF_SIZE; if (g_timing.bufHead==0) g_timing.bufFull=true;
+            xSemaphoreGive(g_timingMutex);
         }
     }
 }
