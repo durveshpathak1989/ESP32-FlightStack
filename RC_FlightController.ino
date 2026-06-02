@@ -207,11 +207,18 @@ struct PID {
 };
 
 // Conservative first-flight gains — tune inner (rate) loop first in ACRO mode
-static PID pidRateRoll  (0.08f, 0.000f, 0.000f);
-static PID pidRatePitch (0.08f, 0.000f, 0.000f);
-static PID pidRateYaw   (0.10f, 0.000f, 0.000f);
-static PID pidAngleRoll (1.5f,  0.0f,   0.0f);
-static PID pidAnglePitch(1.5f,  0.0f,   0.0f);
+// static PID pidRateRoll  (0.008f, 0.000f, 0.000f);
+// static PID pidRatePitch (0.008f, 0.000f, 0.000f);
+// static PID pidRateYaw   (0.010f, 0.000f, 0.000f);
+// static PID pidAngleRoll (1.5f,  0.0f,   0.0f);
+// static PID pidAnglePitch(1.5f,  0.0f,   0.0f);
+
+static PID pidRateRoll  (0.0005f, 0.0001f, 0.000f);
+static PID pidRatePitch (0.0005f, 0.0001f, 0.000f);
+static PID pidRateYaw   (0.00010f, 0.0001f, 0.000f);
+
+static PID pidAngleRoll (1.5f, 0.0f, 0.0f);
+static PID pidAnglePitch(2.5f, 0.0f, 0.0f);
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -786,7 +793,7 @@ static void taskControl(void* /*pv*/)
         float gx    = imuOk ? s.gx_dps : 0.0f;
         float gy    = imuOk ? s.gy_dps : 0.0f;
         float gz    = imuOk ? s.gz_dps : 0.0f;
-
+  
         const float MAX_ANGLE_DEG = 30.0f;
         const float MAX_RATE_DPS  = 200.0f;
         float rO=0, pO=0, yO=0;
@@ -803,9 +810,9 @@ static void taskControl(void* /*pv*/)
             yO = pidRateYaw  .update(cmd.yaw  *MAX_RATE_DPS - gz, dt);
         }
 
-        rO = constrain(rO, -0.25f, 0.25f);
+        rO = constrain(rO, -0.15f, 0.15f);
         pO = constrain(pO, -0.25f, 0.25f);
-        yO = constrain(yO, -0.15f, 0.15f);
+        yO = constrain(yO, -0.10f, 0.10f);
 
         float thr = cmd.throttle;
         float fl = constrain(thr+rO-pO-yO, 0.0f, 1.0f);
@@ -818,7 +825,8 @@ static void taskControl(void* /*pv*/)
         // ── Publish flight state ──────────────────────────────
         // Single mutex write covering both AHRS and PID output —
         // WiFi task sees a consistent snapshot with no torn reads.
-        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+        //if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) 
+        if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE){
             if (imuOk) {
                 g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
                 g_state.yaw_deg  = att.yaw;
