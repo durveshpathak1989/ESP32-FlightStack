@@ -428,13 +428,21 @@ void MPU9250::calibrateGyro() {
 //  Calibration: Accel
 // ─────────────────────────────────────────────────────────────
 void MPU9250::calibrateAccel() {
+    // const char* labels[6] = {
+    //     "+X axis UP  (right side up)",
+    //     "-X axis UP  (left side up)",
+    //     "+Y axis UP  (nose up)",
+    //     "-Y axis UP  (nose down)",
+    //     "+Z axis UP  (flat, top up)",
+    //     "-Z axis UP  (inverted)"
+    // };
     const char* labels[6] = {
-        "+X axis UP  (right side up)",
-        "-X axis UP  (left side up)",
-        "+Y axis UP  (nose up)",
-        "-Y axis UP  (nose down)",
-        "+Z axis UP  (flat, top up)",
-        "-Z axis UP  (inverted)"
+    "+X axis UP  (nose up)",
+    "-X axis UP  (nose down)",
+    "+Y axis UP  (left side up)",
+    "-Y axis UP  (right side up)",
+    "+Z axis UP  (flat, top up)",
+    "-Z axis UP  (inverted)"
     };
     float readings[6][3];
     Serial.println(F("\n[CAL] Accel 6-position calibration."));

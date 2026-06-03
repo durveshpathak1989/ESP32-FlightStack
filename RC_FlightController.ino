@@ -85,7 +85,7 @@
 // ─────────────────────────────────────────────────────────────
 //  Motor RPM estimation constants
 // ─────────────────────────────────────────────────────────────
-#define MOTOR_KV         2300.0f
+#define MOTOR_KV         920.0f
 #define BATTERY_VOLTAGE    11.1f
 
 // ─────────────────────────────────────────────────────────────
@@ -217,8 +217,8 @@ static PID pidRateRoll  (0.0005f, 0.0001f, 0.000f);
 static PID pidRatePitch (0.0005f, 0.0001f, 0.000f);
 static PID pidRateYaw   (0.00010f, 0.0001f, 0.000f);
 
-static PID pidAngleRoll (1.5f, 0.0f, 0.0f);
-static PID pidAnglePitch(2.5f, 0.0f, 0.0f);
+static PID pidAngleRoll (1.5f, 0.0002f, 0.0f);
+static PID pidAnglePitch(2.5f, 0.0002f, 0.0f);
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -509,44 +509,178 @@ static void runAutonomousCalibration()
     }
     calLog("[CAL] ✓ GYRO done.");
 
+    // // ── Stage 2: Accel ───────────────────────────────────────
+    // g_calibState = CalibState::RUNNING_ACCEL;
+    // // struct Pos { const char* lbl; const char* ins; };
+    // // const Pos pos[6] = {
+    // //     {"+X UP","RIGHT side UP"}, {"-X UP","LEFT side UP"},
+    // //     {"+Y UP","NOSE UP"},       {"-Y UP","TAIL UP"},
+    // //     {"+Z UP","FLAT top up"},   {"-Z UP","UPSIDE DOWN"}
+    // // };
+
+    // struct Pos { const char* lbl; const char* ins; };
+    // const Pos pos[6] = {
+    //     {"+X UP", "NOSE UP"},
+    //     {"-X UP", "NOSE DOWN"},
+    //     {"+Y UP", "LEFT side UP"},
+    //     {"-Y UP", "RIGHT side UP"},
+    //     {"+Z UP", "FLAT top up"},
+    //     {"-Z UP", "UPSIDE DOWN"}
+    // }; 
+    // float rds[6][3] = {};
+    // calLog("[CAL] 2/3 ACCEL — 6 positions, flip SWC UP to confirm each.");
+    // for (int p = 0; p < 6; p++) {
+    //     if (swcIsUp()) { calLog("[CAL] Flip SWC DOWN first..."); waitSwcDown(); }
+    //     calLogf("[CAL] Pos %d/6: %s — %s — Flip SWC UP when steady",
+    //             p+1, pos[p].lbl, pos[p].ins);
+    //     uint32_t t0 = millis();
+    //     while (!swcIsUp()) {
+    //         if (millis()-t0 > ACCEL_WAIT_MAX_MS) { calLog("[CAL] Timeout — position skipped"); break; }
+    //         delay(20);
+    //     }
+    //     if (!swcIsUp()) continue;
+    //     silentWait(ACCEL_HOLD_MS);
+    //     MPU_SensorData avg;
+    //     imu.sampleAvg(ACCEL_HOLD_MS / 2, avg);
+    //     rds[p][0]=avg.ax_g; rds[p][1]=avg.ay_g; rds[p][2]=avg.az_g;
+    //     calLogf("[CAL] Got ax=%+.4f ay=%+.4f az=%+.4f g", avg.ax_g, avg.ay_g, avg.az_g);
+    //     waitSwcDown();
+    // }
+    // imu.cal.ax_b = (rds[0][0]+rds[1][0])/2.0f;
+    // imu.cal.ay_b = (rds[2][1]+rds[3][1])/2.0f;
+    // imu.cal.az_b = (rds[4][2]+rds[5][2])/2.0f;
+    // float hx=(rds[0][0]-rds[1][0])/2.0f;
+    // float hy=(rds[2][1]-rds[3][1])/2.0f;
+    // float hz=(rds[4][2]-rds[5][2])/2.0f;
+    // imu.cal.ax_s = fabsf(hx)>0.01f ? 1.0f/hx : 1.0f;
+    // imu.cal.ay_s = fabsf(hy)>0.01f ? 1.0f/hy : 1.0f;
+    // imu.cal.az_s = fabsf(hz)>0.01f ? 1.0f/hz : 1.0f;
+    // calLog("[CAL] ✓ ACCEL done.");
     // ── Stage 2: Accel ───────────────────────────────────────
     g_calibState = CalibState::RUNNING_ACCEL;
-    struct Pos { const char* lbl; const char* ins; };
-    const Pos pos[6] = {
-        {"+X UP","RIGHT side UP"}, {"-X UP","LEFT side UP"},
-        {"+Y UP","NOSE UP"},       {"-Y UP","TAIL UP"},
-        {"+Z UP","FLAT top up"},   {"-Z UP","UPSIDE DOWN"}
+
+    // Axis index: 0 = sensor X, 1 = sensor Y, 2 = sensor Z
+    // Based on measured mounting:
+    //   Nose up        -> ax = +1
+    //   Nose down      -> ax = -1
+    //   Left side up   -> ay = +1
+    //   Right side up  -> ay = -1
+    //   Flat top up    -> az = +1
+    //   Upside down    -> az = -1
+    struct AccelPose {
+        const char* physicalPose;
+        uint8_t axis;
+        int8_t sign;
     };
-    float rds[6][3] = {};
-    calLog("[CAL] 2/3 ACCEL — 6 positions, flip SWC UP to confirm each.");
+
+    const AccelPose poses[6] = {
+        {"NOSE UP",        0, +1},
+        {"NOSE DOWN",      0, -1},
+        {"LEFT side UP",   1, +1},
+        {"RIGHT side UP",  1, -1},
+        {"FLAT top up",    2, +1},
+        {"UPSIDE DOWN",    2, -1}
+    };
+
+    float plusVal[3]  = {0.0f, 0.0f, 0.0f};
+    float minusVal[3] = {0.0f, 0.0f, 0.0f};
+    bool gotPlus[3]   = {false, false, false};
+    bool gotMinus[3]  = {false, false, false};
+
+    calLog("[CAL] 2/3 ACCEL — 6 physical positions, flip SWC UP to confirm each.");
+
     for (int p = 0; p < 6; p++) {
-        if (swcIsUp()) { calLog("[CAL] Flip SWC DOWN first..."); waitSwcDown(); }
-        calLogf("[CAL] Pos %d/6: %s — %s — Flip SWC UP when steady",
-                p+1, pos[p].lbl, pos[p].ins);
+        if (swcIsUp()) {
+            calLog("[CAL] Flip SWC DOWN first...");
+            waitSwcDown();
+        }
+
+        calLogf("[CAL] Pos %d/6: Put drone: %s — Flip SWC UP when steady",
+                p + 1, poses[p].physicalPose);
+
         uint32_t t0 = millis();
         while (!swcIsUp()) {
-            if (millis()-t0 > ACCEL_WAIT_MAX_MS) { calLog("[CAL] Timeout — position skipped"); break; }
+            if (millis() - t0 > ACCEL_WAIT_MAX_MS) {
+                calLog("[CAL] Timeout — position skipped");
+                break;
+            }
             delay(20);
         }
+
         if (!swcIsUp()) continue;
+
         silentWait(ACCEL_HOLD_MS);
+
         MPU_SensorData avg;
         imu.sampleAvg(ACCEL_HOLD_MS / 2, avg);
-        rds[p][0]=avg.ax_g; rds[p][1]=avg.ay_g; rds[p][2]=avg.az_g;
-        calLogf("[CAL] Got ax=%+.4f ay=%+.4f az=%+.4f g", avg.ax_g, avg.ay_g, avg.az_g);
+
+        float axisValue[3] = {
+            avg.ax_g,
+            avg.ay_g,
+            avg.az_g
+        };
+
+        uint8_t axis = poses[p].axis;
+        int8_t sign  = poses[p].sign;
+        float value  = axisValue[axis];
+
+        calLogf("[CAL] Got ax=%+.4f ay=%+.4f az=%+.4f g",
+                avg.ax_g, avg.ay_g, avg.az_g);
+
+        calLogf("[CAL] Routed %s to sensor %c%c = %+.4f g",
+                poses[p].physicalPose,
+                sign > 0 ? '+' : '-',
+                axis == 0 ? 'X' : axis == 1 ? 'Y' : 'Z',
+                value);
+
+        // Optional validation: expected sign should roughly match measured sign.
+        // Do not reject automatically yet; just warn.
+        if ((sign > 0 && value < 0.5f) || (sign < 0 && value > -0.5f)) {
+            calLog("[CAL][WARN] Axis sign does not match expected pose. Check orientation.");
+        }
+
+        if (sign > 0) {
+            plusVal[axis] = value;
+            gotPlus[axis] = true;
+        } else {
+            minusVal[axis] = value;
+            gotMinus[axis] = true;
+        }
+
         waitSwcDown();
     }
-    imu.cal.ax_b = (rds[0][0]+rds[1][0])/2.0f;
-    imu.cal.ay_b = (rds[2][1]+rds[3][1])/2.0f;
-    imu.cal.az_b = (rds[4][2]+rds[5][2])/2.0f;
-    float hx=(rds[0][0]-rds[1][0])/2.0f;
-    float hy=(rds[2][1]-rds[3][1])/2.0f;
-    float hz=(rds[4][2]-rds[5][2])/2.0f;
-    imu.cal.ax_s = fabsf(hx)>0.01f ? 1.0f/hx : 1.0f;
-    imu.cal.ay_s = fabsf(hy)>0.01f ? 1.0f/hy : 1.0f;
-    imu.cal.az_s = fabsf(hz)>0.01f ? 1.0f/hz : 1.0f;
-    calLog("[CAL] ✓ ACCEL done.");
 
+    // Check all six positions were captured
+    bool accelOk = true;
+    for (int a = 0; a < 3; a++) {
+        if (!gotPlus[a] || !gotMinus[a]) {
+            accelOk = false;
+        }
+    }
+
+    if (!accelOk) {
+        calLog("[CAL][ERROR] Accel calibration incomplete — keeping old accel calibration.");
+    } else {
+        imu.cal.ax_b = (plusVal[0] + minusVal[0]) / 2.0f;
+        imu.cal.ay_b = (plusVal[1] + minusVal[1]) / 2.0f;
+        imu.cal.az_b = (plusVal[2] + minusVal[2]) / 2.0f;
+
+        float hx = (plusVal[0] - minusVal[0]) / 2.0f;
+        float hy = (plusVal[1] - minusVal[1]) / 2.0f;
+        float hz = (plusVal[2] - minusVal[2]) / 2.0f;
+
+        imu.cal.ax_s = fabsf(hx) > 0.01f ? 1.0f / hx : 1.0f;
+        imu.cal.ay_s = fabsf(hy) > 0.01f ? 1.0f / hy : 1.0f;
+        imu.cal.az_s = fabsf(hz) > 0.01f ? 1.0f / hz : 1.0f;
+
+        calLogf("[CAL] Accel bias ax=%+.4f ay=%+.4f az=%+.4f g",
+                imu.cal.ax_b, imu.cal.ay_b, imu.cal.az_b);
+
+        calLogf("[CAL] Accel scale ax=%+.4f ay=%+.4f az=%+.4f",
+                imu.cal.ax_s, imu.cal.ay_s, imu.cal.az_s);
+
+        calLog("[CAL] ✓ ACCEL done.");
+    }
     // ── Stage 3: Mag (skipped automatically if no AK8963) ────
     g_calibState = CalibState::RUNNING_MAG;
     if (imu.hasMag()) {
@@ -794,8 +928,8 @@ static void taskControl(void* /*pv*/)
         float gy    = imuOk ? s.gy_dps : 0.0f;
         float gz    = imuOk ? s.gz_dps : 0.0f;
   
-        const float MAX_ANGLE_DEG = 30.0f;
-        const float MAX_RATE_DPS  = 200.0f;
+        const float MAX_ANGLE_DEG = 10.0f;
+        const float MAX_RATE_DPS  = 100.0f;
         float rO=0, pO=0, yO=0;
 
         if (cmd.mode == FlightMode::ANGLE) {
