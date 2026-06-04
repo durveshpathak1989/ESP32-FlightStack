@@ -105,6 +105,11 @@
 #define TIMING_TARGET_US      2500     // nominal control period (400 Hz = 2500 µs)
 #define JITTER_VIOLATION_US    100     // threshold: counts as a violation
 
+//-----------------------------------------------------------------
+//  Low Pass software filter for gyro 
+#define GYRO_LPF_HZ   80.0f   // lower = smoother but more lag (try 60–90)
+#define RC_LPF_HZ     25.0f   // stick setpoint smoothing
+
 struct TimingStats {
     // Welford online algorithm accumulators
     uint32_t count;
@@ -217,8 +222,8 @@ static PID pidRateRoll  (0.001f, 0.000f, 0.000f);
 static PID pidRatePitch (0.001f, 0.000f, 0.000f);
 static PID pidRateYaw   (0.00010f, 0.000f, 0.000f);
 
-static PID pidAngleRoll (1.0f, 0.000f, 0.0f);
-static PID pidAnglePitch(1.0f, 0.000f, 0.0f);
+static PID pidAngleRoll (1.0f, 0.000f, 0.00002f);
+static PID pidAnglePitch(1.0f, 0.000f, 0.00002f);
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -793,6 +798,26 @@ static float throttleExpo(float x, float expo)
 
     return expo * x * x * x +(1.0f - expo) * x;
 }
+
+static float smoothStep01(float x)
+{
+    x = constrain(x, 0.0f, 1.0f);
+    return x * x * (3.0f - 2.0f * x);
+}
+
+// First-order gyro/setpoint low-pass (one state per axis)
+struct LPF {
+    float y = 0.0f;
+    float apply(float x, float dt, float fc) {
+        float rc = 1.0f / (2.0f * 3.14159265f * fc);
+        float a  = dt / (dt + rc);
+        y += a * (x - y);
+        return y;
+    }
+};
+static LPF lpfGx, lpfGy, lpfGz, lpfSpRoll, lpfSpPitch, lpfSpYaw;
+
+
 // ─────────────────────────────────────────────────────────────
 //  taskControl — Core 1, priority 5, 400 Hz  (2.5 ms period)
 //
@@ -899,8 +924,12 @@ static void taskControl(void* /*pv*/)
         MPU_SensorData s;
         MPU_Attitude   att;
         bool imuOk = imu.readScaled(s);
+        float gxf = 0, gyf = 0, gzf = 0;
         if (imuOk) {
             imu.mahonyUpdate(s, dt, att);
+            gxf = lpfGx.apply(s.gx_dps, dt, GYRO_LPF_HZ);
+            gyf = lpfGy.apply(s.gy_dps, dt, GYRO_LPF_HZ);
+            gzf = lpfGz.apply(s.gz_dps, dt, GYRO_LPF_HZ);
         }
 
         // ── Get RC command ────────────────────────────────────
@@ -932,24 +961,42 @@ static void taskControl(void* /*pv*/)
         // Armed — run cascaded PID using fresh AHRS data from this same cycle
         float roll  = imuOk ? att.roll  : 0.0f;
         float pitch = imuOk ? att.pitch : 0.0f;
-        float gx    = imuOk ? s.gx_dps : 0.0f;
-        float gy    = imuOk ? s.gy_dps : 0.0f;
-        float gz    = imuOk ? s.gz_dps : 0.0f;
+        // float gx    = imuOk ? s.gx_dps : 0.0f;
+        // float gy    = imuOk ? s.gy_dps : 0.0f;
+        // float gz    = imuOk ? s.gz_dps : 0.0f;
+        float gx    = imuOk ? gxf : 0.0f;
+        float gy    = imuOk ? gyf : 0.0f;
+        float gz    = imuOk ? gzf : 0.0f;
   
         const float MAX_ANGLE_DEG = 10.0f;
         const float MAX_RATE_DPS  = 100.0f;
         float rO=0, pO=0, yO=0;
 
+        float rollCmd  = lpfSpRoll .apply(cmd.roll,  dt, RC_LPF_HZ);
+        float pitchCmd = lpfSpPitch.apply(cmd.pitch, dt, RC_LPF_HZ);
+        float yawCmd   = lpfSpYaw  .apply(cmd.yaw,   dt, RC_LPF_HZ);
+
+        // if (cmd.mode == FlightMode::ANGLE) {
+        //     float rSP = pidAngleRoll .update(cmd.roll *MAX_ANGLE_DEG - roll,  dt);
+        //     float pSP = pidAnglePitch.update(cmd.pitch*MAX_ANGLE_DEG - pitch, dt);
+        //     rO = pidRateRoll .update(rSP - gx, dt);
+        //     pO = pidRatePitch.update(pSP - gy, dt);
+        //     yO = pidRateYaw  .update(cmd.yaw*MAX_RATE_DPS - gz, dt);
+        // } else {   // ACRO
+        //     rO = pidRateRoll .update(cmd.roll *MAX_RATE_DPS - gx, dt);
+        //     pO = pidRatePitch.update(cmd.pitch*MAX_RATE_DPS - gy, dt);
+        //     yO = pidRateYaw  .update(cmd.yaw  *MAX_RATE_DPS - gz, dt);
+        // }
         if (cmd.mode == FlightMode::ANGLE) {
-            float rSP = pidAngleRoll .update(cmd.roll *MAX_ANGLE_DEG - roll,  dt);
-            float pSP = pidAnglePitch.update(cmd.pitch*MAX_ANGLE_DEG - pitch, dt);
+            float rSP = pidAngleRoll .update(rollCmd *MAX_ANGLE_DEG - roll,  dt);
+            float pSP = pidAnglePitch.update(pitchCmd*MAX_ANGLE_DEG - pitch, dt);
             rO = pidRateRoll .update(rSP - gx, dt);
             pO = pidRatePitch.update(pSP - gy, dt);
-            yO = pidRateYaw  .update(cmd.yaw*MAX_RATE_DPS - gz, dt);
+            yO = pidRateYaw  .update(yawCmd*MAX_RATE_DPS - gz, dt);
         } else {   // ACRO
-            rO = pidRateRoll .update(cmd.roll *MAX_RATE_DPS - gx, dt);
-            pO = pidRatePitch.update(cmd.pitch*MAX_RATE_DPS - gy, dt);
-            yO = pidRateYaw  .update(cmd.yaw  *MAX_RATE_DPS - gz, dt);
+            rO = pidRateRoll .update(rollCmd *MAX_RATE_DPS - gx, dt);
+            pO = pidRatePitch.update(pitchCmd*MAX_RATE_DPS - gy, dt);
+            yO = pidRateYaw  .update(yawCmd  *MAX_RATE_DPS - gz, dt);
         }
 
         // rO = constrain(rO, -0.25f, 0.25f);
@@ -963,12 +1010,22 @@ static void taskControl(void* /*pv*/)
         // ── Throttle expo + smoothing ─────────────────────────
         static float thrSmooth = 0.0f;
 
-        const float THROTTLE_EXPO = 0.25f;
-        const float THROTTLE_UP_RATE_PER_SEC   = 0.40f;
+        const float THROTTLE_EXPO = 0.35f;
+        const float THROTTLE_UP_RATE_PER_SEC   = 0.30f;
         const float THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
+        const float MOTOR_IDLE = 0.06f;
+        const float MOTOR_MAX  = 0.80f;
+        const float THROTTLE_CUT = 0.03f;
+        const float IDLE_RAMP_END = 0.15f;
 
         float thrRaw = constrain(cmd.throttle, 0.0f, 1.0f);
-        float thrTarget = throttleExpo(thrRaw, THROTTLE_EXPO);
+
+        //Throttle Dead Zone
+        float thrTarget = 0.0f;
+        if (thrRaw > THROTTLE_CUT) 
+        {
+            thrTarget = throttleExpo(thrRaw, THROTTLE_EXPO);
+        }
 
         float maxStepUp   = THROTTLE_UP_RATE_PER_SEC * dt;
         float maxStepDown = THROTTLE_DOWN_RATE_PER_SEC * dt;
@@ -987,8 +1044,6 @@ static void taskControl(void* /*pv*/)
         // float rl = constrain(thr+rO+pO+yO, 0.0f, 1.0f);
         // float rr = constrain(thr-rO+pO-yO, 0.0f, 1.0f);
 
-        const float MOTOR_IDLE = 0.06f;
-        const float MOTOR_MAX  = 0.80f;
 
         float fl = thr + rO - pO - yO;
         float fr = thr - rO - pO + yO;
@@ -1005,12 +1060,14 @@ static void taskControl(void* /*pv*/)
             rr -= excess;
         }
 
-        // Apply idle only when throttle is active
-        if (thr > 0.03f) {
-            fl = constrain(fl, MOTOR_IDLE, MOTOR_MAX);
-            fr = constrain(fr, MOTOR_IDLE, MOTOR_MAX);
-            rl = constrain(rl, MOTOR_IDLE, MOTOR_MAX);
-            rr = constrain(rr, MOTOR_IDLE, MOTOR_MAX);
+        float idleBlend = smoothStep01((thr - THROTTLE_CUT) / (IDLE_RAMP_END - THROTTLE_CUT));
+        float motorMin = MOTOR_IDLE * idleBlend;
+
+        if (thr > THROTTLE_CUT) {
+            fl = constrain(fl, motorMin, MOTOR_MAX);
+            fr = constrain(fr, motorMin, MOTOR_MAX);
+            rl = constrain(rl, motorMin, MOTOR_MAX);
+            rr = constrain(rr, motorMin, MOTOR_MAX);
         } else {
             fl = fr = rl = rr = 0.0f;
         }
