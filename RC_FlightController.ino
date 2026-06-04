@@ -72,6 +72,64 @@
 #define PIN_GPS_RX    13
 #define PIN_GPS_TX    17   // GPS module RXD (optional for read-only operation)
 
+// ═════════════════════════════════════════════════════════════
+//  TUNING DASHBOARD — edit flight behavior here first
+//
+//  This section intentionally collects the high-impact values that
+//  affect feel, liftoff behavior, ANGLE/ACRO authority, motor limits,
+//  and logging/timing. The control logic below should not need edits
+//  for normal tuning. Values are copied from the original sketch; this
+//  rearrangement does not intentionally change flight behavior.
+// ═════════════════════════════════════════════════════════════
+
+// ── Loop timing + software filtering ────────────────────────
+#define TIMING_BUF_SIZE       3000     // ring buffer depth (samples)
+#define TIMING_TARGET_US      2500     // nominal control period (400 Hz = 2500 µs)
+#define JITTER_VIOLATION_US    100     // threshold: counts as a violation
+#define GYRO_LPF_HZ           40.0f    // lower = smoother but more lag
+#define RC_LPF_HZ             60.0f    // stick setpoint smoothing
+
+// ── Pilot command limits ────────────────────────────────────
+static constexpr float TUNE_MAX_ANGLE_DEG = 12.0f;
+static constexpr float TUNE_MAX_RATE_DPS  = 120.0f;
+
+// ── PID output authority limits before motor mixing ─────────
+static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.150f;
+static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.150f;
+static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.050f;
+
+// ── Throttle shaping + motor output limits ──────────────────
+static constexpr float TUNE_THROTTLE_EXPO              = 0.35f;
+static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.50f;
+static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
+static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
+static constexpr float TUNE_MOTOR_MAX                  = 0.75f;
+static constexpr float TUNE_THROTTLE_CUT               = 0.03f;
+static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
+
+// ── Initial PID gains loaded at boot ────────────────────────
+// Inner Loop
+static constexpr float TUNE_RATE_ROLL_KP   = 0.0030f;
+static constexpr float TUNE_RATE_ROLL_KI   = 0.00000f;
+static constexpr float TUNE_RATE_ROLL_KD   = 0.00000f;
+static constexpr float TUNE_RATE_PITCH_KP  = 0.0030f;
+static constexpr float TUNE_RATE_PITCH_KI  = 0.00000f;
+static constexpr float TUNE_RATE_PITCH_KD  = 0.00000f;
+static constexpr float TUNE_RATE_YAW_KP    = 0.00025f;
+static constexpr float TUNE_RATE_YAW_KI    = 0.0000000f;
+static constexpr float TUNE_RATE_YAW_KD    = 0.0000000f;
+// Outer Loop
+static constexpr float TUNE_ANGLE_ROLL_KP  = 0.50f;
+static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
+static constexpr float TUNE_ANGLE_ROLL_KD  = 0.0000f;
+static constexpr float TUNE_ANGLE_PITCH_KP = 0.50f;
+static constexpr float TUNE_ANGLE_PITCH_KI = 0.000f;
+static constexpr float TUNE_ANGLE_PITCH_KD = 0.0000f;
+// Outer Loop — Yaw heading hold
+static constexpr float TUNE_ANGLE_YAW_KP     = 2.00f;   // heading-hold Kp (tune up if soft)
+static constexpr float TUNE_YAW_DEADBAND     = 0.05f;   // |yaw stick| below this = hold
+static constexpr float TUNE_YAW_MAX_RATE_DPS = 90.0f;   // cap on commanded yaw rate
+
 // ─────────────────────────────────────────────────────────────
 //  Calibration timing
 // ─────────────────────────────────────────────────────────────
@@ -101,14 +159,7 @@
 //  IMU path: if the WiFi task holds it while computing p99,
 //  that single sample is skipped rather than blocking taskIMU.
 // ─────────────────────────────────────────────────────────────
-#define TIMING_BUF_SIZE       3000     // ring buffer depth (samples)
-#define TIMING_TARGET_US      2500     // nominal control period (400 Hz = 2500 µs)
-#define JITTER_VIOLATION_US    100     // threshold: counts as a violation
-
-//-----------------------------------------------------------------
-//  Low Pass software filter for gyro 
-#define GYRO_LPF_HZ   80.0f   // lower = smoother but more lag (try 60–90)
-#define RC_LPF_HZ     25.0f   // stick setpoint smoothing
+// Timing/filter tuning values are defined in the TUNING DASHBOARD above.
 
 struct TimingStats {
     // Welford online algorithm accumulators
@@ -211,19 +262,14 @@ struct PID {
     void reset(){integral=0;prevError=0;}
 };
 
-// Conservative first-flight gains — tune inner (rate) loop first in ACRO mode
-// static PID pidRateRoll  (0.008f, 0.000f, 0.000f);
-// static PID pidRatePitch (0.008f, 0.000f, 0.000f);
-// static PID pidRateYaw   (0.010f, 0.000f, 0.000f);
-// static PID pidAngleRoll (1.5f,  0.0f,   0.0f);
-// static PID pidAnglePitch(1.5f,  0.0f,   0.0f);
+static PID pidRateRoll  (TUNE_RATE_ROLL_KP,   TUNE_RATE_ROLL_KI,   TUNE_RATE_ROLL_KD);
+static PID pidRatePitch (TUNE_RATE_PITCH_KP,  TUNE_RATE_PITCH_KI,  TUNE_RATE_PITCH_KD);
+static PID pidRateYaw   (TUNE_RATE_YAW_KP,    TUNE_RATE_YAW_KI,    TUNE_RATE_YAW_KD);
 
-static PID pidRateRoll  (0.001f, 0.000f, 0.000f);
-static PID pidRatePitch (0.001f, 0.000f, 0.000f);
-static PID pidRateYaw   (0.00010f, 0.000f, 0.000f);
-
-static PID pidAngleRoll (1.0f, 0.000f, 0.00002f);
-static PID pidAnglePitch(1.0f, 0.000f, 0.00002f);
+static PID pidAngleRoll (TUNE_ANGLE_ROLL_KP,  TUNE_ANGLE_ROLL_KI,  TUNE_ANGLE_ROLL_KD);
+static PID pidAnglePitch(TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
+// Yaw Control
+static PID pidAngleYaw  (TUNE_ANGLE_YAW_KP,   0.0f,                0.0f);   // NEW
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -808,14 +854,32 @@ static float smoothStep01(float x)
 // First-order gyro/setpoint low-pass (one state per axis)
 struct LPF {
     float y = 0.0f;
+    bool initialized = false;
+
     float apply(float x, float dt, float fc) {
+        if (dt <= 0.0f || fc <= 0.0f) return x;
+
+        if (!initialized) {
+            y = x;
+            initialized = true;
+            return y;
+        }
+
         float rc = 1.0f / (2.0f * 3.14159265f * fc);
         float a  = dt / (dt + rc);
         y += a * (x - y);
         return y;
     }
+
+    void reset() {
+        y = 0.0f;
+        initialized = false;
+    }
 };
 static LPF lpfGx, lpfGy, lpfGz, lpfSpRoll, lpfSpPitch, lpfSpYaw;
+
+static float g_yawSetpoint   = 0.0f;
+static bool  g_yawHoldActive = false;
 
 
 // ─────────────────────────────────────────────────────────────
@@ -855,6 +919,8 @@ static void taskControl(void* /*pv*/)
     // PID state (declared here so they reset cleanly after calibration)
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
+    pidAngleYaw.reset();
+    g_yawHoldActive = false;   // recapture heading when re-armed
 
     for (;;) {
         // ── Apply pending gain update ─────────────────────────
@@ -865,6 +931,8 @@ static void taskControl(void* /*pv*/)
             motorsOff();
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
+            pidAngleYaw.reset();
+            g_yawHoldActive = false;   // recapture heading when re-armed
             runAutonomousCalibration();
             g_calibState = CalibState::IDLE;
             // Re-anchor timing after the long calibration block
@@ -940,6 +1008,14 @@ static void taskControl(void* /*pv*/)
             motorsOff();
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
+            lpfGx.reset();
+            lpfGy.reset();
+            lpfGz.reset();
+            lpfSpRoll.reset();
+            lpfSpPitch.reset();
+            lpfSpYaw.reset();
+            pidAngleYaw.reset();
+            g_yawHoldActive = false;   // recapture heading when re-armed
 
             if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
                 g_state.armed   = false;
@@ -968,8 +1044,8 @@ static void taskControl(void* /*pv*/)
         float gy    = imuOk ? gyf : 0.0f;
         float gz    = imuOk ? gzf : 0.0f;
   
-        const float MAX_ANGLE_DEG = 10.0f;
-        const float MAX_RATE_DPS  = 100.0f;
+        const float MAX_ANGLE_DEG = TUNE_MAX_ANGLE_DEG;
+        const float MAX_RATE_DPS  = TUNE_MAX_RATE_DPS;
         float rO=0, pO=0, yO=0;
 
         float rollCmd  = lpfSpRoll .apply(cmd.roll,  dt, RC_LPF_HZ);
@@ -992,31 +1068,50 @@ static void taskControl(void* /*pv*/)
             float pSP = pidAnglePitch.update(pitchCmd*MAX_ANGLE_DEG - pitch, dt);
             rO = pidRateRoll .update(rSP - gx, dt);
             pO = pidRatePitch.update(pSP - gy, dt);
-            yO = pidRateYaw  .update(yawCmd*MAX_RATE_DPS - gz, dt);
+            //yO = pidRateYaw  .update(yawCmd*MAX_RATE_DPS - gz, dt);
         } else {   // ACRO
             rO = pidRateRoll .update(rollCmd *MAX_RATE_DPS - gx, dt);
             pO = pidRatePitch.update(pitchCmd*MAX_RATE_DPS - gy, dt);
-            yO = pidRateYaw  .update(yawCmd  *MAX_RATE_DPS - gz, dt);
+            //yO = pidRateYaw  .update(yawCmd  *MAX_RATE_DPS - gz, dt);
+        }
+        // ── Yaw: heading-hold when stick centered, rate when moving ──
+        // Applies in BOTH ANGLE and ACRO. Stick centered → capture heading
+        // once and actively return to it. Stick deflected → command rate.
+        if (imuOk && fabsf(yawCmd) < TUNE_YAW_DEADBAND) {
+            if (!g_yawHoldActive) {
+                g_yawSetpoint   = att.yaw;   // capture heading on entry
+                g_yawHoldActive = true;
+                pidAngleYaw.reset();
+            }
+            float yawErr = g_yawSetpoint - att.yaw;
+            while (yawErr >  180.0f) yawErr -= 360.0f;   // shortest-path wrap
+            while (yawErr < -180.0f) yawErr += 360.0f;
+            float yawRateSP = pidAngleYaw.update(yawErr, dt);
+            yawRateSP = constrain(yawRateSP, -TUNE_YAW_MAX_RATE_DPS, TUNE_YAW_MAX_RATE_DPS);
+            yO = pidRateYaw.update(yawRateSP - gz, dt);
+        } else {
+            g_yawHoldActive = false;                     // stick moving → free yaw
+            yO = pidRateYaw.update(-yawCmd*MAX_RATE_DPS - gz, dt);
         }
 
         // rO = constrain(rO, -0.25f, 0.25f);
         // pO = constrain(pO, -0.25f, 0.25f);
         // yO = constrain(yO, -0.10f, 0.10f);
 
-        rO = constrain(rO, -0.125f, 0.125f);
-        pO = constrain(pO, -0.125f, 0.125f);
-        yO = constrain(yO, -0.050f, 0.050f);
+        rO = constrain(rO, -TUNE_ROLL_OUTPUT_LIMIT,  TUNE_ROLL_OUTPUT_LIMIT);
+        pO = constrain(pO, -TUNE_PITCH_OUTPUT_LIMIT, TUNE_PITCH_OUTPUT_LIMIT);
+        yO = constrain(yO, -TUNE_YAW_OUTPUT_LIMIT,   TUNE_YAW_OUTPUT_LIMIT);
 
         // ── Throttle expo + smoothing ─────────────────────────
         static float thrSmooth = 0.0f;
 
-        const float THROTTLE_EXPO = 0.35f;
-        const float THROTTLE_UP_RATE_PER_SEC   = 0.30f;
-        const float THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
-        const float MOTOR_IDLE = 0.06f;
-        const float MOTOR_MAX  = 0.80f;
-        const float THROTTLE_CUT = 0.03f;
-        const float IDLE_RAMP_END = 0.15f;
+        const float THROTTLE_EXPO              = TUNE_THROTTLE_EXPO;
+        const float THROTTLE_UP_RATE_PER_SEC   = TUNE_THROTTLE_UP_RATE_PER_SEC;
+        const float THROTTLE_DOWN_RATE_PER_SEC = TUNE_THROTTLE_DOWN_RATE_PER_SEC;
+        const float MOTOR_IDLE                 = TUNE_MOTOR_IDLE;
+        const float MOTOR_MAX                  = TUNE_MOTOR_MAX;
+        const float THROTTLE_CUT               = TUNE_THROTTLE_CUT;
+        const float IDLE_RAMP_END              = TUNE_IDLE_RAMP_END;
 
         float thrRaw = constrain(cmd.throttle, 0.0f, 1.0f);
 
