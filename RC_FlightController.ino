@@ -213,12 +213,12 @@ struct PID {
 // static PID pidAngleRoll (1.5f,  0.0f,   0.0f);
 // static PID pidAnglePitch(1.5f,  0.0f,   0.0f);
 
-static PID pidRateRoll  (0.0005f, 0.0001f, 0.000f);
-static PID pidRatePitch (0.0005f, 0.0001f, 0.000f);
-static PID pidRateYaw   (0.00010f, 0.0001f, 0.000f);
+static PID pidRateRoll  (0.001f, 0.000f, 0.000f);
+static PID pidRatePitch (0.001f, 0.000f, 0.000f);
+static PID pidRateYaw   (0.00010f, 0.000f, 0.000f);
 
-static PID pidAngleRoll (1.5f, 0.0002f, 0.0f);
-static PID pidAnglePitch(2.5f, 0.0002f, 0.0f);
+static PID pidAngleRoll (1.0f, 0.000f, 0.0f);
+static PID pidAnglePitch(1.0f, 0.000f, 0.0f);
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -784,7 +784,15 @@ static void taskRC(void* /*pv*/)
         vTaskDelayUntil(&lastWake, period);
     }
 }
+// throttle smoothening
 
+static float throttleExpo(float x, float expo)
+{
+    x = constrain(x, 0.0f, 1.0f);
+    expo = constrain(expo, 0.0f, 1.0f);
+
+    return expo * x * x * x +(1.0f - expo) * x;
+}
 // ─────────────────────────────────────────────────────────────
 //  taskControl — Core 1, priority 5, 400 Hz  (2.5 ms period)
 //
@@ -944,15 +952,73 @@ static void taskControl(void* /*pv*/)
             yO = pidRateYaw  .update(cmd.yaw  *MAX_RATE_DPS - gz, dt);
         }
 
-        rO = constrain(rO, -0.15f, 0.15f);
-        pO = constrain(pO, -0.25f, 0.25f);
-        yO = constrain(yO, -0.10f, 0.10f);
+        // rO = constrain(rO, -0.25f, 0.25f);
+        // pO = constrain(pO, -0.25f, 0.25f);
+        // yO = constrain(yO, -0.10f, 0.10f);
 
-        float thr = cmd.throttle;
-        float fl = constrain(thr+rO-pO-yO, 0.0f, 1.0f);
-        float fr = constrain(thr-rO-pO+yO, 0.0f, 1.0f);
-        float rl = constrain(thr+rO+pO+yO, 0.0f, 1.0f);
-        float rr = constrain(thr-rO+pO-yO, 0.0f, 1.0f);
+        rO = constrain(rO, -0.125f, 0.125f);
+        pO = constrain(pO, -0.125f, 0.125f);
+        yO = constrain(yO, -0.050f, 0.050f);
+
+        // ── Throttle expo + smoothing ─────────────────────────
+        static float thrSmooth = 0.0f;
+
+        const float THROTTLE_EXPO = 0.25f;
+        const float THROTTLE_UP_RATE_PER_SEC   = 0.40f;
+        const float THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
+
+        float thrRaw = constrain(cmd.throttle, 0.0f, 1.0f);
+        float thrTarget = throttleExpo(thrRaw, THROTTLE_EXPO);
+
+        float maxStepUp   = THROTTLE_UP_RATE_PER_SEC * dt;
+        float maxStepDown = THROTTLE_DOWN_RATE_PER_SEC * dt;
+
+        if (thrTarget > thrSmooth) {
+            thrSmooth += min(thrTarget - thrSmooth, maxStepUp);
+        } else {
+            thrSmooth -= min(thrSmooth - thrTarget, maxStepDown);
+        }
+
+        float thr = constrain(thrSmooth, 0.0f, 1.0f);
+
+        //float thr = cmd.throttle;
+        // float fl = constrain(thr+rO-pO-yO, 0.0f, 1.0f);
+        // float fr = constrain(thr-rO-pO+yO, 0.0f, 1.0f);
+        // float rl = constrain(thr+rO+pO+yO, 0.0f, 1.0f);
+        // float rr = constrain(thr-rO+pO-yO, 0.0f, 1.0f);
+
+        const float MOTOR_IDLE = 0.06f;
+        const float MOTOR_MAX  = 0.80f;
+
+        float fl = thr + rO - pO - yO;
+        float fr = thr - rO - pO + yO;
+        float rl = thr + rO + pO + yO;
+        float rr = thr - rO + pO - yO;
+
+        // Desaturate high side first
+        float maxMotor = max(max(fl, fr), max(rl, rr));
+        if (maxMotor > MOTOR_MAX) {
+            float excess = maxMotor - MOTOR_MAX;
+            fl -= excess;
+            fr -= excess;
+            rl -= excess;
+            rr -= excess;
+        }
+
+        // Apply idle only when throttle is active
+        if (thr > 0.03f) {
+            fl = constrain(fl, MOTOR_IDLE, MOTOR_MAX);
+            fr = constrain(fr, MOTOR_IDLE, MOTOR_MAX);
+            rl = constrain(rl, MOTOR_IDLE, MOTOR_MAX);
+            rr = constrain(rr, MOTOR_IDLE, MOTOR_MAX);
+        } else {
+            fl = fr = rl = rr = 0.0f;
+        }
+
+        //         Serial.printf(
+        // "[MIXTEST] roll=%+.2f pitch=%+.2f gx=%+.2f gy=%+.2f | rO=%+.3f pO=%+.3f | FL=%.3f FR=%.3f RL=%.3f RR=%.3f\n",
+        // roll, pitch, gx, gy, rO, pO, fl, fr, rl, rr
+        // );
 
         writeMotors(fl, fr, rl, rr);
 
