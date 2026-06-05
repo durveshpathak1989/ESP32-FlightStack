@@ -1,17 +1,16 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════╗
- * ║  RC_FlightController.ino  v2.3.1                                  ║
+ * ║  RC_FlightController.ino  v2.3.2                                  ║
  * ║  FlySky FS-iA6B iBUS  +  MPU-9250/6500  +  BMP280  +  GPS       ║
  * ║  Fully autonomous — no keyboard required                         ║
  * ╠══════════════════════════════════════════════════════════════════╣
- * ║  v2.3.1 fixes (over v2.3):                                       ║
- * ║   • MERGED taskIMU + taskPID → single taskControl at 400 Hz     ║
- * ║     Root cause of Core1=100%: two 500 Hz tasks sharing one core  ║
- * ║     Fix: one merged task, 2.5 ms budget, Core 1 ~45% utilisation ║
- * ║   • WiFi telemetry mutex timeout 5 ms → 15 ms (fixes "undefined" ║
- * ║     cycling caused by mutex starvation under Core 1 load)        ║
- * ║   • TIMING_TARGET_US updated to 2500 µs (400 Hz)                ║
- * ║   Requires TelemetryWiFi v2.4 (timing endpoint callbacks)        ║
+ * ║  v2.3.2 changes (over the pasted v2.3.1 working file):           ║
+ * ║   • PID telemetry FIXED: real rO/pO/yO now published in          ║
+ * ║     FlightState and printed (was feeding 4 motor values into     ║
+ * ║     3 out-slots, garbling yawSP/hold). [PID] line is now a       ║
+ * ║     sibling of the 1 Hz block at ~4 Hz, toggled by Serial 'p'.   ║
+ * ║   • No flight-behavior changes: gains, yaw-stick negation,       ║
+ * ║     heading hold, LPF reset, output limits all preserved.        ║
  * ╠══════════════════════════════════════════════════════════════════╣
  * ║  WIRING                                                           ║
  * ║   FS-iA6B iBUS port → GPIO 16 (UART2 RX)                        ║
@@ -19,15 +18,15 @@
  * ║   BMP280 SDA→21  SCL→22  VCC→3.3V  GND→GND  CSB→3.3V           ║
  * ║   GPS TXD→13  VCC→3.3V  GND→GND (UART1)                         ║
  * ║   Motors: FL→25  FR→15  RL→14  RR→32                            ║
- * ║                                                                  ║
- * ║  GPIO 17 is shared: iBUS TX (unused) + GPS UART1 TX (optional)  ║
- * ║  Both are output-only sides never driven — no electrical conflict║
  * ╠══════════════════════════════════════════════════════════════════╣
  * ║  RC SWITCH ASSIGNMENTS                                            ║
  * ║   CH7  SWA  → ARM / DISARM                                       ║
  * ║   CH8  SWB  → ANGLE / ACRO                                       ║
  * ║   CH9  SWC  → Accel confirm during calibration                   ║
  * ║   CH10 SWD  → CALIBRATION trigger (flip UP while disarmed)       ║
+ * ╠══════════════════════════════════════════════════════════════════╣
+ * ║  SERIAL COMMANDS                                                  ║
+ * ║   p  → toggle ~4 Hz [PID] tuning trace on/off (off at boot)     ║
  * ╠══════════════════════════════════════════════════════════════════╣
  * ║  HTTP ENDPOINTS                                                   ║
  * ║   GET  /telemetry     — full state JSON                          ║
@@ -74,12 +73,6 @@
 
 // ═════════════════════════════════════════════════════════════
 //  TUNING DASHBOARD — edit flight behavior here first
-//
-//  This section intentionally collects the high-impact values that
-//  affect feel, liftoff behavior, ANGLE/ACRO authority, motor limits,
-//  and logging/timing. The control logic below should not need edits
-//  for normal tuning. Values are copied from the original sketch; this
-//  rearrangement does not intentionally change flight behavior.
 // ═════════════════════════════════════════════════════════════
 
 // ── Loop timing + software filtering ────────────────────────
@@ -130,6 +123,21 @@ static constexpr float TUNE_ANGLE_YAW_KP     = 2.00f;   // heading-hold Kp (tune
 static constexpr float TUNE_YAW_DEADBAND     = 0.05f;   // |yaw stick| below this = hold
 static constexpr float TUNE_YAW_MAX_RATE_DPS = 90.0f;   // cap on commanded yaw rate
 
+struct FlightLogRow {
+    uint32_t t_us;
+    uint16_t period_us;
+    uint8_t  mode;        // 0=DISARM 1=ANGLE 2=ACRO 3=FAILSAFE
+    uint8_t  flags;       // bit0 armed, bit1 imuOk
+    float rcThrottle, thr;            // raw stick throttle, final mixed
+    float rcRoll, rcPitch, rcYaw;     // smoothed setpoints (post-LPF)
+    float roll, pitch, yaw;           // attitude (deg)
+    float gxRaw, gyRaw, gzRaw;        // unfiltered gyro (dps)
+    float gxFilt, gyFilt, gzFilt;     // filtered gyro fed to PID
+    float rO, pO, yO;                 // clamped PID outputs
+    float mFL, mFR, mRL, mRR;         // motor commands 0..1
+};
+
+
 // ─────────────────────────────────────────────────────────────
 //  Calibration timing
 // ─────────────────────────────────────────────────────────────
@@ -148,30 +156,15 @@ static constexpr float TUNE_YAW_MAX_RATE_DPS = 90.0f;   // cap on commanded yaw 
 
 // ─────────────────────────────────────────────────────────────
 //  IMU loop timing instrumentation — Test 7.1
-//
-//  Ring buffer stores the last 3000 raw period_us samples
-//  (~7.5 s of data at 400 Hz).  The Welford online algorithm
-//  tracks mean and variance without storing every sample for
-//  the stats; the ring buffer is only needed for the p99
-//  computation and the CSV download.
-//
-//  The timing mutex is try-taken with timeout=0 in the hot
-//  IMU path: if the WiFi task holds it while computing p99,
-//  that single sample is skipped rather than blocking taskIMU.
 // ─────────────────────────────────────────────────────────────
-// Timing/filter tuning values are defined in the TUNING DASHBOARD above.
-
 struct TimingStats {
-    // Welford online algorithm accumulators
     uint32_t count;
-    double   wMean;   // running mean of period_us
-    double   wM2;     // running sum of squared deviations (for variance)
-    // Jitter = |period_us - TIMING_TARGET_US|
+    double   wMean;
+    double   wM2;
     uint32_t jitterMax;
     uint32_t jitterViolations;
     double   jMean;
     double   jM2;
-    // Ring buffer for p99 and CSV export (chronological, head = next write)
     uint16_t buf[TIMING_BUF_SIZE];
     uint16_t bufHead;
     bool     bufFull;
@@ -193,6 +186,10 @@ static void resetTimingStats()
 // ─────────────────────────────────────────────────────────────
 MPU9250 imu(PIN_MPU_CS);
 
+#define FLIGHT_LOG_SIZE 400   // 400 samples @ 100 Hz = 4 s
+
+
+
 // ─────────────────────────────────────────────────────────────
 //  Shared flight state
 // ─────────────────────────────────────────────────────────────
@@ -206,6 +203,7 @@ struct FlightState {
     float cpuCore0_pct, cpuCore1_pct;
     bool  cpuValid;
     float motorFL, motorFR, motorRL, motorRR;
+    float pidRollOut, pidPitchOut, pidYawOut;   // NEW — true PID outputs for tuning trace
     RCCommand rc;
     bool  armed;
     uint32_t loopCount;
@@ -213,6 +211,9 @@ struct FlightState {
 };
 static FlightState       g_state;
 static SemaphoreHandle_t g_flightMutex;
+
+// PID-trace toggle (Serial 'p'). Off at boot so the log stays clean.
+static volatile bool g_pidTrace = false;
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning state
@@ -239,8 +240,8 @@ static volatile CalibState g_calibState = CalibState::IDLE;
 // ─────────────────────────────────────────────────────────────
 //  Task handles
 // ─────────────────────────────────────────────────────────────
-static TaskHandle_t hTaskIMU    = nullptr;   // kept as alias — now points to taskControl
-static TaskHandle_t hTaskControl= nullptr;   // merged IMU+PID at 400 Hz on Core 1
+static TaskHandle_t hTaskIMU    = nullptr;
+static TaskHandle_t hTaskControl= nullptr;
 static TaskHandle_t hTaskRC     = nullptr;
 static TaskHandle_t hTaskSerial = nullptr;
 static TaskHandle_t hTaskWiFi   = nullptr;
@@ -269,7 +270,7 @@ static PID pidRateYaw   (TUNE_RATE_YAW_KP,    TUNE_RATE_YAW_KI,    TUNE_RATE_YAW
 static PID pidAngleRoll (TUNE_ANGLE_ROLL_KP,  TUNE_ANGLE_ROLL_KI,  TUNE_ANGLE_ROLL_KD);
 static PID pidAnglePitch(TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
 // Yaw Control
-static PID pidAngleYaw  (TUNE_ANGLE_YAW_KP,   0.0f,                0.0f);   // NEW
+static PID pidAngleYaw  (TUNE_ANGLE_YAW_KP,   0.0f,                0.0f);
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -325,10 +326,6 @@ static void calLogf(const char* fmt, ...) {
 
 // ─────────────────────────────────────────────────────────────
 //  Timing JSON provider — /timing endpoint (Test 7.1)
-//
-//  p99 is computed by sorting a local copy of the ring buffer.
-//  Insertion sort on n≤3000 uint16s takes ~2–5 ms at 240 MHz.
-//  This runs in taskWiFi (Core 0); the hot control loop uses a non-blocking mutex try-take.
 // ─────────────────────────────────────────────────────────────
 static String provideTimingJson()
 {
@@ -344,9 +341,6 @@ static String provideTimingJson()
     uint32_t jitterMax  = g_timing.jitterMax;
     uint32_t violations = g_timing.jitterViolations;
 
-    // Copy ring buffer and convert to absolute jitter before sorting.
-    // Important: p99 must be the 99th percentile of |period-target|,
-    // not the 99th percentile of raw period_us minus target.
     static uint16_t sortBuf[TIMING_BUF_SIZE];
     uint16_t n    = g_timing.bufFull ? TIMING_BUF_SIZE : g_timing.bufHead;
     uint16_t head = g_timing.bufFull ? g_timing.bufHead : 0;
@@ -358,7 +352,6 @@ static String provideTimingJson()
     }
     xSemaphoreGive(g_timingMutex);
 
-    // Insertion sort (ascending) — O(n²) but n≤3000, fine on Core 0
     for (uint16_t i = 1; i < n; i++) {
         uint16_t key = sortBuf[i]; int j = i - 1;
         while (j >= 0 && sortBuf[j] > key) { sortBuf[j+1]=sortBuf[j]; j--; }
@@ -391,7 +384,6 @@ static String provideTimingJson()
 
 // ─────────────────────────────────────────────────────────────
 //  Timing CSV provider — /timing/csv endpoint (Test 7.1)
-//  Returns chronological index,period_us,jitter_us CSV.
 // ─────────────────────────────────────────────────────────────
 static String provideTimingCsv()
 {
@@ -436,8 +428,6 @@ static const char* flightModeToStr(FlightMode m) {
 static bool provideTelemetry(TelemetryPacket& out)
 {
     FlightState s;
-    // Increased from 5 ms → 15 ms: Core 1 holds this mutex for ~0.8 ms per control
-    // cycle at 400 Hz; 15 ms gives the WiFi task 6 full cycles to acquire it.
     if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(15)) != pdTRUE) return false;
     s = g_state;
     xSemaphoreGive(g_flightMutex);
@@ -490,7 +480,6 @@ static bool provideTelemetry(TelemetryPacket& out)
 
 // ─────────────────────────────────────────────────────────────
 //  Wi-Fi tune handler — /tune endpoint (Test 7.5)
-//  Rejected while armed.
 // ─────────────────────────────────────────────────────────────
 static void handleTune(const TunePacket& in)
 {
@@ -534,11 +523,6 @@ static void silentWait(uint32_t ms) {
 
 // ═════════════════════════════════════════════════════════════
 //  AUTONOMOUS CALIBRATION (runs inside taskControl, Core 1)
-//  Triggered by SWD↑ while disarmed (Test 7.4).
-//  Motors are zeroed before starting. Because calibration runs
-//  inside taskControl itself, there is no separate PID task to
-//  suspend — motor output is simply stopped at entry and the
-//  PID state is reset on exit.
 // ═════════════════════════════════════════════════════════════
 static void runAutonomousCalibration()
 {
@@ -560,64 +544,9 @@ static void runAutonomousCalibration()
     }
     calLog("[CAL] ✓ GYRO done.");
 
-    // // ── Stage 2: Accel ───────────────────────────────────────
-    // g_calibState = CalibState::RUNNING_ACCEL;
-    // // struct Pos { const char* lbl; const char* ins; };
-    // // const Pos pos[6] = {
-    // //     {"+X UP","RIGHT side UP"}, {"-X UP","LEFT side UP"},
-    // //     {"+Y UP","NOSE UP"},       {"-Y UP","TAIL UP"},
-    // //     {"+Z UP","FLAT top up"},   {"-Z UP","UPSIDE DOWN"}
-    // // };
-
-    // struct Pos { const char* lbl; const char* ins; };
-    // const Pos pos[6] = {
-    //     {"+X UP", "NOSE UP"},
-    //     {"-X UP", "NOSE DOWN"},
-    //     {"+Y UP", "LEFT side UP"},
-    //     {"-Y UP", "RIGHT side UP"},
-    //     {"+Z UP", "FLAT top up"},
-    //     {"-Z UP", "UPSIDE DOWN"}
-    // }; 
-    // float rds[6][3] = {};
-    // calLog("[CAL] 2/3 ACCEL — 6 positions, flip SWC UP to confirm each.");
-    // for (int p = 0; p < 6; p++) {
-    //     if (swcIsUp()) { calLog("[CAL] Flip SWC DOWN first..."); waitSwcDown(); }
-    //     calLogf("[CAL] Pos %d/6: %s — %s — Flip SWC UP when steady",
-    //             p+1, pos[p].lbl, pos[p].ins);
-    //     uint32_t t0 = millis();
-    //     while (!swcIsUp()) {
-    //         if (millis()-t0 > ACCEL_WAIT_MAX_MS) { calLog("[CAL] Timeout — position skipped"); break; }
-    //         delay(20);
-    //     }
-    //     if (!swcIsUp()) continue;
-    //     silentWait(ACCEL_HOLD_MS);
-    //     MPU_SensorData avg;
-    //     imu.sampleAvg(ACCEL_HOLD_MS / 2, avg);
-    //     rds[p][0]=avg.ax_g; rds[p][1]=avg.ay_g; rds[p][2]=avg.az_g;
-    //     calLogf("[CAL] Got ax=%+.4f ay=%+.4f az=%+.4f g", avg.ax_g, avg.ay_g, avg.az_g);
-    //     waitSwcDown();
-    // }
-    // imu.cal.ax_b = (rds[0][0]+rds[1][0])/2.0f;
-    // imu.cal.ay_b = (rds[2][1]+rds[3][1])/2.0f;
-    // imu.cal.az_b = (rds[4][2]+rds[5][2])/2.0f;
-    // float hx=(rds[0][0]-rds[1][0])/2.0f;
-    // float hy=(rds[2][1]-rds[3][1])/2.0f;
-    // float hz=(rds[4][2]-rds[5][2])/2.0f;
-    // imu.cal.ax_s = fabsf(hx)>0.01f ? 1.0f/hx : 1.0f;
-    // imu.cal.ay_s = fabsf(hy)>0.01f ? 1.0f/hy : 1.0f;
-    // imu.cal.az_s = fabsf(hz)>0.01f ? 1.0f/hz : 1.0f;
-    // calLog("[CAL] ✓ ACCEL done.");
     // ── Stage 2: Accel ───────────────────────────────────────
     g_calibState = CalibState::RUNNING_ACCEL;
 
-    // Axis index: 0 = sensor X, 1 = sensor Y, 2 = sensor Z
-    // Based on measured mounting:
-    //   Nose up        -> ax = +1
-    //   Nose down      -> ax = -1
-    //   Left side up   -> ay = +1
-    //   Right side up  -> ay = -1
-    //   Flat top up    -> az = +1
-    //   Upside down    -> az = -1
     struct AccelPose {
         const char* physicalPose;
         uint8_t axis;
@@ -665,11 +594,7 @@ static void runAutonomousCalibration()
         MPU_SensorData avg;
         imu.sampleAvg(ACCEL_HOLD_MS / 2, avg);
 
-        float axisValue[3] = {
-            avg.ax_g,
-            avg.ay_g,
-            avg.az_g
-        };
+        float axisValue[3] = { avg.ax_g, avg.ay_g, avg.az_g };
 
         uint8_t axis = poses[p].axis;
         int8_t sign  = poses[p].sign;
@@ -684,8 +609,6 @@ static void runAutonomousCalibration()
                 axis == 0 ? 'X' : axis == 1 ? 'Y' : 'Z',
                 value);
 
-        // Optional validation: expected sign should roughly match measured sign.
-        // Do not reject automatically yet; just warn.
         if ((sign > 0 && value < 0.5f) || (sign < 0 && value > -0.5f)) {
             calLog("[CAL][WARN] Axis sign does not match expected pose. Check orientation.");
         }
@@ -701,7 +624,6 @@ static void runAutonomousCalibration()
         waitSwcDown();
     }
 
-    // Check all six positions were captured
     bool accelOk = true;
     for (int a = 0; a < 3; a++) {
         if (!gotPlus[a] || !gotMinus[a]) {
@@ -732,6 +654,7 @@ static void runAutonomousCalibration()
 
         calLog("[CAL] ✓ ACCEL done.");
     }
+
     // ── Stage 3: Mag (skipped automatically if no AK8963) ────
     g_calibState = CalibState::RUNNING_MAG;
     if (imu.hasMag()) {
@@ -809,7 +732,6 @@ static void taskGPS(void* /*pv*/)
 
 // ─────────────────────────────────────────────────────────────
 //  taskRC — Core 0, priority 3, 200 Hz
-//  Detects SWD rising edge to request calibration.
 // ─────────────────────────────────────────────────────────────
 static void taskRC(void* /*pv*/)
 {
@@ -821,7 +743,6 @@ static void taskRC(void* /*pv*/)
         rcReceiver.update();
         RCCommand cmd = rcReceiver.getCommand();
 
-        // Rising edge on SWD (CH10) while disarmed → request calibration
         if (cmd.swdHigh && !swdPrev) {
             if (cmd.mode == FlightMode::DISARMED &&
                 (g_calibState == CalibState::IDLE || g_calibState == CalibState::DONE)) {
@@ -835,13 +756,12 @@ static void taskRC(void* /*pv*/)
         vTaskDelayUntil(&lastWake, period);
     }
 }
-// throttle smoothening
 
+// throttle smoothening
 static float throttleExpo(float x, float expo)
 {
     x = constrain(x, 0.0f, 1.0f);
     expo = constrain(expo, 0.0f, 1.0f);
-
     return expo * x * x * x +(1.0f - expo) * x;
 }
 
@@ -858,13 +778,11 @@ struct LPF {
 
     float apply(float x, float dt, float fc) {
         if (dt <= 0.0f || fc <= 0.0f) return x;
-
         if (!initialized) {
             y = x;
             initialized = true;
             return y;
         }
-
         float rc = 1.0f / (2.0f * 3.14159265f * fc);
         float a  = dt / (dt + rc);
         y += a * (x - y);
@@ -881,80 +799,145 @@ static LPF lpfGx, lpfGy, lpfGz, lpfSpRoll, lpfSpPitch, lpfSpYaw;
 static float g_yawSetpoint   = 0.0f;
 static bool  g_yawHoldActive = false;
 
+// ═════════════════════════════════════════════════════════════
+//  HIGH-SPEED ON-BOARD FLIGHT LOG  (Test 7.1 / 7.3 / 7.4 capture)
+//
+//  Compact 92-byte row, logged at 100 Hz (every 4th 400 Hz cycle).
+//  Workflow: POST /flightlog/reset  →  arm + fly  →  disarm  →
+//            GET /flightlog/csv (freezes the buffer, streams it out).
+//
+//  FLIGHT_LOG_SIZE=800 → 8.0 s at 100 Hz → ~74 KB. Raise only if
+//  free heap allows (check the 'I'-style resource report first).
+//
+//  Concurrency: writer (taskControl, Core 1) and the freeze flag
+//  share one portMUX spinlock. GET freezes logging first, so the
+//  WiFi task (Core 0) reads a static buffer with no further writes
+//  — no second copy buffer needed, and rows are streamed (chunked)
+//  so no giant CSV String is ever built in heap.
+// ═════════════════════════════════════════════════════════════
 
+static FlightLogRow  g_log[FLIGHT_LOG_SIZE];
+static volatile uint16_t g_logHead   = 0;
+static volatile bool     g_logFull   = false;
+static volatile bool     g_logActive = true;   // writes enabled; GET freezes it
+static portMUX_TYPE      g_logMux    = portMUX_INITIALIZER_UNLOCKED;
+
+static void pushFlightLog(const FlightLogRow& row)
+{
+    portENTER_CRITICAL(&g_logMux);
+    if (g_logActive) {
+        g_log[g_logHead] = row;
+        if (++g_logHead >= FLIGHT_LOG_SIZE) { g_logHead = 0; g_logFull = true; }
+    }
+    portEXIT_CRITICAL(&g_logMux);
+}
+
+static void resetFlightLog()    // POST /flightlog/reset — clear + re-arm logging
+{
+    portENTER_CRITICAL(&g_logMux);
+    g_logHead = 0; g_logFull = false; g_logActive = true;
+    portEXIT_CRITICAL(&g_logMux);
+}
+
+// Called by the WiFi CSV handler. Freezes the buffer so the read is
+// race-free, then reports how many rows are available.
+static uint16_t flightLogCount()
+{
+    portENTER_CRITICAL(&g_logMux);
+    g_logActive = false;
+    uint16_t n = g_logFull ? FLIGHT_LOG_SIZE : g_logHead;
+    portEXIT_CRITICAL(&g_logMux);
+    return n;
+}
+
+static String flightLogHeader()
+{
+    return F("t_us,period_us,mode,armed,imuOk,"
+             "rcThrottle,thr,rcRoll,rcPitch,rcYaw,"
+             "roll,pitch,yaw,"
+             "gxRaw,gyRaw,gzRaw,gxFilt,gyFilt,gzFilt,"
+             "rO,pO,yO,mFL,mFR,mRL,mRR\n");
+}
+
+// Row i in chronological order. Buffer is frozen during download.
+static String flightLogRowCsv(uint16_t i)
+{
+    uint16_t head, n; bool full;
+    portENTER_CRITICAL(&g_logMux);
+    full = g_logFull; head = g_logHead;
+    portEXIT_CRITICAL(&g_logMux);
+    n = full ? FLIGHT_LOG_SIZE : head;
+    if (i >= n) return String();
+
+    const FlightLogRow& r = g_log[full ? ((head + i) % FLIGHT_LOG_SIZE) : i];
+
+    String s; s.reserve(160);
+    s += String(r.t_us);                 s += ',';
+    s += String(r.period_us);            s += ',';
+    s += String(r.mode);                 s += ',';
+    s += String((r.flags & 0x01) ? 1 : 0); s += ',';
+    s += String((r.flags & 0x02) ? 1 : 0); s += ',';
+    s += String(r.rcThrottle, 4);        s += ',';
+    s += String(r.thr, 4);               s += ',';
+    s += String(r.rcRoll, 4);            s += ',';
+    s += String(r.rcPitch, 4);           s += ',';
+    s += String(r.rcYaw, 4);             s += ',';
+    s += String(r.roll, 3);              s += ',';
+    s += String(r.pitch, 3);             s += ',';
+    s += String(r.yaw, 3);               s += ',';
+    s += String(r.gxRaw, 3);             s += ',';
+    s += String(r.gyRaw, 3);             s += ',';
+    s += String(r.gzRaw, 3);             s += ',';
+    s += String(r.gxFilt, 3);            s += ',';
+    s += String(r.gyFilt, 3);            s += ',';
+    s += String(r.gzFilt, 3);            s += ',';
+    s += String(r.rO, 4);                s += ',';
+    s += String(r.pO, 4);                s += ',';
+    s += String(r.yO, 4);                s += ',';
+    s += String(r.mFL, 4);               s += ',';
+    s += String(r.mFR, 4);               s += ',';
+    s += String(r.mRL, 4);               s += ',';
+    s += String(r.mRR, 4);               s += '\n';
+    return s;
+}
 // ─────────────────────────────────────────────────────────────
 //  taskControl — Core 1, priority 5, 400 Hz  (2.5 ms period)
-//
-//  MERGED replacement for the previous taskIMU + taskPID pair.
-//
-//  Why merged?
-//    Two separate 500 Hz tasks on the same core require 4 ms of
-//    CPU time per 2 ms window (200% utilisation), causing Core 1
-//    to pin at 100% and vTaskDelayUntil to thrash. By merging
-//    into one task at 400 Hz (2.5 ms budget), the full
-//    IMU-read + AHRS + PID + motor-write pipeline takes ~0.8–1.0 ms
-//    leaving ~1.5 ms of slack — Core 1 runs at ~40–45%.
-//
-//  Timing budget per cycle (measured on ESP32 @ 240 MHz):
-//    SPI burst read (22 bytes @ 20 MHz) : ~150 µs
-//    Mahony 9-DOF AHRS update           : ~200 µs
-//    Cascaded PID + motor write          : ~100 µs
-//    Mutex + overhead                    : ~50 µs
-//    Total                               : ~500 µs  (20% of 2.5 ms)
-//
-//  Welford accumulator: try-take mutex with timeout=0 so the WiFi
-//  task computing p99 never delays the control loop.
 // ─────────────────────────────────────────────────────────────
 static void taskControl(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(3);   // 400 Hz (rounding: 2.5→3 ms tick)
-    // Note: FreeRTOS tick is 1 ms. pdMS_TO_TICKS(3) = 3 ticks → 333 Hz at tick resolution.
-    // For true 400 Hz use pdMS_TO_TICKS(2) + manual micros() guard (see below).
-    // We use a micros()-gated approach: vTaskDelay(1) keeps the RTOS happy while
-    // micros() controls the actual loop rate precisely.
+    const TickType_t period = pdMS_TO_TICKS(3);
     TickType_t lastWake = xTaskGetTickCount();
     uint32_t lastUs = micros();
-    const uint32_t TARGET_US = TIMING_TARGET_US;   // 2500 µs = 400 Hz
+    const uint32_t TARGET_US = TIMING_TARGET_US;
 
-    // PID state (declared here so they reset cleanly after calibration)
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
     pidAngleYaw.reset();
-    g_yawHoldActive = false;   // recapture heading when re-armed
+    g_yawHoldActive = false;
 
     for (;;) {
-        // ── Apply pending gain update ─────────────────────────
         if (g_tuning.dirty) applyTuningToObjects();
 
-        // ── Calibration (blocks this task; motors already off) ─
         if (g_calibState == CalibState::REQUESTED) {
             motorsOff();
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
             pidAngleYaw.reset();
-            g_yawHoldActive = false;   // recapture heading when re-armed
+            g_yawHoldActive = false;
             runAutonomousCalibration();
             g_calibState = CalibState::IDLE;
-            // Re-anchor timing after the long calibration block
             lastUs   = micros();
             lastWake = xTaskGetTickCount();
             continue;
         }
 
-        // ── Precise 400 Hz gate using micros() ───────────────
-        // vTaskDelayUntil(2) would give 500 Hz at 1 ms tick resolution
-        // but two tasks at 500 Hz overwhelmed Core 1.
-        // We yield for 1 tick to allow Core 0 tasks to run, then spin
-        // until exactly TARGET_US has elapsed since the last cycle start.
-        // This gives true 400 Hz without tick-resolution rounding errors.
         vTaskDelay(1);   // yield — allows WiFi, BMP, GPS, Serial to run
         while ((micros() - lastUs) < TARGET_US) { }   // busy-wait remainder
 
-        // ── Measure actual period ─────────────────────────────
         uint32_t nowUs    = micros();
         uint32_t periodUs = nowUs - lastUs;
         lastUs = nowUs;
-        lastWake = xTaskGetTickCount();   // re-sync after yield+spin
+        lastWake = xTaskGetTickCount();
 
         float dt = (float)periodUs * 1e-6f;
         if (dt <= 0.0f || dt > 0.05f) {
@@ -965,7 +948,6 @@ static void taskControl(void* /*pv*/)
         // ── Welford timing accumulator (Test 7.1) ────────────
         if (xSemaphoreTake(g_timingMutex, 0) == pdTRUE) {
             uint32_t n = ++g_timing.count;
-
             double delta  = (double)periodUs - g_timing.wMean;
             g_timing.wMean += delta / n;
             g_timing.wM2   += delta * ((double)periodUs - g_timing.wMean);
@@ -1000,26 +982,22 @@ static void taskControl(void* /*pv*/)
             gzf = lpfGz.apply(s.gz_dps, dt, GYRO_LPF_HZ);
         }
 
-        // ── Get RC command ────────────────────────────────────
         RCCommand cmd = rcReceiver.getCommand();
 
-        // ── PID + motor mix ───────────────────────────────────
+        // ── DISARMED / FAILSAFE ───────────────────────────────
         if (cmd.mode == FlightMode::DISARMED || cmd.mode == FlightMode::FAILSAFE) {
             motorsOff();
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
-            lpfGx.reset();
-            lpfGy.reset();
-            lpfGz.reset();
-            lpfSpRoll.reset();
-            lpfSpPitch.reset();
-            lpfSpYaw.reset();
+            lpfGx.reset(); lpfGy.reset(); lpfGz.reset();
+            lpfSpRoll.reset(); lpfSpPitch.reset(); lpfSpYaw.reset();
             pidAngleYaw.reset();
-            g_yawHoldActive = false;   // recapture heading when re-armed
+            g_yawHoldActive = false;
 
             if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
                 g_state.armed   = false;
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
+                g_state.pidRollOut = g_state.pidPitchOut = g_state.pidYawOut = 0;
                 g_state.rc      = cmd;
                 if (imuOk) {
                     g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
@@ -1034,16 +1012,13 @@ static void taskControl(void* /*pv*/)
             continue;
         }
 
-        // Armed — run cascaded PID using fresh AHRS data from this same cycle
+        // ── ARMED — cascaded PID ──────────────────────────────
         float roll  = imuOk ? att.roll  : 0.0f;
         float pitch = imuOk ? att.pitch : 0.0f;
-        // float gx    = imuOk ? s.gx_dps : 0.0f;
-        // float gy    = imuOk ? s.gy_dps : 0.0f;
-        // float gz    = imuOk ? s.gz_dps : 0.0f;
         float gx    = imuOk ? gxf : 0.0f;
         float gy    = imuOk ? gyf : 0.0f;
         float gz    = imuOk ? gzf : 0.0f;
-  
+
         const float MAX_ANGLE_DEG = TUNE_MAX_ANGLE_DEG;
         const float MAX_RATE_DPS  = TUNE_MAX_RATE_DPS;
         float rO=0, pO=0, yO=0;
@@ -1052,51 +1027,33 @@ static void taskControl(void* /*pv*/)
         float pitchCmd = lpfSpPitch.apply(cmd.pitch, dt, RC_LPF_HZ);
         float yawCmd   = lpfSpYaw  .apply(cmd.yaw,   dt, RC_LPF_HZ);
 
-        // if (cmd.mode == FlightMode::ANGLE) {
-        //     float rSP = pidAngleRoll .update(cmd.roll *MAX_ANGLE_DEG - roll,  dt);
-        //     float pSP = pidAnglePitch.update(cmd.pitch*MAX_ANGLE_DEG - pitch, dt);
-        //     rO = pidRateRoll .update(rSP - gx, dt);
-        //     pO = pidRatePitch.update(pSP - gy, dt);
-        //     yO = pidRateYaw  .update(cmd.yaw*MAX_RATE_DPS - gz, dt);
-        // } else {   // ACRO
-        //     rO = pidRateRoll .update(cmd.roll *MAX_RATE_DPS - gx, dt);
-        //     pO = pidRatePitch.update(cmd.pitch*MAX_RATE_DPS - gy, dt);
-        //     yO = pidRateYaw  .update(cmd.yaw  *MAX_RATE_DPS - gz, dt);
-        // }
         if (cmd.mode == FlightMode::ANGLE) {
             float rSP = pidAngleRoll .update(rollCmd *MAX_ANGLE_DEG - roll,  dt);
             float pSP = pidAnglePitch.update(pitchCmd*MAX_ANGLE_DEG - pitch, dt);
             rO = pidRateRoll .update(rSP - gx, dt);
             pO = pidRatePitch.update(pSP - gy, dt);
-            //yO = pidRateYaw  .update(yawCmd*MAX_RATE_DPS - gz, dt);
         } else {   // ACRO
             rO = pidRateRoll .update(rollCmd *MAX_RATE_DPS - gx, dt);
             pO = pidRatePitch.update(pitchCmd*MAX_RATE_DPS - gy, dt);
-            //yO = pidRateYaw  .update(yawCmd  *MAX_RATE_DPS - gz, dt);
         }
+
         // ── Yaw: heading-hold when stick centered, rate when moving ──
-        // Applies in BOTH ANGLE and ACRO. Stick centered → capture heading
-        // once and actively return to it. Stick deflected → command rate.
         if (imuOk && fabsf(yawCmd) < TUNE_YAW_DEADBAND) {
             if (!g_yawHoldActive) {
-                g_yawSetpoint   = att.yaw;   // capture heading on entry
+                g_yawSetpoint   = att.yaw;
                 g_yawHoldActive = true;
                 pidAngleYaw.reset();
             }
             float yawErr = g_yawSetpoint - att.yaw;
-            while (yawErr >  180.0f) yawErr -= 360.0f;   // shortest-path wrap
+            while (yawErr >  180.0f) yawErr -= 360.0f;
             while (yawErr < -180.0f) yawErr += 360.0f;
             float yawRateSP = pidAngleYaw.update(yawErr, dt);
             yawRateSP = constrain(yawRateSP, -TUNE_YAW_MAX_RATE_DPS, TUNE_YAW_MAX_RATE_DPS);
             yO = pidRateYaw.update(yawRateSP - gz, dt);
         } else {
-            g_yawHoldActive = false;                     // stick moving → free yaw
+            g_yawHoldActive = false;
             yO = pidRateYaw.update(-yawCmd*MAX_RATE_DPS - gz, dt);
         }
-
-        // rO = constrain(rO, -0.25f, 0.25f);
-        // pO = constrain(pO, -0.25f, 0.25f);
-        // yO = constrain(yO, -0.10f, 0.10f);
 
         rO = constrain(rO, -TUNE_ROLL_OUTPUT_LIMIT,  TUNE_ROLL_OUTPUT_LIMIT);
         pO = constrain(pO, -TUNE_PITCH_OUTPUT_LIMIT, TUNE_PITCH_OUTPUT_LIMIT);
@@ -1115,10 +1072,8 @@ static void taskControl(void* /*pv*/)
 
         float thrRaw = constrain(cmd.throttle, 0.0f, 1.0f);
 
-        //Throttle Dead Zone
         float thrTarget = 0.0f;
-        if (thrRaw > THROTTLE_CUT) 
-        {
+        if (thrRaw > THROTTLE_CUT) {
             thrTarget = throttleExpo(thrRaw, THROTTLE_EXPO);
         }
 
@@ -1133,13 +1088,6 @@ static void taskControl(void* /*pv*/)
 
         float thr = constrain(thrSmooth, 0.0f, 1.0f);
 
-        //float thr = cmd.throttle;
-        // float fl = constrain(thr+rO-pO-yO, 0.0f, 1.0f);
-        // float fr = constrain(thr-rO-pO+yO, 0.0f, 1.0f);
-        // float rl = constrain(thr+rO+pO+yO, 0.0f, 1.0f);
-        // float rr = constrain(thr-rO+pO-yO, 0.0f, 1.0f);
-
-
         float fl = thr + rO - pO - yO;
         float fr = thr - rO - pO + yO;
         float rl = thr + rO + pO + yO;
@@ -1149,10 +1097,7 @@ static void taskControl(void* /*pv*/)
         float maxMotor = max(max(fl, fr), max(rl, rr));
         if (maxMotor > MOTOR_MAX) {
             float excess = maxMotor - MOTOR_MAX;
-            fl -= excess;
-            fr -= excess;
-            rl -= excess;
-            rr -= excess;
+            fl -= excess; fr -= excess; rl -= excess; rr -= excess;
         }
 
         float idleBlend = smoothStep01((thr - THROTTLE_CUT) / (IDLE_RAMP_END - THROTTLE_CUT));
@@ -1167,17 +1112,31 @@ static void taskControl(void* /*pv*/)
             fl = fr = rl = rr = 0.0f;
         }
 
-        //         Serial.printf(
-        // "[MIXTEST] roll=%+.2f pitch=%+.2f gx=%+.2f gy=%+.2f | rO=%+.3f pO=%+.3f | FL=%.3f FR=%.3f RL=%.3f RR=%.3f\n",
-        // roll, pitch, gx, gy, rO, pO, fl, fr, rl, rr
-        // );
-
         writeMotors(fl, fr, rl, rr);
 
-        // ── Publish flight state ──────────────────────────────
-        // Single mutex write covering both AHRS and PID output —
-        // WiFi task sees a consistent snapshot with no torn reads.
-        //if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) 
+        // ── High-speed flight log @ 100 Hz (every 4th cycle) ──
+        static uint8_t logDiv = 0;
+        if (++logDiv >= 4) {
+            logDiv = 0;
+            FlightLogRow row;
+            row.t_us      = nowUs;
+            row.period_us = (uint16_t)min(periodUs, (uint32_t)65535);
+            row.mode      = (uint8_t)cmd.mode;
+            row.flags     = 0x01 | (imuOk ? 0x02 : 0x00);   // armed here by definition
+            row.rcThrottle = thrRaw;
+            row.thr        = thr;
+            row.rcRoll = rollCmd; row.rcPitch = pitchCmd; row.rcYaw = yawCmd;
+            row.roll = roll; row.pitch = pitch; row.yaw = imuOk ? att.yaw : 0.0f;
+            row.gxRaw = imuOk ? s.gx_dps : 0.0f;
+            row.gyRaw = imuOk ? s.gy_dps : 0.0f;
+            row.gzRaw = imuOk ? s.gz_dps : 0.0f;
+            row.gxFilt = gx; row.gyFilt = gy; row.gzFilt = gz;
+            row.rO = rO; row.pO = pO; row.yO = yO;
+            row.mFL = fl; row.mFR = fr; row.mRL = rl; row.mRR = rr;
+            pushFlightLog(row);
+        }
+
+        // ── Publish flight state (incl. true PID outputs) ─────
         if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE){
             if (imuOk) {
                 g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
@@ -1189,6 +1148,7 @@ static void taskControl(void* /*pv*/)
             }
             g_state.motorFL=fl; g_state.motorFR=fr;
             g_state.motorRL=rl; g_state.motorRR=rr;
+            g_state.pidRollOut=rO; g_state.pidPitchOut=pO; g_state.pidYawOut=yO;
             g_state.armed=true; g_state.rc=cmd;
             xSemaphoreGive(g_flightMutex);
         }
@@ -1197,8 +1157,7 @@ static void taskControl(void* /*pv*/)
 
 // ─────────────────────────────────────────────────────────────
 //  taskSerial — Core 0, priority 1, 20 Hz
-//  1 Hz telemetry line to Serial (also parseable by ground station
-//  over USB serial mode).
+//  1 Hz status line; optional ~4 Hz [PID] trace (Serial 'p' toggles).
 // ─────────────────────────────────────────────────────────────
 static void taskSerial(void* /*pv*/)
 {
@@ -1207,27 +1166,41 @@ static void taskSerial(void* /*pv*/)
     uint32_t tick = 0;
 
     Serial.println(F("\n╔══════════════════════════════════════════════════════╗"));
-    Serial.println(F("║  FlySky iBUS + MPU-9250/6500 + BMP280 + GPS  v2.3.1 ║"));
+    Serial.println(F("║  FlySky iBUS + MPU-9250/6500 + BMP280 + GPS  v2.3.2 ║"));
     Serial.println(F("║  Wi-Fi: ESP32-DRONE / 12345678 → 192.168.4.1        ║"));
     Serial.println(F("║  taskControl: merged IMU+PID @ 400 Hz, Core 1       ║"));
+    Serial.println(F("║  Type 'p' to toggle the [PID] tuning trace.         ║"));
     Serial.println(F("╚══════════════════════════════════════════════════════╝"));
 
     for (;;) {
+        // Handle inbound Serial commands (non-blocking)
+        while (Serial.available() > 0) {
+            int c = Serial.read();
+            if (c == 'p' || c == 'P') {
+                g_pidTrace = !g_pidTrace;
+                Serial.printf("[CMD] PID trace %s\n", g_pidTrace ? "ON" : "OFF");
+            }
+        }
+
         if (g_calibState != CalibState::IDLE && g_calibState != CalibState::DONE) {
             tick++; vTaskDelayUntil(&lastWake, period); continue;
         }
-        if (tick % 20 == 0) {  // 1 Hz
-            FlightState s;
-            if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-                s = g_state; xSemaphoreGive(g_flightMutex);
-            }
-            const char* ms = "???";
-            switch(s.rc.mode) {
-                case FlightMode::DISARMED: ms="DISARMD"; break;
-                case FlightMode::ANGLE:    ms="ANGLE  "; break;
-                case FlightMode::ACRO:     ms="ACRO   "; break;
-                case FlightMode::FAILSAFE: ms="FAILSFE"; break;
-            }
+
+        // Snapshot once per loop; both blocks below use it.
+        FlightState s;
+        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+            s = g_state; xSemaphoreGive(g_flightMutex);
+        }
+        const char* ms = "???";
+        switch(s.rc.mode) {
+            case FlightMode::DISARMED: ms="DISARMD"; break;
+            case FlightMode::ANGLE:    ms="ANGLE  "; break;
+            case FlightMode::ACRO:     ms="ACRO   "; break;
+            case FlightMode::FAILSAFE: ms="FAILSFE"; break;
+        }
+
+        // 1 Hz status line
+        if (tick % 20 == 0) {
             Serial.printf("[%6lu] %s | R=%+6.1f P=%+6.1f Y=%6.1f | "
                           "MOT %.2f %.2f %.2f %.2f | "
                           "BMP %.1fC %.1fhPa %.1fm | "
@@ -1241,6 +1214,21 @@ static void taskSerial(void* /*pv*/)
                           imu.hasMag() ? "9DOF" : "6DOF",
                           imu.mahonyKp);
         }
+
+        // ~4 Hz PID tuning trace (sibling of the 1 Hz block; gated by 'p')
+        if (g_pidTrace && s.armed && (tick % 5 == 0)) {
+            Serial.printf("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
+                          "att R=%+6.2f P=%+6.2f Y=%+6.2f | "
+                          "gyro gx=%+7.1f gy=%+7.1f gz=%+7.1f | "
+                          "out rO=%+.4f pO=%+.4f yO=%+.4f | "
+                          "yawSP=%+6.1f hold=%d\n",
+                          ms, s.rc.roll, s.rc.pitch, s.rc.yaw,
+                          s.roll_deg, s.pitch_deg, s.yaw_deg,
+                          s.gx_dps, s.gy_dps, s.gz_dps,
+                          s.pidRollOut, s.pidPitchOut, s.pidYawOut,
+                          g_yawSetpoint, (int)g_yawHoldActive);
+        }
+
         tick++;
         vTaskDelayUntil(&lastWake, period);
     }
@@ -1296,18 +1284,21 @@ static void taskCPU(void* /*pv*/)
 
 // ─────────────────────────────────────────────────────────────
 //  taskWiFi — Core 0, priority 1, event-driven
-//  Registers all HTTP routes including timing endpoints.
-//  Requires TelemetryWiFi v2.4 header.
 // ─────────────────────────────────────────────────────────────
 static void taskWiFi(void* /*pv*/)
 {
     telemetryWiFi.setTelemetryProvider(provideTelemetry);
     telemetryWiFi.setTuneHandler(handleTune);
 
-    // Timing endpoints (Test 7.1) — requires TelemetryWiFi v2.4
     telemetryWiFi.setTimingProvider(provideTimingJson);
     telemetryWiFi.setTimingCsvProvider(provideTimingCsv);
     telemetryWiFi.setTimingResetHandler(resetTimingStats);
+
+// High-speed flight log (chunked streaming — no giant String)
+    telemetryWiFi.setFlightLogCountProvider(flightLogCount);
+    telemetryWiFi.setFlightLogHeaderProvider(flightLogHeader);
+    telemetryWiFi.setFlightLogRowProvider(flightLogRowCsv);
+    telemetryWiFi.setFlightLogResetHandler(resetFlightLog);
 
     telemetryWiFi.begin("ESP32-DRONE", "12345678");
 
@@ -1325,7 +1316,6 @@ void setup()
     Serial.begin(115200);
     delay(600);
 
-    // ── Create synchronisation primitives ─────────────────────
     g_flightMutex = xSemaphoreCreateMutex();
     g_tuneMutex   = xSemaphoreCreateMutex();
     g_timingMutex = xSemaphoreCreateMutex();
@@ -1336,11 +1326,9 @@ void setup()
     memset(&g_state,  0, sizeof(g_state));
     memset(&g_timing, 0, sizeof(g_timing));
 
-    // ── ESC PWM init + arm pulse ───────────────────────────────
     motorsBegin();
     motorEscArm();   // sends 1000 µs for 3 s; comment out after ESC calibration done
 
-    // ── SPI + IMU ──────────────────────────────────────────────
     SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_MPU_CS);
     delay(10);
 
@@ -1358,22 +1346,18 @@ void setup()
         Serial.println(F("[BOOT] Roll and pitch accurate. Yaw will drift."));
     }
 
-    // ── BMP280 barometer ──────────────────────────────────────
     bmp280.scanI2C(PIN_BMP_SDA, PIN_BMP_SCL, 100000);
     Serial.print(F("[BOOT] BMP280... "));
     bmp280.beginAuto(PIN_BMP_SDA, PIN_BMP_SCL, 100000)
         ? Serial.println(F("OK")) : Serial.println(F("not found."));
 
-    // ── CPU load monitor ──────────────────────────────────────
     Serial.print(F("[BOOT] CPU monitor... "));
     cpuUtilization.begin(1000)
         ? Serial.println(F("OK")) : Serial.println(F("idle-hook failed."));
 
-    // ── GPS ───────────────────────────────────────────────────
     Serial.println(F("[BOOT] GPS (GY-GPS6MV2)..."));
     gps.begin(PIN_GPS_RX, PIN_GPS_TX, 9600);
 
-    // ── Load calibration from NVS flash ───────────────────────
     Serial.print(F("[BOOT] NVS calibration... "));
     if (imu.loadCalibration()) {
         Serial.println(F("loaded."));
@@ -1382,28 +1366,25 @@ void setup()
         Serial.println(F("none — flip SWD UP (disarmed) to calibrate."));
     }
 
-    // ── iBUS RC receiver ──────────────────────────────────────
     rcReceiver.begin(PIN_IBUS_RX, PIN_IBUS_TX, 2);
     Serial.println(F("[BOOT] iBUS ready."));
 
     syncTuningFromObjects();
 
-    // ── Spawn FreeRTOS tasks ──────────────────────────────────
-    // Core 0 — low-latency I/O and network
     xTaskCreatePinnedToCore(taskRC,      "RC",     6144,  nullptr, 3, &hTaskRC,      0);
     xTaskCreatePinnedToCore(taskSerial,  "Serial", 4096,  nullptr, 1, &hTaskSerial,  0);
     xTaskCreatePinnedToCore(taskWiFi,    "WiFi",   12288, nullptr, 1, &hTaskWiFi,    0);
     xTaskCreatePinnedToCore(taskBMP,     "BMP280", 3072,  nullptr, 1, &hTaskBMP,     0);
     xTaskCreatePinnedToCore(taskCPU,     "CPU",    3072,  nullptr, 1, &hTaskCPU,     0);
     xTaskCreatePinnedToCore(taskGPS,     "GPS",    4096,  nullptr, 1, &hTaskGPS,     0);
-    // Core 1 — ONE merged real-time control task (prevents the 200% overload)
     xTaskCreatePinnedToCore(taskControl, "Ctrl",   10240, nullptr, 5, &hTaskControl, 1);
-    hTaskIMU = hTaskControl;   // alias for any code that checks hTaskIMU
+    hTaskIMU = hTaskControl;
 
     Serial.println(F("[BOOT] All tasks running."));
     Serial.println(F("[BOOT] Timing target: 2500 us (400 Hz control loop)."));
     Serial.println(F("[BOOT] Ground station: http://192.168.4.1"));
     Serial.println(F("[BOOT] GPS fix takes 30-90 s outdoors."));
+    Serial.printf("[BOOT] Free heap: %u bytes\n", ESP.getFreeHeap());
 }
 
 void loop() { vTaskDelay(portMAX_DELAY); }

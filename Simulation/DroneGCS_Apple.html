@@ -279,6 +279,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <button class="hbtn" id="btnAI" onclick="toggleAiLearning()">AI</button>
     <button class="hbtn red" id="btnLog" onclick="toggleLog()">⏺ LOG</button>
     <button class="hbtn" id="btnDL" onclick="downloadLog()" style="display:none">⬇ CSV</button>
+	<button class="hbtn" id="btnHsDL" onclick="downloadOnboardLog()">⬇ Download HighSpeed on board data</button>
   </div>
 </header>
 
@@ -934,6 +935,36 @@ function downloadLog(){
   const url=URL.createObjectURL(blob);const a=document.createElement('a');
   a.href=url;const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
   a.download=`drone_${ts}.csv`;a.click();URL.revokeObjectURL(url);
+}
+
+async function downloadOnboardLog(){
+  const ip = (CFG.wifiIp||'192.168.4.1');
+  const url = 'http://'+ip+'/flightlog/csv';
+  const btn = document.getElementById('btnHsDL');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ fetching…'; btn.disabled = true;
+  addCalLog('[HSLOG] Fetching on-board log from '+url,'lTUNE');
+  try{
+    const r = await fetch(url, {cache:'no-store'});
+    if(!r.ok){ throw new Error('HTTP '+r.status); }
+    const csv = await r.text();
+    const rows = csv.trim().split('\n').length - 1;   // minus header
+    if(rows < 1){ alert('On-board log is empty. Reset, arm, fly, then download.'); }
+    else{
+      const blob = new Blob([csv],{type:'text/csv'});
+      const dl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+      a.href = dl; a.download = `onboard_hs_${ts}.csv`; a.click();
+      URL.revokeObjectURL(dl);
+      addCalLog(`[HSLOG] Downloaded ${rows} rows`,'lTUNE');
+    }
+  }catch(e){
+    addCalLog('[HSLOG] Failed: '+e.message+' (Wi-Fi connected to ESP32-DRONE?)','lWARN');
+    alert('On-board log download failed: '+e.message);
+  }finally{
+    btn.textContent = orig; btn.disabled = false;
+  }
 }
 
 // ─── Connection ───────────────────────────────────────────────────────────────

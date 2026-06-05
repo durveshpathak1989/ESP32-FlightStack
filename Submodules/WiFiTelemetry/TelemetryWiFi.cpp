@@ -15,6 +15,10 @@ TelemetryWiFi::TelemetryWiFi(uint16_t port)
       _timingProvider(nullptr),
       _timingCsvProvider(nullptr),
       _timingResetHandler(nullptr),
+      _flightLogCount(nullptr),
+      _flightLogHeader(nullptr),
+      _flightLogRow(nullptr),
+      _flightLogReset(nullptr),
       _requestCount(0)
 {
     memset(_logBuf, 0, sizeof(_logBuf));
@@ -44,6 +48,12 @@ void TelemetryWiFi::setTimingProvider(String (*p)())                       { _ti
 void TelemetryWiFi::setTimingCsvProvider(String (*p)())                    { _timingCsvProvider    = p; }
 void TelemetryWiFi::setTimingResetHandler(void (*h)())                     { _timingResetHandler   = h; }
 void TelemetryWiFi::update()                                               { _server.handleClient(); }
+
+void TelemetryWiFi::setFlightLogCountProvider(uint16_t (*p)())     { _flightLogCount  = p; }
+void TelemetryWiFi::setFlightLogHeaderProvider(String (*p)())      { _flightLogHeader = p; }
+void TelemetryWiFi::setFlightLogRowProvider(String (*p)(uint16_t)) { _flightLogRow    = p; }
+void TelemetryWiFi::setFlightLogResetHandler(void (*h)())          { _flightLogReset  = h; }
+
 IPAddress TelemetryWiFi::ip()           const { return WiFi.softAPIP(); }
 uint32_t  TelemetryWiFi::requestCount() const { return _requestCount; }
 
@@ -81,6 +91,10 @@ void TelemetryWiFi::_setupRoutes()
     _server.on("/timing/reset",   HTTP_OPTIONS, [this]() { _handleOptions(); });
     _server.on("/timing/csv",     HTTP_GET,     [this]() { _handleTimingCsv(); });
     _server.on("/timing/csv",     HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.on("/flightlog/csv",   HTTP_GET,     [this]() { _handleFlightLogCsv(); });
+    _server.on("/flightlog/csv",   HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.on("/flightlog/reset", HTTP_POST,    [this]() { _handleFlightLogReset(); });
+    _server.on("/flightlog/reset", HTTP_OPTIONS, [this]() { _handleOptions(); });
     _server.onNotFound(                         [this]() { _handleNotFound(); });
 }
 
@@ -147,6 +161,32 @@ void TelemetryWiFi::_handleTimingCsv()
     }
     _server.sendHeader("Content-Disposition", "attachment; filename=\"timing.csv\"");
     _server.send(200, "text/csv", _timingCsvProvider());
+}
+
+void TelemetryWiFi::_handleFlightLogReset()
+{
+    _sendCorsHeaders();
+    if (_flightLogReset) _flightLogReset();
+    _server.send(200, "application/json", "{\"ok\":true,\"msg\":\"flight log reset\"}");
+}
+
+void TelemetryWiFi::_handleFlightLogCsv()
+{
+    _sendCorsHeaders();
+    if (!_flightLogCount || !_flightLogHeader || !_flightLogRow) {
+        _server.send(503, "text/plain", "no flightlog provider");
+        return;
+    }
+    // Chunked streaming — never builds the whole CSV in RAM.
+    _server.sendHeader("Content-Disposition", "attachment; filename=\"flightlog.csv\"");
+    _server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    _server.send(200, "text/csv", "");
+    _server.sendContent(_flightLogHeader());     // also freezes the buffer (count() does)
+    uint16_t n = _flightLogCount();
+    for (uint16_t i = 0; i < n; i++) {
+        _server.sendContent(_flightLogRow(i));
+    }
+    _server.sendContent("");                     // terminate chunked transfer
 }
 
 void TelemetryWiFi::_handleLog()

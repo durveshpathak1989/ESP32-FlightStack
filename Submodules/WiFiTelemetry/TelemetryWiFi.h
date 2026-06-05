@@ -105,6 +105,12 @@ public:
     void pushLog(const char* line);
     void pushLog(const String& line) { pushLog(line.c_str()); }
 
+    // High-speed flight-log endpoints (chunked CSV)
+    void setFlightLogCountProvider(uint16_t (*provider)());
+    void setFlightLogHeaderProvider(String (*provider)());
+    void setFlightLogRowProvider(String (*provider)(uint16_t));
+    void setFlightLogResetHandler(void (*handler)());
+
     IPAddress ip()           const;
     uint32_t  requestCount() const;
 
@@ -139,8 +145,16 @@ private:
     void _handleTiming();
     void _handleTimingReset();
     void _handleTimingCsv();
+    void _handleFlightLogCsv();
+    void _handleFlightLogReset();
     void _handleOptions();
     void _handleNotFound();
+
+    // flight-log callbacks
+    uint16_t (*_flightLogCount)();
+    String   (*_flightLogHeader)();
+    String   (*_flightLogRow)(uint16_t);
+    void     (*_flightLogReset)();
 
     String _jsonFromPacket(const TelemetryPacket& p) const;
     bool   _jsonGetFloat(const String& body, const char* key, float& out) const;
