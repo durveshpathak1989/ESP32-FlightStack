@@ -1094,12 +1094,25 @@ function applyJson(j){
   syncI('pKp',j.pidPitchKp,4);syncI('pKi',j.pidPitchKi,5);syncI('pKd',j.pidPitchKd,4);
   syncI('yKp',j.pidYawKp,4);syncI('yKi',j.pidYawKi,5);syncI('yKd',j.pidYawKd,4);
   syncI('arKp',j.pidAngleRollKp,3);syncI('apKp',j.pidAnglePitchKp,3);
-  if(j.mahonyKp!=null){syncI('mKp',j.mahonyKp,4);setText('smKp',Number(j.mahonyKp).toFixed(4));}
-  if(j.mahonyKi!=null){syncI('mKi',j.mahonyKi,5);setText('smKi',Number(j.mahonyKi).toFixed(5));}
-  if(j.pidRollKp!=null)setText('srKp',Number(j.pidRollKp).toFixed(4));
+  if(j.mahonyKp!=null){syncI('mKp',j.mahonyKp,4);setText('smKp',fmtGain(j.mahonyKp,4));}
+  if(j.mahonyKi!=null){syncI('mKi',j.mahonyKi,5);setText('smKi',fmtGain(j.mahonyKi,5));}
+  if(j.pidRollKp!=null)setText('srKp',fmtGain(j.pidRollKp,4));
   lastTelemMs=Date.now();appendLogRow();pushHist();postTelemetryToAiLearner();render();
 }
-function syncI(id,val,dp){if(val==null)return;const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=Number(val).toFixed(dp);}
+// Magnitude-aware gain formatter: keeps significant figures for very small
+// gains (e.g. 0.00003) instead of rounding them away to 0.0000. `dp` acts as a
+// floor. Plain decimal output (never scientific) so parseFloat() round-trips it.
+function fmtGain(val,dp){
+  dp=(dp==null)?4:dp;
+  const v=Number(val);
+  if(!isFinite(v)||v===0)return (0).toFixed(dp);
+  const a=Math.abs(v);
+  let places=dp;
+  if(a<1)places=Math.max(dp,3-Math.floor(Math.log10(a)));  // ~4 sig figs for sub-1 values
+  places=Math.min(places,9);
+  return v.toFixed(places);
+}
+function syncI(id,val,dp){if(val==null)return;const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=fmtGain(val,dp);}
 
 function processLine(raw){
   const line=raw.trim();if(!line)return;
