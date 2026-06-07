@@ -312,19 +312,21 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"cpuCore0\":"       + String(p.cpu_core0_pct, 1);
     j += ",\"cpuCore1\":"       + String(p.cpu_core1_pct, 1);
     j += ",\"cpuValid\":"       + String(p.cpu_valid ? "true" : "false");
-    j += ",\"pidRollKp\":"       + String(p.pid_roll_kp,        4);
-    j += ",\"pidRollKi\":"       + String(p.pid_roll_ki,        5);
-    j += ",\"pidRollKd\":"       + String(p.pid_roll_kd,        4);
-    j += ",\"pidPitchKp\":"      + String(p.pid_pitch_kp,       4);
-    j += ",\"pidPitchKi\":"      + String(p.pid_pitch_ki,       5);
-    j += ",\"pidPitchKd\":"      + String(p.pid_pitch_kd,       4);
-    j += ",\"pidYawKp\":"        + String(p.pid_yaw_kp,         4);
-    j += ",\"pidYawKi\":"        + String(p.pid_yaw_ki,         5);
-    j += ",\"pidYawKd\":"        + String(p.pid_yaw_kd,         4);
-    j += ",\"pidAngleRollKp\":"  + String(p.pid_angle_roll_kp,  3);
-    j += ",\"pidAnglePitchKp\":" + String(p.pid_angle_pitch_kp, 3);
-    j += ",\"mahonyKp\":"        + String(p.mahony_kp,          4);
-    j += ",\"mahonyKi\":"        + String(p.mahony_ki,          5);
+    // Gains serialized at 8 dp so sub-0.0001 values survive the round-trip
+    // (a 32-bit float keeps ~7 sig figs, so 1e-6-scale gains stay readable).
+    j += ",\"pidRollKp\":"       + String(p.pid_roll_kp,        8);
+    j += ",\"pidRollKi\":"       + String(p.pid_roll_ki,        8);
+    j += ",\"pidRollKd\":"       + String(p.pid_roll_kd,        8);
+    j += ",\"pidPitchKp\":"      + String(p.pid_pitch_kp,       8);
+    j += ",\"pidPitchKi\":"      + String(p.pid_pitch_ki,       8);
+    j += ",\"pidPitchKd\":"      + String(p.pid_pitch_kd,       8);
+    j += ",\"pidYawKp\":"        + String(p.pid_yaw_kp,         8);
+    j += ",\"pidYawKi\":"        + String(p.pid_yaw_ki,         8);
+    j += ",\"pidYawKd\":"        + String(p.pid_yaw_kd,         8);
+    j += ",\"pidAngleRollKp\":"  + String(p.pid_angle_roll_kp,  8);
+    j += ",\"pidAnglePitchKp\":" + String(p.pid_angle_pitch_kp, 8);
+    j += ",\"mahonyKp\":"        + String(p.mahony_kp,          8);
+    j += ",\"mahonyKi\":"        + String(p.mahony_ki,          8);
     j += ",\"clients\":"         + String(WiFi.softAPgetStationNum());
     j += ",\"requests\":"        + String(_requestCount);
     j += ",\"gpsValid\":"    + String(p.gps_valid ? "true" : "false");
