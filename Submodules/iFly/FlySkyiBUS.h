@@ -78,7 +78,7 @@
 // Stick thresholds
 #define RC_THROTTLE_MIN     1000    // µs — zero throttle
 #define RC_THROTTLE_MAX     2000    // µs — full throttle
-#define RC_DEADBAND         30      // µs — centre deadband ±30 µs
+#define RC_DEADBAND         50      // µs — centre deadband ±30 µs
 #define RC_ARM_THRESHOLD    1700    // µs — CH5 above this = ARMED
 #define RC_CALIB_THRESHOLD  1700    // µs — CH6 VrA above this = calib request (knob)
 #define RC_SWD_THRESHOLD    1700    // µs — CH9 SWD above this = SWD HIGH
@@ -173,6 +173,13 @@ public:
     uint32_t getFailsafeCount() const;
 
     /**
+     * getChecksumFailCount() — cumulative count of frames that arrived
+     * but failed the iBUS checksum. Watch its rate of increase to tell
+     * corruption/mis-sync (climbs fast) from a clean lower link rate (flat).
+     */
+    uint32_t getChecksumFailCount() const;
+
+    /**
      * printChannels() — Serial.print all 10 channels in µs.
      * For debug use only (blocks serial).
      */
@@ -196,6 +203,7 @@ private:
     uint32_t _lastFrameMs;
     uint32_t _frameCount;
     uint32_t _failsafeCount;
+    uint32_t _csumFailCount = 0;   // frames that arrived but failed checksum (diagnostic)
     float    _frameRateHz;
 
     // FreeRTOS mutex for thread safety

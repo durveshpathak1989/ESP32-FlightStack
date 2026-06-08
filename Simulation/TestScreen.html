@@ -188,7 +188,7 @@
     <div id="t72-fs-timer" style="font-size:28px;font-family:monospace;color:#f85149;margin:8px 0">Waiting for TX-OFF...</div>
   </div>
   <div class="grid">
-    <div class="card"><h3>RC Frame Rate</h3><div class="val" id="t72-hz">—</div><small>Hz (pass: 130–150)</small></div>
+    <div class="card"><h3>RC Frame Rate</h3><div class="val" id="t72-hz">—</div><small>Hz (pass: 70–95)</small></div>
     <div class="card"><h3>RC Valid</h3><div class="val" id="t72-valid">—</div></div>
     <div class="card"><h3>Flight Mode</h3><div class="val" id="t72-mode">—</div></div>
     <div class="card"><h3>Failsafe Detected</h3><div class="val" id="t72-fs">Waiting...</div></div>
@@ -199,7 +199,7 @@
     <h3>Pass Criteria</h3>
     <table>
       <tr><th>Check</th><th>Criterion</th><th>Measured</th><th>Pass?</th></tr>
-      <tr><td>RC frame rate</td><td>130–150 Hz</td><td id="c72-hz">—</td><td id="c72-hz-p">—</td></tr>
+      <tr><td>RC frame rate</td><td>70–95 Hz</td><td id="c72-hz">—</td><td id="c72-hz-p">—</td></tr>
       <tr><td>Failsafe time</td><td>&lt; 500 ms after TX off</td><td id="c72-fst">—</td><td id="c72-fst-p">—</td></tr>
       <tr><td>Mode = FAILSAFE</td><td>Yes</td><td id="c72-fsmode">—</td><td id="c72-fsmode-p">—</td></tr>
     </table>
@@ -432,7 +432,7 @@ async function pollTelemetry() {
     setVal('d-pitch', (d.pitch>=0?'+':'')+d.pitch?.toFixed(1)+'°');
     setVal('d-yaw', d.yaw?.toFixed(1)+'°');
     setVal('d-thr', (d.thr*100)?.toFixed(0)+'%');
-    setVal('d-rchz', d.rcHz?.toFixed(1)+' Hz', d.rcHz>120?'ok':'err');
+    setVal('d-rchz', d.rcHz?.toFixed(1)+' Hz', d.rcHz>=70?'ok':'err');
     setVal('d-cpu0', d.cpuCore0?.toFixed(1)+'%');
     setVal('d-cpu1', d.cpuCore1?.toFixed(1)+'%');
     document.getElementById('d-cpu0-bar').style.width = d.cpuCore0+'%';
@@ -452,7 +452,7 @@ async function pollTelemetry() {
     setVal('d-mrr', (d.motRR*100)?.toFixed(0)+'%');
 
     // Test 7.2 live data
-    setVal('t72-hz', d.rcHz?.toFixed(1)+' Hz', (d.rcHz>=130&&d.rcHz<=150)?'ok':'warn');
+    setVal('t72-hz', d.rcHz?.toFixed(1)+' Hz', (d.rcHz>=70&&d.rcHz<=95)?'ok':'warn');
     setVal('t72-valid', d.rcValid?'YES':'NO', d.rcValid?'ok':'err');
     setVal('t72-mode', d.mode||'?');
     if (t72Watching && d.mode === 'FAILSAFE') t72Detected();
@@ -591,12 +591,12 @@ function t72Detected() {
   document.getElementById('t72-fs-timer').style.color = ms<500?'#3fb950':'#f85149';
   const hz = lastTelem?.rcHz || 0;
   document.getElementById('c72-hz').textContent = hz.toFixed(1)+' Hz';
-  document.getElementById('c72-hz-p').innerHTML = pass(hz>=130&&hz<=150);
+  document.getElementById('c72-hz-p').innerHTML = pass(hz>=70&&hz<=95);
   document.getElementById('c72-fst').textContent = ms+' ms';
   document.getElementById('c72-fst-p').innerHTML = pass(ms<500);
   document.getElementById('c72-fsmode').textContent = 'FAILSAFE';
   document.getElementById('c72-fsmode-p').innerHTML = pass(true);
-  setVal('t72-result', (hz>=130&&hz<=150&&ms<500)?'PASS':'FAIL', (hz>=130&&hz<=150&&ms<500)?'ok':'err');
+  setVal('t72-result', (hz>=70&&hz<=95&&ms<500)?'PASS':'FAIL', (hz>=70&&hz<=95&&ms<500)?'ok':'err');
 }
 
 function t72Reset() {

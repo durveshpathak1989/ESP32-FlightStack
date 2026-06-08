@@ -35,6 +35,7 @@ FlySkyiBUS::FlySkyiBUS(HardwareSerial& serial)
 void FlySkyiBUS::begin(int rxPin, int txPin, uint8_t uartNum)
 {
     // HardwareSerial::begin(baud, config, rxPin, txPin)
+    //_serial.setRxBufferSize(512); 
     _serial.begin(IBUS_BAUD, SERIAL_8N1, rxPin, txPin);
 
     Serial.printf("[iBUS] Initialised on UART%u  RX=GPIO%d  TX=GPIO%d\n",
@@ -80,7 +81,8 @@ void FlySkyiBUS::update()
 bool FlySkyiBUS::_parseFrame()
 {
     if (!_validateChecksum(_buf)) {
-        return false;  // silently discard corrupt frame
+        _csumFailCount++;   // count corrupt / mis-synced frames for diagnostics
+        return false;       // still discard the bad frame
     }
 
     // Extract 14 channel slots (FS-i6X uses first 10)
@@ -149,7 +151,7 @@ void FlySkyiBUS::_updateFrameRate()
     if (lastMs > 0) {
         uint32_t dt = now - lastMs;
 
-        if (dt >= 1000) {
+        if (dt >= 500) {
             _frameRateHz = (acceptedFrameCount * 1000.0f) / (float)dt;
 
             // Clamp only the displayed diagnostic value.
@@ -252,6 +254,16 @@ uint32_t FlySkyiBUS::getFailsafeCount() const
 }
 
 // ─────────────────────────────────────────────────────────────
+//  getChecksumFailCount()
+//  Single writer (taskRC); a 32-bit aligned read is atomic on the
+//  ESP32, so no mutex is needed for this monotonic diagnostic counter.
+// ─────────────────────────────────────────────────────────────
+uint32_t FlySkyiBUS::getChecksumFailCount() const
+{
+    return _csumFailCount;
+}
+
+// ─────────────────────────────────────────────────────────────
 //  getCommand() — primary flight controller interface
 // ─────────────────────────────────────────────────────────────
 RCCommand FlySkyiBUS::getCommand() const
@@ -314,8 +326,9 @@ void FlySkyiBUS::printChannels() const
     for (int i = 0; i < IBUS_CHANNELS; i++) {
         Serial.printf("CH%d=%4d ", i + 1, getChannel(i));
     }
-    Serial.printf("| %.1f Hz | FS#%lu\n",
-                  getFrameRate(), (unsigned long)getFailsafeCount());
+    Serial.printf("| %.1f Hz | FS#%lu | CSUMFAIL#%lu\n",
+                  getFrameRate(), (unsigned long)getFailsafeCount(),
+                  (unsigned long)getChecksumFailCount());
 }
 
 // ─────────────────────────────────────────────────────────────

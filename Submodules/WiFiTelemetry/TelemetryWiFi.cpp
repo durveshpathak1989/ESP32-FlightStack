@@ -12,6 +12,10 @@ TelemetryWiFi::TelemetryWiFi(uint16_t port)
     : _server(port),
       _provider(nullptr),
       _tuneHandler(nullptr),
+      _otaAllowedProvider(nullptr),
+      _otaInProgress(false),
+      _otaRejected(false),
+      _otaError(),
       _timingProvider(nullptr),
       _timingCsvProvider(nullptr),
       _timingResetHandler(nullptr),
@@ -44,6 +48,7 @@ bool TelemetryWiFi::begin(const char* ssid, const char* password,
 
 void TelemetryWiFi::setTelemetryProvider(bool (*p)(TelemetryPacket& out)) { _provider             = p; }
 void TelemetryWiFi::setTuneHandler(void (*h)(const TunePacket& in))       { _tuneHandler          = h; }
+void TelemetryWiFi::setOtaAllowedProvider(bool (*p)())                      { _otaAllowedProvider   = p; }
 void TelemetryWiFi::setTimingProvider(String (*p)())                       { _timingProvider       = p; }
 void TelemetryWiFi::setTimingCsvProvider(String (*p)())                    { _timingCsvProvider    = p; }
 void TelemetryWiFi::setTimingResetHandler(void (*h)())                     { _timingResetHandler   = h; }
@@ -82,6 +87,9 @@ void TelemetryWiFi::_setupRoutes()
     _server.on("/telemetry",      HTTP_OPTIONS, [this]() { _handleOptions(); });
     _server.on("/tune",           HTTP_POST,    [this]() { _handleTune(); });
     _server.on("/tune",           HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.on("/update",         HTTP_GET,     [this]() { _handleOtaPage(); });
+    _server.on("/update",         HTTP_POST,    [this]() { _handleOtaFinish(); }, [this]() { _handleOtaUpload(); });
+    _server.on("/update",         HTTP_OPTIONS, [this]() { _handleOptions(); });
     _server.on("/log",            HTTP_GET,     [this]() { _handleLog(); });
     _server.on("/log",            HTTP_OPTIONS, [this]() { _handleOptions(); });
     // v2.4 timing endpoints
@@ -112,7 +120,8 @@ void TelemetryWiFi::_handleRoot()
     _server.send(200, "text/plain",
         "ESP32 Drone Telemetry v2.4\n"
         "GET  /telemetry        — full state JSON\n"
-        "POST /tune             — apply PID/Mahony gains (disarmed only)\n"
+        "POST /tune             — apply runtime tuning levers (disarmed only)\n"
+        "GET/POST /update       — Web OTA firmware update (safe/disarmed only)\n"
         "GET  /log?since=N      — calibration log lines\n"
         "GET  /timing           — IMU jitter stats (Welford)\n"
         "POST /timing/reset     — reset jitter stats\n"
@@ -232,6 +241,104 @@ void TelemetryWiFi::_handleLog()
     _server.send(200, "application/json", json);
 }
 
+
+bool TelemetryWiFi::_isOtaAllowed() const
+{
+    return _otaAllowedProvider ? _otaAllowedProvider() : false;
+}
+
+void TelemetryWiFi::_handleOtaPage()
+{
+    _sendCorsHeaders();
+    const bool allowed = _isOtaAllowed();
+    String html;
+    html.reserve(1700);
+    html += F("<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>");
+    html += F("<title>ESP32 Drone OTA</title><style>body{font-family:system-ui;background:#0b0b0f;color:#eee;margin:24px}"
+              ".card{max-width:620px;background:#1c1c1e;border:1px solid #333;border-radius:14px;padding:20px}"
+              "input,button{font-size:15px;margin-top:10px}button{padding:10px 16px;border-radius:8px;border:0;background:#0a84ff;color:white}"
+              ".bad{color:#ff453a}.ok{color:#30d158}.warn{color:#ff9f0a}code{color:#64d2ff}</style></head><body><div class='card'>");
+    html += F("<h2>ESP32 Drone OTA Update</h2>");
+    html += allowed ? F("<p class='ok'>OTA unlocked: drone is DISARMED and motors are inactive.</p>")
+                    : F("<p class='bad'>OTA locked. Disarm the drone, lower throttle, and stop motors before uploading firmware.</p>");
+    html += F("<p class='warn'>Use only the compiled <code>.bin</code> for this same board/partition scheme. Keep USB available as recovery.</p>");
+    if (allowed) {
+        html += F("<form method='POST' action='/update' enctype='multipart/form-data'>"
+                  "<input type='file' name='firmware' accept='.bin,.bin.gz' required><br>"
+                  "<button type='submit'>Upload and Reboot</button></form>");
+    }
+    html += F("<p><a style='color:#64d2ff' href='/telemetry'>telemetry</a></p></div></body></html>");
+    _server.send(allowed ? 200 : 423, "text/html", html);
+}
+
+void TelemetryWiFi::_handleOtaUpload()
+{
+    HTTPUpload& upload = _server.upload();
+
+    if (upload.status == UPLOAD_FILE_START) {
+        _otaInProgress = true;
+        _otaRejected = false;
+        _otaError = "";
+
+        if (!_isOtaAllowed()) {
+            _otaRejected = true;
+            _otaError = "OTA rejected: disarm, lower throttle, and stop motors first";
+            Serial.println("[OTA] Rejected — unsafe state");
+            return;
+        }
+
+        Serial.printf("[OTA] Start: %s\n", upload.filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+            _otaRejected = true;
+            _otaError = "Update.begin failed";
+            Update.printError(Serial);
+            return;
+        }
+    }
+    else if (upload.status == UPLOAD_FILE_WRITE) {
+        if (_otaRejected) return;
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+            _otaRejected = true;
+            _otaError = "flash write failed";
+            Update.printError(Serial);
+        }
+    }
+    else if (upload.status == UPLOAD_FILE_END) {
+        if (_otaRejected) return;
+        if (Update.end(true)) {
+            Serial.printf("[OTA] Success: %u bytes\n", upload.totalSize);
+        } else {
+            _otaRejected = true;
+            _otaError = "Update.end failed";
+            Update.printError(Serial);
+        }
+    }
+    else if (upload.status == UPLOAD_FILE_ABORTED) {
+        _otaRejected = true;
+        _otaError = "upload aborted";
+        Update.abort();
+        Serial.println("[OTA] Aborted");
+    }
+}
+
+void TelemetryWiFi::_handleOtaFinish()
+{
+    _sendCorsHeaders();
+    _otaInProgress = false;
+
+    if (_otaRejected || Update.hasError()) {
+        String msg = "{\"ok\":false,\"error\":\"";
+        msg += (_otaError.length() ? _otaError : String("OTA update failed"));
+        msg += "\"}";
+        _server.send(_otaError.startsWith("OTA rejected") ? 423 : 500, "application/json", msg);
+        return;
+    }
+
+    _server.send(200, "text/html", "<!doctype html><html><body style='font-family:system-ui;background:#111;color:#eee'><h2>OTA complete</h2><p>Rebooting ESP32...</p></body></html>");
+    delay(250);
+    ESP.restart();
+}
+
 void TelemetryWiFi::_handleTune()
 {
     _sendCorsHeaders();
@@ -248,19 +355,55 @@ void TelemetryWiFi::_handleTune()
     auto tryF = [&](const char* key, bool& has, float& val) {
         float tmp; if (_jsonGetFloat(body, key, tmp)) { has = true; val = tmp; }
     };
-    tryF("pid_roll_kp",        t.has_pid_roll_kp,        t.pid_roll_kp);
-    tryF("pid_roll_ki",        t.has_pid_roll_ki,        t.pid_roll_ki);
-    tryF("pid_roll_kd",        t.has_pid_roll_kd,        t.pid_roll_kd);
-    tryF("pid_pitch_kp",       t.has_pid_pitch_kp,       t.pid_pitch_kp);
-    tryF("pid_pitch_ki",       t.has_pid_pitch_ki,       t.pid_pitch_ki);
-    tryF("pid_pitch_kd",       t.has_pid_pitch_kd,       t.pid_pitch_kd);
-    tryF("pid_yaw_kp",         t.has_pid_yaw_kp,         t.pid_yaw_kp);
-    tryF("pid_yaw_ki",         t.has_pid_yaw_ki,         t.pid_yaw_ki);
-    tryF("pid_yaw_kd",         t.has_pid_yaw_kd,         t.pid_yaw_kd);
-    tryF("pid_angle_roll_kp",  t.has_pid_angle_roll_kp,  t.pid_angle_roll_kp);
-    tryF("pid_angle_pitch_kp", t.has_pid_angle_pitch_kp, t.pid_angle_pitch_kp);
-    tryF("mahony_kp",          t.has_mahony_kp,          t.mahony_kp);
-    tryF("mahony_ki",          t.has_mahony_ki,          t.mahony_ki);
+    // Pilot command limits
+    tryF("max_angle_deg",           t.has_max_angle_deg,           t.max_angle_deg);
+    tryF("max_rate_dps",            t.has_max_rate_dps,            t.max_rate_dps);
+    tryF("max_pitch_rate_dps",      t.has_max_pitch_rate_dps,      t.max_pitch_rate_dps);
+
+    // PID output authority limits before motor mixing
+    tryF("roll_output_limit",       t.has_roll_output_limit,       t.roll_output_limit);
+    tryF("pitch_output_limit",      t.has_pitch_output_limit,      t.pitch_output_limit);
+    tryF("yaw_output_limit",        t.has_yaw_output_limit,        t.yaw_output_limit);
+
+    // Throttle shaping + motor output limits
+    tryF("throttle_expo",           t.has_throttle_expo,           t.throttle_expo);
+    tryF("throttle_up_rate_per_sec",   t.has_throttle_up_rate_per_sec,   t.throttle_up_rate_per_sec);
+    tryF("throttle_down_rate_per_sec", t.has_throttle_down_rate_per_sec, t.throttle_down_rate_per_sec);
+    tryF("motor_idle",              t.has_motor_idle,              t.motor_idle);
+    tryF("motor_max",               t.has_motor_max,               t.motor_max);
+    tryF("throttle_cut",            t.has_throttle_cut,            t.throttle_cut);
+    tryF("idle_ramp_end",           t.has_idle_ramp_end,           t.idle_ramp_end);
+    tryF("pid_ilimit",              t.has_pid_ilimit,              t.pid_ilimit);
+
+    // Inner rate loop PID
+    tryF("pid_roll_kp",             t.has_pid_roll_kp,             t.pid_roll_kp);
+    tryF("pid_roll_ki",             t.has_pid_roll_ki,             t.pid_roll_ki);
+    tryF("pid_roll_kd",             t.has_pid_roll_kd,             t.pid_roll_kd);
+    tryF("pid_pitch_kp",            t.has_pid_pitch_kp,            t.pid_pitch_kp);
+    tryF("pid_pitch_ki",            t.has_pid_pitch_ki,            t.pid_pitch_ki);
+    tryF("pid_pitch_kd",            t.has_pid_pitch_kd,            t.pid_pitch_kd);
+    tryF("pid_yaw_kp",              t.has_pid_yaw_kp,              t.pid_yaw_kp);
+    tryF("pid_yaw_ki",              t.has_pid_yaw_ki,              t.pid_yaw_ki);
+    tryF("pid_yaw_kd",              t.has_pid_yaw_kd,              t.pid_yaw_kd);
+
+    // Outer angle loop PID
+    tryF("pid_angle_roll_kp",       t.has_pid_angle_roll_kp,       t.pid_angle_roll_kp);
+    tryF("pid_angle_roll_ki",       t.has_pid_angle_roll_ki,       t.pid_angle_roll_ki);
+    tryF("pid_angle_roll_kd",       t.has_pid_angle_roll_kd,       t.pid_angle_roll_kd);
+    tryF("pid_angle_pitch_kp",      t.has_pid_angle_pitch_kp,      t.pid_angle_pitch_kp);
+    tryF("pid_angle_pitch_ki",      t.has_pid_angle_pitch_ki,      t.pid_angle_pitch_ki);
+    tryF("pid_angle_pitch_kd",      t.has_pid_angle_pitch_kd,      t.pid_angle_pitch_kd);
+
+    // Outer yaw heading-hold loop
+    tryF("pid_angle_yaw_kp",        t.has_pid_angle_yaw_kp,        t.pid_angle_yaw_kp);
+    tryF("yaw_deadband",            t.has_yaw_deadband,            t.yaw_deadband);
+    tryF("yaw_max_rate_dps",        t.has_yaw_max_rate_dps,        t.yaw_max_rate_dps);
+    // Compatibility alias used by some GCS config panels
+    if (!t.has_yaw_max_rate_dps) { tryF("max_yaw_rate_dps", t.has_yaw_max_rate_dps, t.yaw_max_rate_dps); }
+
+    // AHRS
+    tryF("mahony_kp",               t.has_mahony_kp,               t.mahony_kp);
+    tryF("mahony_ki",               t.has_mahony_ki,               t.mahony_ki);
     _tuneHandler(t);
     _server.send(200, "application/json", "{\"ok\":true}");
 }
@@ -277,7 +420,7 @@ void TelemetryWiFi::_handleNotFound() {
 String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
 {
     String j;
-    j.reserve(1100);
+    j.reserve(2300);
     j += "{\"ok\":true";
     j += ",\"tick\":"    + String(p.tick);
     j += ",\"mode\":\""  + String(p.mode ? p.mode : "UNKNOWN") + "\"";
@@ -312,21 +455,43 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"cpuCore0\":"       + String(p.cpu_core0_pct, 1);
     j += ",\"cpuCore1\":"       + String(p.cpu_core1_pct, 1);
     j += ",\"cpuValid\":"       + String(p.cpu_valid ? "true" : "false");
-    // Gains serialized at 8 dp so sub-0.0001 values survive the round-trip
-    // (a 32-bit float keeps ~7 sig figs, so 1e-6-scale gains stay readable).
-    j += ",\"pidRollKp\":"       + String(p.pid_roll_kp,        8);
-    j += ",\"pidRollKi\":"       + String(p.pid_roll_ki,        8);
-    j += ",\"pidRollKd\":"       + String(p.pid_roll_kd,        8);
-    j += ",\"pidPitchKp\":"      + String(p.pid_pitch_kp,       8);
-    j += ",\"pidPitchKi\":"      + String(p.pid_pitch_ki,       8);
-    j += ",\"pidPitchKd\":"      + String(p.pid_pitch_kd,       8);
-    j += ",\"pidYawKp\":"        + String(p.pid_yaw_kp,         8);
-    j += ",\"pidYawKi\":"        + String(p.pid_yaw_ki,         8);
-    j += ",\"pidYawKd\":"        + String(p.pid_yaw_kd,         8);
-    j += ",\"pidAngleRollKp\":"  + String(p.pid_angle_roll_kp,  8);
-    j += ",\"pidAnglePitchKp\":" + String(p.pid_angle_pitch_kp, 8);
-    j += ",\"mahonyKp\":"        + String(p.mahony_kp,          8);
-    j += ",\"mahonyKi\":"        + String(p.mahony_ki,          8);
+    // Runtime tuning values serialized at 8 dp where useful so very small
+    // gains like 0.00001 survive the telemetry round trip.
+    j += ",\"maxAngleDeg\":"             + String(p.max_angle_deg,                 3);
+    j += ",\"maxRateDps\":"              + String(p.max_rate_dps,                  3);
+    j += ",\"maxPitchRateDps\":"         + String(p.max_pitch_rate_dps,            3);
+    j += ",\"rollOutputLimit\":"         + String(p.roll_output_limit,             6);
+    j += ",\"pitchOutputLimit\":"        + String(p.pitch_output_limit,            6);
+    j += ",\"yawOutputLimit\":"          + String(p.yaw_output_limit,              6);
+    j += ",\"throttleExpo\":"            + String(p.throttle_expo,                 6);
+    j += ",\"throttleUpRatePerSec\":"    + String(p.throttle_up_rate_per_sec,      6);
+    j += ",\"throttleDownRatePerSec\":"  + String(p.throttle_down_rate_per_sec,    6);
+    j += ",\"motorIdle\":"               + String(p.motor_idle,                    6);
+    j += ",\"motorMax\":"                + String(p.motor_max,                     6);
+    j += ",\"throttleCut\":"             + String(p.throttle_cut,                  6);
+    j += ",\"idleRampEnd\":"             + String(p.idle_ramp_end,                 6);
+    j += ",\"pidRollKp\":"               + String(p.pid_roll_kp,                   8);
+    j += ",\"pidRollKi\":"               + String(p.pid_roll_ki,                   8);
+    j += ",\"pidRollKd\":"               + String(p.pid_roll_kd,                   8);
+    j += ",\"pidPitchKp\":"              + String(p.pid_pitch_kp,                  8);
+    j += ",\"pidPitchKi\":"              + String(p.pid_pitch_ki,                  8);
+    j += ",\"pidPitchKd\":"              + String(p.pid_pitch_kd,                  8);
+    j += ",\"pidYawKp\":"                + String(p.pid_yaw_kp,                    8);
+    j += ",\"pidYawKi\":"                + String(p.pid_yaw_ki,                    8);
+    j += ",\"pidYawKd\":"                + String(p.pid_yaw_kd,                    8);
+    j += ",\"pidAngleRollKp\":"          + String(p.pid_angle_roll_kp,             8);
+    j += ",\"pidAngleRollKi\":"          + String(p.pid_angle_roll_ki,             8);
+    j += ",\"pidAngleRollKd\":"          + String(p.pid_angle_roll_kd,             8);
+    j += ",\"pidAnglePitchKp\":"         + String(p.pid_angle_pitch_kp,            8);
+    j += ",\"pidAnglePitchKi\":"         + String(p.pid_angle_pitch_ki,            8);
+    j += ",\"pidAnglePitchKd\":"         + String(p.pid_angle_pitch_kd,            8);
+    j += ",\"pidAngleYawKp\":"           + String(p.pid_angle_yaw_kp,              8);
+    j += ",\"yawDeadband\":"             + String(p.yaw_deadband,                  6);
+    j += ",\"yawMaxRateDps\":"           + String(p.yaw_max_rate_dps,              3);
+    // Compatibility alias for config panels that read maxYawRateDps.
+    j += ",\"maxYawRateDps\":"           + String(p.yaw_max_rate_dps,              3);
+    j += ",\"mahonyKp\":"                + String(p.mahony_kp,                     8);
+    j += ",\"mahonyKi\":"                + String(p.mahony_ki,                     8);
     j += ",\"clients\":"         + String(WiFi.softAPgetStationNum());
     j += ",\"requests\":"        + String(_requestCount);
     j += ",\"gpsValid\":"    + String(p.gps_valid ? "true" : "false");

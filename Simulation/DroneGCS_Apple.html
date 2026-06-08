@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Drone GCS</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root {
   --bg:      #000;
@@ -150,7 +148,15 @@ select{background:var(--bg3);color:var(--t2);border:1px solid var(--sep);border-
 /* ── GPS TAB ── */
 #tab-gps{display:none}
 #tab-gps.active{display:flex;gap:10px}
-#gpsMap{flex:1;min-height:0;border-radius:8px;overflow:hidden}
+#gpsMap{flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative;background:#05070a}
+#gpsCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#05070a}
+#gpsMapHud{position:absolute;left:10px;top:10px;z-index:2;background:rgba(0,0,0,.55);
+           border:1px solid rgba(10,132,255,.35);border-radius:8px;padding:6px 9px;
+           font-size:10px;color:var(--t2);font-family:var(--mono);line-height:1.45;pointer-events:none}
+#gpsMapControls{position:absolute;right:10px;top:10px;z-index:3;display:flex;flex-direction:column;gap:5px}
+.map-btn{width:28px;height:28px;border-radius:7px;border:1px solid var(--sep);background:rgba(44,44,46,.9);
+         color:var(--blue);font-weight:700;cursor:pointer;font-family:var(--mono)}
+.map-btn:hover{background:var(--bg4)}
 .leaflet-container{background:#0a0a0a!important}
 .leaflet-tile{filter:brightness(.5) saturate(.35) hue-rotate(185deg)}
 .leaflet-control-zoom a{background:var(--bg3)!important;color:var(--blue)!important;border-color:var(--sep)!important}
@@ -368,6 +374,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="data-row"><span class="dn">Parser</span><span class="dv" id="sParse">WAIT</span></div>
     <div class="data-row"><span class="dn">Tick</span><span class="dv" id="stk">—</span></div>
     <div class="data-row"><span class="dn">RC Hz</span><span class="dv" id="shz">—</span></div>
+    <div class="data-row"><span class="dn">RC link</span><span class="dv" id="srcfail">—</span></div>
     <div class="data-row"><span class="dn">Data age</span><span class="dv" id="sAge">—</span></div>
     <div id="aiPanel"><span class="chip warn" id="aiState">AI OFFLINE</span><span class="chip" id="aiBias">bias: —</span></div>
     <div style="margin-top:6px;font-size:11px;color:var(--t3)" id="logCount">0 rows logged</div>
@@ -806,6 +813,7 @@ const S={
   roll:0,pitch:0,yaw:0,ax:0,ay:0,az:0,gx:0,gy:0,gz:0,
   mx:0,my:0,mz:0,
   thr:0,rcRoll:0,rcPitch:0,rcYaw:0,rcHz:0,
+  rcCsumFail:0,rcBadPerSec:0,_rcLastFail:null,_rcLastFailMs:0,
   motFL:0,motFR:0,motRL:0,motRR:0,rpmFL:0,rpmFR:0,rpmRL:0,rpmRR:0,
   mode:'UNKNOWN',armed:false,tick:0,
   bmpTemp:NaN,bmpPressure:NaN,bmpAlt:NaN,bmpValid:false,
@@ -849,44 +857,295 @@ function switchTab(name){
   if(name==='motors') drawRpmGauges();
 }
 
-// ─── GPS / Leaflet ────────────────────────────────────────────────────────────
+// ─── GPS / Offline OSM Canvas Map ────────────────────────────────────────────
+// This version does NOT need internet map tiles. Put ColumbusMap.osm in the same
+// folder as this HTML and run from a local server: python -m http.server 8080
 const FIX_LABELS={0:'NO FIX',1:'GPS FIX',2:'DGPS FIX'};
 let gpsMap=null,droneMarker=null,homeMarker=null,trackLine=null,trackPoints=[],mapCentered=false;
-const droneIconHtml=`<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="11" fill="#0a0a0a" stroke="#0a84ff" stroke-width="1.5"/><circle cx="12" cy="12" r="2.5" fill="#0a84ff"/><line x1="12" y1="1" x2="12" y2="6.5" stroke="#0a84ff" stroke-width="1.5"/><line x1="23" y1="12" x2="17.5" y2="12" stroke="#0a84ff" stroke-width="1.5"/><line x1="12" y1="23" x2="12" y2="17.5" stroke="#0a84ff" stroke-width="1.5"/><line x1="1" y1="12" x2="6.5" y2="12" stroke="#0a84ff" stroke-width="1.5"/><circle cx="5.5" cy="5.5" r="2" fill="#ff9f0a"/><circle cx="18.5" cy="5.5" r="2" fill="#ff9f0a"/><circle cx="5.5" cy="18.5" r="2" fill="#ff9f0a"/><circle cx="18.5" cy="18.5" r="2" fill="#ff9f0a"/></svg>`;
+const OSM_FILE='ColumbusMap.osm';
+
+const OSM={
+  loaded:false, loading:false, error:'',
+  nodes:new Map(), ways:[], bounds:null,
+  centerLat:39.16908, centerLon:-85.95163,
+  scale:1, userZoom:1, panX:0, panY:0,
+  canvas:null, ctx:null, hud:null,
+  dragging:false, lastX:0, lastY:0
+};
 
 function initMap(){
   if(gpsMap)return;
   const container=document.getElementById('gpsMap');
-  container.style.flex='1';container.style.minHeight='0';
-  gpsMap=L.map('gpsMap',{zoomControl:true,attributionControl:false}).setView([0,0],15);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20}).addTo(gpsMap);
+  container.innerHTML =
+    '<canvas id="gpsCanvas"></canvas>' +
+    '<div id="gpsMapHud">OSM: loading ColumbusMap.osm…<br>Run through localhost, not file://</div>' +
+    '<div id="gpsMapControls">' +
+      '<button class="map-btn" onclick="osmZoom(1.25)">+</button>' +
+      '<button class="map-btn" onclick="osmZoom(0.80)">−</button>' +
+      '<button class="map-btn" onclick="osmCenterOnDrone()">⌖</button>' +
+    '</div>';
+  OSM.canvas=document.getElementById('gpsCanvas');
+  OSM.ctx=OSM.canvas.getContext('2d');
+  OSM.hud=document.getElementById('gpsMapHud');
+
+  gpsMap={invalidateSize:resizeOsmCanvas};
+
+  OSM.canvas.addEventListener('wheel', e=>{
+    e.preventDefault();
+    osmZoom(e.deltaY<0?1.15:0.87, e.offsetX, e.offsetY);
+  }, {passive:false});
+  OSM.canvas.addEventListener('mousedown', e=>{OSM.dragging=true;OSM.lastX=e.clientX;OSM.lastY=e.clientY;});
+  window.addEventListener('mouseup', ()=>{OSM.dragging=false;});
+  window.addEventListener('mousemove', e=>{
+    if(!OSM.dragging)return;
+    OSM.panX += e.clientX-OSM.lastX;
+    OSM.panY += e.clientY-OSM.lastY;
+    OSM.lastX=e.clientX; OSM.lastY=e.clientY;
+    drawOsmMap();
+  });
+
+  resizeOsmCanvas();
+  loadOsmFile();
 }
+
+function resizeOsmCanvas(){
+  if(!OSM.canvas)return;
+  const r=OSM.canvas.parentElement.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  OSM.canvas.width=Math.max(1,Math.floor(r.width*dpr));
+  OSM.canvas.height=Math.max(1,Math.floor(r.height*dpr));
+  OSM.canvas.style.width=r.width+'px';
+  OSM.canvas.style.height=r.height+'px';
+  OSM.ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawOsmMap();
+}
+
+async function loadOsmFile(){
+  if(OSM.loading||OSM.loaded)return;
+  OSM.loading=true;
+  try{
+    const resp=await fetch(OSM_FILE,{cache:'no-store'});
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const xmlText=await resp.text();
+    parseOsmXml(xmlText);
+    OSM.loaded=true;
+    OSM.loading=false;
+    if(OSM.hud)OSM.hud.innerHTML='OSM: ColumbusMap.osm loaded<br>GPS track uses local vector map';
+    addCalLog('[GPS] Offline OSM map loaded: '+OSM_FILE,'lBOOT');
+    drawOsmMap();
+  }catch(e){
+    OSM.loading=false;
+    OSM.error=e.message;
+    if(OSM.hud)OSM.hud.innerHTML='OSM load failed: '+e.message+'<br>Use: python -m http.server 8080';
+    addCalLog('[GPS] Offline map failed: '+e.message+' — run local server and keep ColumbusMap.osm beside HTML','lWARN');
+    drawOsmMap();
+  }
+}
+
+function parseOsmXml(xmlText){
+  const doc=new DOMParser().parseFromString(xmlText,'application/xml');
+  const err=doc.querySelector('parsererror');
+  if(err)throw new Error('OSM XML parse error');
+
+  const b=doc.querySelector('bounds');
+  if(b){
+    OSM.bounds={
+      minlat:+b.getAttribute('minlat'), minlon:+b.getAttribute('minlon'),
+      maxlat:+b.getAttribute('maxlat'), maxlon:+b.getAttribute('maxlon')
+    };
+    OSM.centerLat=(OSM.bounds.minlat+OSM.bounds.maxlat)/2;
+    OSM.centerLon=(OSM.bounds.minlon+OSM.bounds.maxlon)/2;
+  }
+
+  OSM.nodes.clear();
+  doc.querySelectorAll('node').forEach(n=>{
+    OSM.nodes.set(n.getAttribute('id'), {lat:+n.getAttribute('lat'), lon:+n.getAttribute('lon')});
+  });
+
+  OSM.ways=[];
+  doc.querySelectorAll('way').forEach(w=>{
+    const refs=[...w.querySelectorAll('nd')].map(nd=>nd.getAttribute('ref'));
+    const tags={};
+    w.querySelectorAll('tag').forEach(t=>{tags[t.getAttribute('k')]=t.getAttribute('v');});
+    const pts=refs.map(id=>OSM.nodes.get(id)).filter(Boolean);
+    if(pts.length<2)return;
+
+    let type='other', weight=1.0, color='rgba(120,135,150,.35)', fill=null;
+    if(tags.highway){
+      type='road';
+      const major=['motorway','trunk','primary','secondary'];
+      const medium=['tertiary','residential','service','unclassified'];
+      weight=major.includes(tags.highway)?3.2:medium.includes(tags.highway)?2.0:1.2;
+      color=major.includes(tags.highway)?'rgba(255,159,10,.72)':'rgba(170,185,205,.62)';
+    }else if(tags.waterway||tags.natural==='water'||tags.water){
+      type='water'; weight=1.2; color='rgba(100,210,255,.65)'; fill='rgba(10,80,130,.22)';
+    }else if(tags.building){
+      type='building'; weight=.8; color='rgba(235,235,245,.18)'; fill='rgba(235,235,245,.055)';
+    }else if(tags.landuse||tags.leisure||tags.natural){
+      type='land'; weight=.7; color='rgba(48,209,88,.20)'; fill='rgba(48,209,88,.055)';
+    }else{
+      return; // keep map light and fast
+    }
+    const closed = pts.length>2 && refs[0]===refs[refs.length-1];
+    OSM.ways.push({pts,tags,type,weight,color,fill,closed});
+  });
+
+  // Draw filled areas below roads.
+  OSM.ways.sort((a,b)=>{
+    const order={land:0,water:1,building:2,other:3,road:4};
+    return (order[a.type]??9)-(order[b.type]??9);
+  });
+}
+
+function projectLatLon(lat,lon){
+  const w=OSM.canvas.clientWidth||1, h=OSM.canvas.clientHeight||1;
+  const lat0=OSM.centerLat*Math.PI/180;
+  const x=(lon-OSM.centerLon)*Math.cos(lat0)*111320;
+  const y=-(lat-OSM.centerLat)*110540;
+  const base=Math.min(w,h)/4200; // ColumbusMap.osm is roughly a few km wide
+  const sc=base*OSM.userZoom;
+  return {x:w/2 + x*sc + OSM.panX, y:h/2 + y*sc + OSM.panY};
+}
+
+function drawOsmMap(){
+  if(!OSM.ctx||!OSM.canvas)return;
+  const ctx=OSM.ctx, w=OSM.canvas.clientWidth||1, h=OSM.canvas.clientHeight||1;
+  ctx.clearRect(0,0,w,h);
+
+  // Background + grid fallback.
+  ctx.fillStyle='#05070a'; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(10,132,255,.10)'; ctx.lineWidth=1;
+  for(let x=((OSM.panX%50)+50)%50;x<w;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+  for(let y=((OSM.panY%50)+50)%50;y<h;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+
+  if(OSM.loaded){
+    for(const way of OSM.ways){
+      if(!way.pts.length)continue;
+      ctx.beginPath();
+      way.pts.forEach((p,i)=>{
+        const q=projectLatLon(p.lat,p.lon);
+        if(i===0)ctx.moveTo(q.x,q.y); else ctx.lineTo(q.x,q.y);
+      });
+      if(way.closed && way.fill){
+        ctx.closePath();
+        ctx.fillStyle=way.fill;
+        ctx.fill();
+      }
+      ctx.strokeStyle=way.color;
+      ctx.lineWidth=way.weight;
+      ctx.lineJoin='round';
+      ctx.lineCap='round';
+      ctx.stroke();
+    }
+  }else{
+    ctx.fillStyle='rgba(235,235,245,.35)';
+    ctx.font='12px monospace';
+    ctx.textAlign='center';
+    ctx.fillText(OSM.error?'Offline map not loaded':'Loading offline OSM…',w/2,h/2);
+  }
+
+  // Track.
+  if(trackPoints.length>1){
+    ctx.beginPath();
+    trackPoints.forEach((pt,i)=>{
+      const q=projectLatLon(pt[0],pt[1]);
+      if(i===0)ctx.moveTo(q.x,q.y); else ctx.lineTo(q.x,q.y);
+    });
+    ctx.strokeStyle='#0a84ff';
+    ctx.lineWidth=2.5;
+    ctx.stroke();
+  }
+
+  // Home marker.
+  if(homeMarker){
+    const q=projectLatLon(homeMarker.lat,homeMarker.lon);
+    drawMapDot(ctx,q.x,q.y,'#ff9f0a','HOME');
+  }
+
+  // Drone marker.
+  if(droneMarker){
+    const q=projectLatLon(droneMarker.lat,droneMarker.lon);
+    drawDroneMarker(ctx,q.x,q.y,S.gpsCrs||S.yaw||0);
+  }
+
+  if(OSM.hud){
+    const gpsTxt=S.gpsValid?`${S.gpsLat.toFixed(6)}, ${S.gpsLon.toFixed(6)}`:'waiting for GPS fix';
+    const osmTxt=OSM.loaded?'OSM local vector map':'OSM not loaded';
+    OSM.hud.innerHTML=`${osmTxt}<br>${gpsTxt}<br>track: ${trackPoints.length} pts`;
+  }
+}
+
+function drawMapDot(ctx,x,y,color,label){
+  ctx.save();
+  ctx.fillStyle=color; ctx.strokeStyle='rgba(0,0,0,.8)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=color; ctx.font='10px monospace'; ctx.textAlign='center';
+  ctx.fillText(label,x,y-10);
+  ctx.restore();
+}
+
+function drawDroneMarker(ctx,x,y,headingDeg){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate((headingDeg||0)*Math.PI/180);
+  ctx.fillStyle='#0a84ff';
+  ctx.strokeStyle='rgba(0,0,0,.9)';
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(0,-13); ctx.lineTo(8,10); ctx.lineTo(0,6); ctx.lineTo(-8,10); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#ffd60a';
+  ctx.beginPath(); ctx.arc(0,0,3,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function osmZoom(factor, px, py){
+  OSM.userZoom=clamp(OSM.userZoom*factor,0.35,25);
+  drawOsmMap();
+}
+
+function osmCenterOnDrone(){
+  if(droneMarker){
+    const w=OSM.canvas.clientWidth||1, h=OSM.canvas.clientHeight||1;
+    OSM.panX=0; OSM.panY=0;
+    const q=projectLatLon(droneMarker.lat,droneMarker.lon);
+    OSM.panX += w/2-q.x;
+    OSM.panY += h/2-q.y;
+  }else{
+    OSM.panX=0; OSM.panY=0;
+  }
+  drawOsmMap();
+}
+
 function updateGpsMap(lat,lon,valid){
-  if(!gpsMap||!valid||(lat===0&&lon===0))return;
-  const icon=L.divIcon({html:droneIconHtml,iconSize:[24,24],iconAnchor:[12,12],className:''});
+  if(!gpsMap||!valid||(lat===0&&lon===0)){drawOsmMap();return;}
   if(!droneMarker){
-    droneMarker=L.marker([lat,lon],{icon}).addTo(gpsMap);
-    homeMarker=L.circleMarker([lat,lon],{radius:5,color:'#ff9f0a',fillColor:'#ff9f0a',fillOpacity:1,weight:2})
-               .addTo(gpsMap).bindTooltip('HOME',{permanent:true,direction:'top'});
-  } else { droneMarker.setLatLng([lat,lon]); }
+    droneMarker={lat,lon};
+    homeMarker={lat,lon};
+  } else {
+    droneMarker.lat=lat; droneMarker.lon=lon;
+  }
   trackPoints.push([lat,lon]);
-  if(trackPoints.length>3000) trackPoints.shift();
-  if(trackLine) gpsMap.removeLayer(trackLine);
-  trackLine=L.polyline(trackPoints,{color:'#0a84ff',weight:2,opacity:.8}).addTo(gpsMap);
-  if(!mapCentered){gpsMap.setView([lat,lon],17);mapCentered=true;}
+  if(trackPoints.length>(CFG.gpsTrack||3000)) trackPoints.shift();
+  if(!mapCentered){osmCenterOnDrone();mapCentered=true;}
+  drawOsmMap();
 }
+
 function resetGpsTrack(){
   trackPoints=[];
-  if(trackLine){gpsMap.removeLayer(trackLine);trackLine=null;}
-  if(droneMarker){gpsMap.removeLayer(droneMarker);droneMarker=null;}
-  if(homeMarker){gpsMap.removeLayer(homeMarker);homeMarker=null;}
+  droneMarker=null;
+  homeMarker=null;
+  trackLine=null;
   mapCentered=false;
+  drawOsmMap();
 }
+
 function updateSatDots(n){
   const row=document.getElementById('satRow'),MAX=16;
   if(row.children.length!==MAX){row.innerHTML='';for(let i=0;i<MAX;i++){const d=document.createElement('div');d.className='sat';row.appendChild(d);}}
   for(let i=0;i<MAX;i++) row.children[i].classList.toggle('active',i<n);
 }
+
 function renderGps(){
   const v=S.gpsValid;
   const fb=document.getElementById('fixBadge');
@@ -901,7 +1160,6 @@ function renderGps(){
   setText('gHdop',v?S.gpsHdop.toFixed(2):'—');
   setText('gFix',FIX_LABELS[S.gpsFix]||'—');
   setText('gUtc',`${String(S.gpsH).padStart(2,'0')}:${String(S.gpsM).padStart(2,'0')}:${String(S.gpsSec).padStart(2,'0')} UTC`);
-  // Only update map if GPS tab is active (map is visible)
   if(activeTab==='gps') updateGpsMap(S.gpsLat,S.gpsLon,v);
 }
 
@@ -1052,12 +1310,12 @@ function stopWifi(){
 }
 async function pollWifi(){
   if(!wifiOn)return;
-  try{const r=await fetch(wifiUrl,{cache:'no-store'});const j=await r.json();if(!j.ok)throw new Error(j.error||'bad');applyJson(j);setParser(true);}catch(e){setParser(false);}
+  try{const r=await fetch(wifiUrl2,{cache:'no-store'});const j=await r.json();if(!j.ok)throw new Error(j.error||'bad');applyJson(j);setParser(true);}catch(e){setParser(false);}
 }
 async function pollWifiLog(){
   if(!wifiOn)return;
   try{
-    const r=await fetch('http://192.168.4.1/log?since='+wifiLogSeq,{cache:'no-store'});
+    const r=await fetch('http://'+(CFG.wifiIp||'192.168.4.1')+'/log?since='+wifiLogSeq,{cache:'no-store'});
     const j=await r.json();if(!j.ok)return;wifiLogSeq=j.nextSeq;
     if(j.lines&&j.lines.length){j.lines.forEach(entry=>{
       const line=entry.text;
@@ -1081,6 +1339,9 @@ function applyJson(j){
   S.gx=+j.gx||0;S.gy=+j.gy||0;S.gz=+j.gz||0;
   S.thr=+j.thr||0;S.rcRoll=+j.rcRoll||0;S.rcPitch=+j.rcPitch||0;S.rcYaw=+j.rcYaw||0;
   S.rcHz=+j.rcHz||0;S.tick=+j.tick||0;
+  { const nf=+j.rcCsumFail||0, now=Date.now();
+    if(S._rcLastFail!=null){const dt=(now-S._rcLastFailMs)/1000; if(dt>0) S.rcBadPerSec=Math.max(0,(nf-S._rcLastFail)/dt);}
+    S._rcLastFail=nf; S._rcLastFailMs=now; S.rcCsumFail=nf; }
   S.mode=(j.mode||'UNKNOWN').toUpperCase();S.armed=!!j.armed;
   S.motFL=+j.motFL||0;S.motFR=+j.motFR||0;S.motRL=+j.motRL||0;S.motRR=+j.motRR||0;
   S.rpmFL=+j.rpmFL||0;S.rpmFR=+j.rpmFR||0;S.rpmRL=+j.rpmRL||0;S.rpmRR=+j.rpmRR||0;
@@ -1174,7 +1435,7 @@ function toggleStationarySim(){
     S.bmpTemp=24+.4*Math.sin(simT*.01);S.bmpPressure=1013.25+.08*Math.sin(simT*.04);
     S.bmpAlt=44330*(1-Math.pow(S.bmpPressure/1013.25,.19029));S.bmpValid=true;
     S.cpu0=18+3*Math.sin(simT*.2);S.cpu1=25+4*Math.cos(simT*.18);
-    S.gpsValid=true;S.gpsLat=39.9612;S.gpsLon=-82.9988;S.gpsAlt=235+.2*Math.sin(simT*.05);
+    S.gpsValid=true;S.gpsLat=OSM.centerLat;S.gpsLon=OSM.centerLon;S.gpsAlt=235+.2*Math.sin(simT*.05);
     S.gpsSpd=0;S.gpsCrs=0;S.gpsSats=8;S.gpsHdop=1.1;S.gpsFix=1;S.gpsH=14;S.gpsM=22;S.gpsSec=Math.floor(simT)%60;
     setParser(true);lastTelemMs=Date.now();appendLogRow();pushHist();postTelemetryToAiLearner();render();
   },100);
@@ -1184,7 +1445,7 @@ function toggleFlySim(){
   stopAnySim();simMode='FLY';
   document.getElementById('btnFlySim').classList.add('on');
   addCalLog('[SIM] Fly sim started','lBOOT');
-  const HL=39.9612,HO=-82.9988;let gpsT=0;simT=0;
+  const HL=OSM.centerLat,HO=OSM.centerLon;let gpsT=0;simT=0;
   simTimer=setInterval(()=>{
     simT+=.1;gpsT+=.1;
     S.roll=28*Math.sin(simT*.9);S.pitch=14*Math.cos(simT*.72);S.yaw=(simT*22)%360;
@@ -1214,7 +1475,7 @@ async function sendAllGains(){
 }
 async function postTune(payload){
   const s=document.getElementById('tuneStatusTune');s.textContent='Sending...';s.style.color='var(--orange)';
-  try{const r=await fetch(tuneUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();
+  try{const r=await fetch(tuneUrl2,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();
     if(j.ok){s.textContent='✓ Applied';s.style.color='var(--green)';addCalLog('[TUNE] Gains applied: '+JSON.stringify(payload),'lTUNE');}
     else{s.textContent='ESP32 error';s.style.color='var(--red)';}}
   catch(e){s.textContent='POST failed';s.style.color='var(--red)';}
@@ -1230,7 +1491,7 @@ function fmt(v,dp){return(v>=0?'+':'')+Number(v).toFixed(dp);}
 function drawGauge(hz){
   const c=document.getElementById('rcGauge'),ctx=c.getContext('2d'),W=c.width,H=c.height,cx=W/2,cy=H-8,R=Math.min(cx-6,H-10);
   ctx.clearRect(0,0,W,H);const MAX=200,frac=clamp(hz/MAX,0,1);
-  const col=hz>130?'#30d158':hz>70?'#ff9f0a':'#ff453a';
+  const col=hz>=70?'#30d158':hz>=50?'#ff9f0a':'#ff453a';
   ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,0,false);ctx.lineWidth=10;ctx.strokeStyle='rgba(255,255,255,.08)';ctx.stroke();
   ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,Math.PI*(1+frac),false);ctx.lineWidth=10;ctx.strokeStyle=col;ctx.stroke();
   ctx.font='9px monospace';
@@ -1242,7 +1503,7 @@ function drawGauge(hz){
 function drawAI(roll,pitch){
   const c=document.getElementById('ai'),ctx=c.getContext('2d'),w=c.width,h=c.height,cx=w/2,cy=h/2,r=w/2-2;
   ctx.clearRect(0,0,w,h);ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.clip();
-  ctx.translate(cx,cy);ctx.rotate(-roll*Math.PI/180);ctx.translate(0,(pitch/90)*r*1.4);
+  ctx.translate(cx,cy);ctx.rotate(roll*Math.PI/180);ctx.translate(0,(-pitch/90)*r*1.4);
   ctx.fillStyle='#0d2d5e';ctx.fillRect(-w,-h*2,w*2,h*2);
   ctx.fillStyle='#4a2c0a';ctx.fillRect(-w,0,w*2,h*2);
   ctx.strokeStyle='#c8a060';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-w,0);ctx.lineTo(w,0);ctx.stroke();
@@ -1252,7 +1513,7 @@ function drawAI(roll,pitch){
   ctx.beginPath();ctx.moveTo(-44,0);ctx.lineTo(-17,0);ctx.stroke();ctx.beginPath();ctx.moveTo(17,0);ctx.lineTo(44,0);ctx.stroke();
   ctx.fillStyle='#ffd60a';ctx.beginPath();ctx.arc(0,0,3.5,0,Math.PI*2);ctx.fill();
   ctx.strokeStyle='rgba(10,132,255,.6)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
-  const ra=(-roll-90)*Math.PI/180;ctx.fillStyle='#ffd60a';ctx.beginPath();ctx.moveTo((r-2)*Math.cos(ra),(r-2)*Math.sin(ra));ctx.lineTo((r-12)*Math.cos(ra-.055),(r-12)*Math.sin(ra-.055));ctx.lineTo((r-12)*Math.cos(ra+.055),(r-12)*Math.sin(ra+.055));ctx.closePath();ctx.fill();ctx.restore();
+  const ra=(roll-90)*Math.PI/180;ctx.fillStyle='#ffd60a';ctx.beginPath();ctx.moveTo((r-2)*Math.cos(ra),(r-2)*Math.sin(ra));ctx.lineTo((r-12)*Math.cos(ra-.055),(r-12)*Math.sin(ra-.055));ctx.lineTo((r-12)*Math.cos(ra+.055),(r-12)*Math.sin(ra+.055));ctx.closePath();ctx.fill();ctx.restore();
 }
 
 function drawCompass(yaw){
@@ -1342,6 +1603,9 @@ function render(){
   drawAI(S.roll,S.pitch);drawCompass(S.yaw);
   drawStick('sL',S.rcYaw,S.thr*2-1);drawStick('sR',S.rcRoll,S.rcPitch);
   setText('stk',S.tick);setText('shz',S.rcHz.toFixed(0)+' Hz');
+  { const el=document.getElementById('srcfail');
+    if(el){el.textContent=S.rcBadPerSec.toFixed(1)+' bad/s';
+      el.style.color=S.rcBadPerSec>20?'var(--red)':S.rcBadPerSec>5?'var(--orange)':'var(--green)';} }
   // Sensor cards
   setText('sc-gx',fmt(S.gx,2));setText('sc-gy',fmt(S.gy,2));setText('sc-gz',fmt(S.gz,2));
   setText('sc-ax',fmt(S.ax,3));setText('sc-ay',fmt(S.ay,3));setText('sc-az',fmt(S.az,3));
@@ -1363,7 +1627,7 @@ document.getElementById('btnAI').classList.add('on');
 addCalLog('[GCS] Ground Station ready — ESP32 Quadcopter','lBOOT');
 addCalLog('[GCS] Connect: SERIAL (Chrome/Edge) or WI-FI (192.168.4.1)','lBOOT');
 addCalLog('[GCS] Use SIM/FLY SIM to preview dashboard with data','lBOOT');
-addCalLog('[GCS] Switch to GPS MAP tab to view Leaflet map','lBOOT');
+addCalLog('[GCS] Switch to GPS MAP tab to load ColumbusMap.osm offline map','lBOOT');
 render();
 </script>
 </body>

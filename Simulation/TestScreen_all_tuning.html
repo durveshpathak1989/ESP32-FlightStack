@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 Drone Ground Station</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; font-size: 13px; }
+  h1 { font-size: 16px; color: #58a6ff; padding: 12px 16px; border-bottom: 1px solid #21262d; background: #161b22; }
+  .tabs { display: flex; flex-wrap: wrap; background: #161b22; border-bottom: 1px solid #21262d; padding: 0 8px; }
+  .tab { padding: 8px 14px; cursor: pointer; color: #8b949e; border-bottom: 2px solid transparent; font-size: 12px; }
+  .tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+  .tab:hover { color: #c9d1d9; }
+  .panel { display: none; padding: 16px; }
+  .panel.active { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .card { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 12px; }
+  .card h3 { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .val { font-size: 22px; font-weight: 600; color: #f0f6fc; }
+  .val.ok { color: #3fb950; }
+  .val.warn { color: #d29922; }
+  .val.err { color: #f85149; }
+  .val small { font-size: 11px; color: #8b949e; font-weight: 400; }
+  .btn { display: inline-block; padding: 7px 14px; border-radius: 5px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; margin: 3px; }
+  .btn-blue  { background: #1f6feb; color: #fff; }
+  .btn-green { background: #238636; color: #fff; }
+  .btn-red   { background: #da3633; color: #fff; }
+  .btn-gray  { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .log { background: #0d1117; border: 1px solid #21262d; border-radius: 5px; padding: 10px; font-family: monospace; font-size: 11px; height: 180px; overflow-y: auto; }
+  .log .line { padding: 1px 0; border-bottom: 1px solid #161b22; }
+  .log .ok   { color: #3fb950; }
+  .log .warn { color: #d29922; }
+  .log .err  { color: #f85149; }
+  .log .info { color: #79c0ff; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #161b22; color: #8b949e; padding: 6px 10px; text-align: left; border-bottom: 1px solid #21262d; }
+  td { padding: 5px 10px; border-bottom: 1px solid #161b22; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #1a4429; color: #3fb950; }
+  .badge-red   { background: #3d1414; color: #f85149; }
+  .badge-gray  { background: #21262d; color: #8b949e; }
+  .badge-blue  { background: #1d3557; color: #79c0ff; }
+  .section { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 14px; margin-bottom: 12px; }
+  .section h3 { font-size: 12px; color: #58a6ff; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  input[type=number], input[type=text] {
+    background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+    border-radius: 4px; padding: 5px 8px; font-size: 12px; width: 90px;
+  }
+  label { font-size: 12px; color: #8b949e; margin-right: 6px; }
+  .progress-bar { height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+  #conn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f85149; margin-right: 6px; }
+  #conn-dot.on { background: #3fb950; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .mono { font-family: monospace; }
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<h1 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+  <span>
+    <span id="conn-dot"></span>
+    ESP32 Drone Ground Station &nbsp;|&nbsp;
+    <span id="hdr-mode" style="color:#d29922">CONNECTING...</span>
+    &nbsp;|&nbsp;
+    <span id="hdr-cpu" style="font-size:11px;color:#8b949e"></span>
+  </span>
+  <span style="display:flex;align-items:center;gap:8px">
+    <span id="log-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#21262d;border:1px solid #30363d"></span>
+    <span id="log-count" style="font-size:11px;color:#8b949e">0 rows</span>
+    <button id="log-btn" class="btn btn-green" onclick="logToggle()" style="padding:5px 12px;font-size:12px">⏺ Start Logging</button>
+    <button class="btn btn-gray" onclick="logDownload()" style="padding:5px 12px;font-size:12px">⬇ Download CSV</button>
+    <button class="btn btn-gray" onclick="logClear()" style="padding:5px 12px;font-size:12px">✕ Clear</button>
+  </span>
+</h1>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('dash')">Dashboard</div>
+  <div class="tab" onclick="showTab('t71')">Test 7.1 Timing</div>
+  <div class="tab" onclick="showTab('t72')">Test 7.2 RC Failsafe</div>
+  <div class="tab" onclick="showTab('t73')">Test 7.3 Telem Rate</div>
+  <div class="tab" onclick="showTab('t74')">Test 7.4 Calibration</div>
+  <div class="tab" onclick="showTab('t75')">Test 7.5 PID Tune</div>
+  <div class="tab" onclick="showTab('t76')">Test 7.6 BMP280</div>
+  <div class="tab" onclick="showTab('t77')">Test 7.7 CPU Load</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     DASHBOARD
+════════════════════════════════════════════════════════════ -->
+<div id="panel-dash" class="panel active">
+  <div class="grid">
+    <div class="card"><h3>Mode</h3><div class="val" id="d-mode">—</div></div>
+    <div class="card"><h3>Roll</h3><div class="val" id="d-roll">—</div><small>degrees</small></div>
+    <div class="card"><h3>Pitch</h3><div class="val" id="d-pitch">—</div><small>degrees</small></div>
+    <div class="card"><h3>Yaw</h3><div class="val" id="d-yaw">—</div><small>degrees</small></div>
+    <div class="card"><h3>Throttle</h3><div class="val" id="d-thr">—</div></div>
+    <div class="card"><h3>RC Hz</h3><div class="val" id="d-rchz">—</div></div>
+    <div class="card"><h3>Core 0</h3><div class="val" id="d-cpu0">—</div><div class="progress-bar"><div class="progress-fill" id="d-cpu0-bar" style="background:#3fb950"></div></div></div>
+    <div class="card"><h3>Core 1</h3><div class="val" id="d-cpu1">—</div><div class="progress-bar"><div class="progress-fill" id="d-cpu1-bar" style="background:#3fb950"></div></div></div>
+    <div class="card"><h3>BMP Temp</h3><div class="val" id="d-btemp">—</div><small>°C</small></div>
+    <div class="card"><h3>BMP Pressure</h3><div class="val" id="d-bpress">—</div><small>hPa</small></div>
+    <div class="card"><h3>BMP Altitude</h3><div class="val" id="d-balt">—</div><small>m</small></div>
+    <div class="card"><h3>GPS</h3><div class="val" id="d-gps">—</div></div>
+    <div class="card"><h3>IMU Loops</h3><div class="val" id="d-loops">—</div></div>
+    <div class="card"><h3>WiFi Requests</h3><div class="val" id="d-req">—</div></div>
+  </div>
+  <div class="section">
+    <h3>Motors</h3>
+    <div class="grid" style="grid-template-columns:repeat(2,1fr)">
+      <div class="card"><h3>FL (GPIO25 CCW)</h3><div class="val" id="d-mfl">—</div></div>
+      <div class="card"><h3>FR (GPIO15 CW)</h3><div class="val" id="d-mfr">—</div></div>
+      <div class="card"><h3>RL (GPIO14 CW)</h3><div class="val" id="d-mrl">—</div></div>
+      <div class="card"><h3>RR (GPIO32 CCW)</h3><div class="val" id="d-mrr">—</div></div>
+    </div>
+  </div>
+  <div class="section">
+    <h3>📋 Session Log <span id="log-live-count" style="color:#8b949e;font-weight:400;font-size:11px;margin-left:6px">0 rows recorded</span></h3>
+    <div class="log" id="dash-log" style="height:120px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TEST 7.1 — IMU TIMING
+════════════════════════════════════════════════════════════ -->
+<div id="panel-t71" class="panel">
+  <div class="section">
+    <h3>Test 7.1 — IMU Loop Timing Characterization</h3>
+    <p style="color:#8b949e;font-size:11px;margin-bottom:10px">
+      Measures jitter of the 500 Hz IMU loop (target 2000 µs period).
+      Run 5 minutes per condition. Reset stats between conditions.
+    </p>
+    <div class="status-row">
+      <span>Condition:</span>
+      <select id="t71-cond" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:4px">
+        <option value="A">A — WiFi Idle</option>
+        <option value="B">B — Telemetry Polling</option>
+        <option value="C">C — Tune Stress</option>
+      </select>
+      <button class="btn btn-red" onclick="t71Reset()">Reset Stats</button>
+      <button class="btn btn-blue" id="t71-start" onclick="t71Start()">Start 5-min Timer</button>
+      <button class="btn btn-gray" onclick="t71Download()">Download CSV</button>
+    </div>
+    <div id="t71-timer" style="font-size:28px;font-family:monospace;color:#58a6ff;margin:8px 0">00:00</div>
+    <div id="t71-progress" style="display:none;margin-bottom:8px">
+      <div class="progress-bar"><div class="progress-fill" id="t71-bar" style="background:#1f6feb;width:0%"></div></div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Samples</h3><div class="val" id="t71-count">—</div></div>
+    <div class="card"><h3>Period Mean</h3><div class="val" id="t71-mean">—</div><small>µs (target 2000)</small></div>
+    <div class="card"><h3>Period Std Dev</h3><div class="val" id="t71-std">—</div><small>µs</small></div>
+    <div class="card"><h3>Jitter Mean</h3><div class="val" id="t71-jmean">—</div><small>µs</small></div>
+    <div class="card"><h3>Jitter Max</h3><div class="val" id="t71-jmax">—</div><small>µs</small></div>
+    <div class="card"><h3>Jitter p99</h3><div class="val" id="t71-p99">—</div><small>µs</small></div>
+    <div class="card"><h3>Violations (&gt;100µs)</h3><div class="val" id="t71-viol">—</div></div>
+    <div class="card"><h3>Pass / Fail</h3><div class="val" id="t71-pass">—</div></div>
+  </div>
+  <div class="section">
+    <h3>Results Table (fill in after each condition)</h3>
+    <table>
+      <tr><th>Condition</th><th>Samples</th><th>Period Mean µs</th><th>Std Dev µs</th><th>Jitter Mean µs</th><th>Jitter p99 µs</th><th>Jitter Max µs</th><th>Violations</th><th>Pass?</th></tr>
+      <tr><td>A — Idle</td><td id="r71-A-n">—</td><td id="r71-A-mean">—</td><td id="r71-A-std">—</td><td id="r71-A-jm">—</td><td id="r71-A-p99">—</td><td id="r71-A-jmax">—</td><td id="r71-A-viol">—</td><td id="r71-A-pass">—</td></tr>
+      <tr><td>B — Polling</td><td id="r71-B-n">—</td><td id="r71-B-mean">—</td><td id="r71-B-std">—</td><td id="r71-B-jm">—</td><td id="r71-B-p99">—</td><td id="r71-B-jmax">—</td><td id="r71-B-viol">—</td><td id="r71-B-pass">—</td></tr>
+      <tr><td>C — Stress</td><td id="r71-C-n">—</td><td id="r71-C-mean">—</td><td id="r71-C-std">—</td><td id="r71-C-jm">—</td><td id="r71-C-p99">—</td><td id="r71-C-jmax">—</td><td id="r71-C-viol">—</td><td id="r71-C-pass">—</td></tr>
+    </table>
+    <button class="btn btn-gray" style="margin-top:8px" onclick="t71SaveRow()">Save Current Row</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TEST 7.2 — RC FAILSAFE
+════════════════════════════════════════════════════════════ -->
+<div id="panel-t72" class="panel">
+  <div class="section">
+    <h3>Test 7.2 — RC Frame Rate and Failsafe</h3>
+    <p style="color:#8b949e;font-size:11px;margin-bottom:10px">
+      Verify iBUS frames arrive at ~142 Hz and failsafe fires within 500 ms of TX off.
+    </p>
+    <div class="row">
+      <button class="btn btn-red" id="t72-txoff" onclick="t72TxOff()">TX OFF — Start Timer</button>
+      <button class="btn btn-gray" onclick="t72Reset()">Reset</button>
+    </div>
+    <div id="t72-fs-timer" style="font-size:28px;font-family:monospace;color:#f85149;margin:8px 0">Waiting for TX-OFF...</div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>RC Frame Rate</h3><div class="val" id="t72-hz">—</div><small>Hz (pass: 70–95)</small></div>
+    <div class="card"><h3>RC Valid</h3><div class="val" id="t72-valid">—</div></div>
+    <div class="card"><h3>Flight Mode</h3><div class="val" id="t72-mode">—</div></div>
+    <div class="card"><h3>Failsafe Detected</h3><div class="val" id="t72-fs">Waiting...</div></div>
+    <div class="card"><h3>Time to Failsafe</h3><div class="val" id="t72-fst">—</div><small>ms (pass: &lt;500 ms)</small></div>
+    <div class="card"><h3>Result</h3><div class="val" id="t72-result">—</div></div>
+  </div>
+  <div class="section">
+    <h3>Pass Criteria</h3>
+    <table>
+      <tr><th>Check</th><th>Criterion</th><th>Measured</th><th>Pass?</th></tr>
+      <tr><td>RC frame rate</td><td>70–95 Hz</td><td id="c72-hz">—</td><td id="c72-hz-p">—</td></tr>
+      <tr><td>Failsafe time</td><td>&lt; 500 ms after TX off</td><td id="c72-fst">—</td><td id="c72-fst-p">—</td></tr>
+      <tr><td>Mode = FAILSAFE</td><td>Yes</td><td id="c72-fsmode">—</td><td id="c72-fsmode-p">—</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TEST 7.3 — TELEMETRY RATE
+════════════════════════════════════════════════════════════ -->
+<div id="panel-t73" class="panel">
+  <div class="section">
+    <h3>Test 7.3 — Telemetry Delivery Rate</h3>
+    <p style="color:#8b949e;font-size:11px;margin-bottom:10px">
+      Measures actual HTTP response rate over 60 seconds. Pass: ≥10 Hz, error rate &lt;5%.
+    </p>
+    <div class="row">
+      <button class="btn btn-green" id="t73-start" onclick="t73Start()">Start 60-sec Measurement</button>
+      <button class="btn btn-gray" onclick="t73Reset()">Reset</button>
+    </div>
+    <div id="t73-timer" style="font-size:28px;font-family:monospace;color:#58a6ff;margin:8px 0">00:00</div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Successful Responses</h3><div class="val" id="t73-ok">—</div></div>
+    <div class="card"><h3>Errors</h3><div class="val" id="t73-err">—</div></div>
+    <div class="card"><h3>Measured Rate</h3><div class="val" id="t73-rate">—</div><small>Hz (pass: ≥10)</small></div>
+    <div class="card"><h3>Error Rate</h3><div class="val" id="t73-errpct">—</div><small>% (pass: &lt;5%)</small></div>
+    <div class="card"><h3>Min Latency</h3><div class="val" id="t73-latmin">—</div><small>ms</small></div>
+    <div class="card"><h3>Max Latency</h3><div class="val" id="t73-latmax">—</div><small>ms</small></div>
+    <div class="card"><h3>Avg Latency</h3><div class="val" id="t73-latavg">—</div><small>ms</small></div>
+    <div class="card"><h3>Result</h3><div class="val" id="t73-result">—</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TEST 7.4 — CALIBRATION
+════════════════════════════════════════════════════════════ -->
+<div id="panel-t74" class="panel">
+  <div class="section">
+    <h3>Test 7.4 — RC-Triggered Calibration</h3>
+    <p style="color:#8b949e;font-size:11px;margin-bottom:10px">
+      Verify field calibration works without USB. Trigger by flipping SWD (CH10) UP while disarmed.
+    </p>
+    <div class="row">
+      <button class="btn btn-blue" onclick="t74Poll()">Poll Log Now</button>
+      <button class="btn btn-gray" onclick="t74Clear()">Clear</button>
+    </div>
+    <div class="status-row" style="margin-top:8px">
+      <span id="t74-status" class="badge badge-gray">Waiting for calibration...</span>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Calibration Log (live from /log)</h3>
+    <div class="log" id="t74-log"></div>
+  </div>
+  <div class="section">
+    <h3>Pass Criteria</h3>
+    <table>
+      <tr><th>Check</th><th>Required Log Message</th><th>Seen?</th></tr>
+      <tr><td>Triggered via SWD</td><td>[RC] Calibration requested — SWD flipped UP</td><td id="c74-1" class="badge badge-gray">No</td></tr>
+      <tr><td>Gyro complete</td><td>[CAL] ✓ GYRO done</td><td id="c74-2" class="badge badge-gray">No</td></tr>
+      <tr><td>Accel complete</td><td>[CAL] ✓ ACCEL done</td><td id="c74-3" class="badge badge-gray">No</td></tr>
+      <tr><td>Mag (or skipped)</td><td>[CAL] ✓ MAG done OR SKIPPED</td><td id="c74-4" class="badge badge-gray">No</td></tr>
+      <tr><td>Saved to NVS</td><td>[CAL] ✓ Calibration COMPLETE — saved to NVS</td><td id="c74-5" class="badge badge-gray">No</td></tr>
+    </table>
+    <div id="c74-overall" style="margin-top:10px;font-size:14px;font-weight:600;color:#8b949e">Overall: Incomplete</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TEST 7.5 — PID TUNE
+════════════════════════════════════════════════════════════ -->
+<div id="panel-t75" class="panel">
+  <div class="section">
+    <h3>Test 7.5 — Runtime Tuning Levers</h3>
+    <p style="color:#8b949e;font-size:11px;margin-bottom:10px">
+      Sends the full tuning set to /tune. Use while DISARMED first. This panel now covers pilot limits, PID authority, throttle shaping, rate PID, angle PID, yaw hold, and Mahony AHRS.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
+      <div class="section" style="margin:0"><h3>Command Limits</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div><label>max_angle_deg</label><input type="number" id="in-max-angle" step="0.5" value="25.0"></div>
+        <div><label>max_rate_dps</label><input type="number" id="in-max-rate" step="1" value="150.0"></div>
+        <div><label>yaw_max_rate_dps</label><input type="number" id="in-yaw-max-rate" step="1" value="90.0"></div>
+        <div><label>yaw_deadband</label><input type="number" id="in-yaw-deadband" step="0.01" value="0.05"></div>
+      </div></div>
+      <div class="section" style="margin:0"><h3>Output Authority</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div><label>roll_output_limit</label><input type="number" id="in-roll-outlim" step="0.01" value="0.500"></div>
+        <div><label>pitch_output_limit</label><input type="number" id="in-pitch-outlim" step="0.01" value="0.500"></div>
+        <div><label>yaw_output_limit</label><input type="number" id="in-yaw-outlim" step="0.01" value="0.200"></div>
+      </div></div>
+      <div class="section" style="margin:0"><h3>Throttle Shaping</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div><label>throttle_expo</label><input type="number" id="in-thr-expo" step="0.05" value="0.60"></div>
+        <div><label>throttle_up_rate_per_sec</label><input type="number" id="in-thr-up" step="0.05" value="0.70"></div>
+        <div><label>throttle_down_rate_per_sec</label><input type="number" id="in-thr-down" step="0.05" value="1.00"></div>
+        <div><label>motor_idle</label><input type="number" id="in-motor-idle" step="0.01" value="0.08"></div>
+        <div><label>motor_max</label><input type="number" id="in-motor-max" step="0.01" value="0.90"></div>
+        <div><label>throttle_cut</label><input type="number" id="in-thr-cut" step="0.01" value="0.03"></div>
+        <div><label>idle_ramp_end</label><input type="number" id="in-idle-ramp" step="0.01" value="0.15"></div>
+      </div></div>
+      <div class="section" style="margin:0"><h3>Rate PID</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div><label>pid_roll_kp</label><input type="number" id="in-roll-kp" step="0.00001" value="0.00015"></div>
+        <div><label>pid_roll_ki</label><input type="number" id="in-roll-ki" step="0.00001" value="0.00000"></div>
+        <div><label>pid_roll_kd</label><input type="number" id="in-roll-kd" step="0.00001" value="0.00001"></div>
+        <div><label>pid_pitch_kp</label><input type="number" id="in-pitch-kp" step="0.00001" value="0.00015"></div>
+        <div><label>pid_pitch_ki</label><input type="number" id="in-pitch-ki" step="0.00001" value="0.00000"></div>
+        <div><label>pid_pitch_kd</label><input type="number" id="in-pitch-kd" step="0.00001" value="0.00001"></div>
+        <div><label>pid_yaw_kp</label><input type="number" id="in-yaw-kp" step="0.00001" value="0.00015"></div>
+        <div><label>pid_yaw_ki</label><input type="number" id="in-yaw-ki" step="0.00001" value="0.00000"></div>
+        <div><label>pid_yaw_kd</label><input type="number" id="in-yaw-kd" step="0.00001" value="0.00001"></div>
+      </div></div>
+      <div class="section" style="margin:0"><h3>Angle PID</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div><label>pid_angle_roll_kp</label><input type="number" id="in-angle-roll-kp" step="0.1" value="8.0"></div>
+        <div><label>pid_angle_roll_ki</label><input type="number" id="in-angle-roll-ki" step="0.001" value="0.0"></div>
+        <div><label>pid_angle_roll_kd</label><input type="number" id="in-angle-roll-kd" step="0.001" value="0.010"></div>
+        <div><label>pid_angle_pitch_kp</label><input type="number" id="in-angle-pitch-kp" step="0.1" value="8.0"></div>
+        <div><label>pid_angle_pitch_ki</label><input type="number" id="in-angle-pitch-ki" step="0.001" value="0.0"></div>
+        <div><label>pid_angle_pitch_kd</label><input type="number" id="in-angle-pitch-kd" step="0.001" value="0.010"></div>
+      </div></div>
+      <div class="section" style="margin:0"><h3>Yaw Hold</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div><label>pid_angle_yaw_kp</label><input type="number" id="in-angle-yaw-kp" step="0.1" value="6.0"></div>
+      </div></div>
+      <div class="section" style="margin:0"><h3>AHRS</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div><label>mahony_kp</label><input type="number" id="in-mkp" step="0.1" value="2.0"></div>
+        <div><label>mahony_ki</label><input type="number" id="in-mki" step="0.001" value="0.005"></div>
+      </div></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn btn-green" onclick="t75Send()">Send All Tuning Levers (Disarmed Test)</button>
+      <button class="btn btn-red" onclick="t75SendArmed()">Send While Armed Test</button>
+    </div>
+    <div id="t75-result" style="margin-top:10px;font-size:13px"></div>
+  </div>
+  <div class="section">
+    <h3>Active Tuning Values (from /telemetry, if firmware exposes them)</h3>
+    <div class="grid">
+      <div class="card"><h3>Max Angle</h3><div class="val" id="t75-maxangle">—</div></div>
+      <div class="card"><h3>Max Rate</h3><div class="val" id="t75-maxrate">—</div></div>
+      <div class="card"><h3>Roll Out Lim</h3><div class="val" id="t75-rollout">—</div></div>
+      <div class="card"><h3>Thr Expo</h3><div class="val" id="t75-threxpo">—</div></div>
+      <div class="card"><h3>Roll Kp</h3><div class="val" id="t75-rkp">—</div></div>
+      <div class="card"><h3>Roll Ki</h3><div class="val" id="t75-rki">—</div></div>
+      <div class="card"><h3>Roll Kd</h3><div class="val" id="t75-rkd">—</div></div>
+      <div class="card"><h3>Pitch Kp</h3><div class="val" id="t75-pkp">—</div></div>
+      <div class="card"><h3>Yaw Kp</h3><div class="val" id="t75-ykp">—</div></div>
+      <div class="card"><h3>Ang Roll Kp</h3><div class="val" id="t75-arkp">—</div></div>
+      <div class="card"><h3>Ang Pitch Kp</h3><div class="val" id="t75-apkp">—</div></div>
+      <div class="card"><h3>Yaw Hold Kp</h3><div class="val" id="t75-aykp">—</div></div>
+      <div class="card"><h3>Mahony Kp</h3><div class="val" id="t75-mkp">—</div></div>
+      <div class="card"><h3>Mahony Ki</h3><div class="val" id="t75-mki">—</div></div>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Pass Criteria</h3>
+    <table>
+      <tr><th>Test</th><th>Expected</th><th>Result</th><th>Pass?</th></tr>
+      <tr><td>Send while DISARMED</td><td>Tuning payload accepted, telemetry shows at least one changed value</td><td id="c75-dis">—</td><td id="c75-dis-p">—</td></tr>
+      <tr><td>Send while ARMED</td><td>Rejected — values unchanged</td><td id="c75-arm">—</td><td id="c75-arm-p">—</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TEST 7.6 — BMP280
+════════════════════════════════════════════════════════════ -->
+<div id="panel-t76" class="panel">
+  <div class="section">
+    <h3>Test 7.6 — BMP280 Barometer</h3>
+    <p style="color:#8b949e;font-size:11px;margin-bottom:10px">
+      Verify pressure and altitude readings are plausible. Lift drone ~1 m to check altitude response.
+    </p>
+    <div class="row">
+      <button class="btn btn-blue" onclick="t76Snap()">Snapshot at Current Height</button>
+      <button class="btn btn-green" onclick="t76SnapHigh()">Snapshot at +1m Height</button>
+      <button class="btn btn-gray" onclick="t76Reset()">Reset</button>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>BMP Valid</h3><div class="val" id="t76-valid">—</div></div>
+    <div class="card"><h3>Temperature</h3><div class="val" id="t76-temp">—</div><small>°C</small></div>
+    <div class="card"><h3>Pressure</h3><div class="val" id="t76-press">—</div><small>hPa</small></div>
+    <div class="card"><h3>Altitude (live)</h3><div class="val" id="t76-alt">—</div><small>m</small></div>
+    <div class="card"><h3>Baseline Alt</h3><div class="val" id="t76-base">—</div><small>m (snapshotted)</small></div>
+    <div class="card"><h3>High Alt</h3><div class="val" id="t76-high">—</div><small>m (snapshotted)</small></div>
+    <div class="card"><h3>Δ Altitude</h3><div class="val" id="t76-delta">—</div><small>m (expect ~1.0)</small></div>
+    <div class="card"><h3>Result</h3><div class="val" id="t76-result">—</div></div>
+  </div>
+  <div class="section">
+    <h3>Pass Criteria</h3>
+    <table>
+      <tr><th>Check</th><th>Criterion</th><th>Measured</th><th>Pass?</th></tr>
+      <tr><td>bmpValid = true</td><td>true</td><td id="c76-v">—</td><td id="c76-v-p">—</td></tr>
+      <tr><td>Temperature</td><td>10–45 °C</td><td id="c76-t">—</td><td id="c76-t-p">—</td></tr>
+      <tr><td>Pressure</td><td>950–1050 hPa</td><td id="c76-p">—</td><td id="c76-p-p">—</td></tr>
+      <tr><td>1m lift → ~1m delta</td><td>0.5–2.0 m</td><td id="c76-d">—</td><td id="c76-d-p">—</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TEST 7.7 — CPU LOAD
+════════════════════════════════════════════════════════════ -->
+<div id="panel-t77" class="panel">
+  <div class="section">
+    <h3>Test 7.7 — CPU Utilization Baseline</h3>
+    <p style="color:#8b949e;font-size:11px;margin-bottom:10px">
+      Record Core 0 and Core 1 load over 60 seconds. Pass: Core 1 &lt;80%, neither core at 100%.
+    </p>
+    <div class="row">
+      <button class="btn btn-green" id="t77-start" onclick="t77Start()">Start 60-sec Recording</button>
+      <button class="btn btn-gray" onclick="t77Reset()">Reset</button>
+      <button class="btn btn-gray" onclick="t77Download()">Download CSV</button>
+    </div>
+    <div id="t77-timer" style="font-size:28px;font-family:monospace;color:#58a6ff;margin:8px 0">00:00</div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Core 0 Now</h3><div class="val" id="t77-c0">—</div><div class="progress-bar"><div class="progress-fill" id="t77-c0-bar" style="background:#3fb950;width:0%"></div></div></div>
+    <div class="card"><h3>Core 1 Now</h3><div class="val" id="t77-c1">—</div><div class="progress-bar"><div class="progress-fill" id="t77-c1-bar" style="background:#3fb950;width:0%"></div></div></div>
+    <div class="card"><h3>Core 0 Peak</h3><div class="val" id="t77-c0max">—</div></div>
+    <div class="card"><h3>Core 1 Peak</h3><div class="val" id="t77-c1max">—</div></div>
+    <div class="card"><h3>Core 0 Mean</h3><div class="val" id="t77-c0avg">—</div></div>
+    <div class="card"><h3>Core 1 Mean</h3><div class="val" id="t77-c1avg">—</div></div>
+    <div class="card"><h3>Samples</h3><div class="val" id="t77-n">—</div></div>
+    <div class="card"><h3>Result</h3><div class="val" id="t77-result">—</div></div>
+  </div>
+  <div class="section">
+    <h3>Pass Criteria</h3>
+    <table>
+      <tr><th>Check</th><th>Criterion</th><th>Measured</th><th>Pass?</th></tr>
+      <tr><td>Core 0 peak</td><td>&lt; 80%</td><td id="c77-c0p">—</td><td id="c77-c0p-p">—</td></tr>
+      <tr><td>Core 1 peak</td><td>&lt; 80%</td><td id="c77-c1p">—</td><td id="c77-c1p-p">—</td></tr>
+      <tr><td>Neither core at 100%</td><td>Max &lt; 100%</td><td id="c77-100">—</td><td id="c77-100-p">—</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+const BASE = 'http://192.168.4.1';
+let lastTelem = null;
+let logSeq = 0;
+
+// ─── Tab switching ───────────────────────────────────────────
+function showTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ─── Helpers ─────────────────────────────────────────────────
+function pass(ok)  { return ok ? '<span class="badge badge-green">PASS</span>' : '<span class="badge badge-red">FAIL</span>'; }
+function cpuColor(v) { return v > 90 ? '#f85149' : v > 70 ? '#d29922' : '#3fb950'; }
+
+function setVal(id, val, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = val;
+  if (cls) el.className = 'val ' + cls;
+}
+
+function fmtMaybe(v, dp=3) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(dp) : '—';
+}
+
+async function fetchJson(url) {
+  const r = await fetch(url, {cache:'no-store'});
+  return r.json();
+}
+
+// ─── Main telemetry poll ──────────────────────────────────────
+async function pollTelemetry() {
+  try {
+    const d = await fetchJson(BASE + '/telemetry');
+    lastTelem = d;
+    logRecord(d);   // ← feed session logger on every poll
+    document.getElementById('conn-dot').className = 'on';
+    document.getElementById('hdr-mode').textContent = d.mode || '?';
+    document.getElementById('hdr-mode').style.color =
+      d.armed ? '#3fb950' : d.mode==='FAILSAFE' ? '#f85149' : '#d29922';
+    document.getElementById('hdr-cpu').textContent =
+      `C0:${d.cpuCore0?.toFixed(0)||'?'}% C1:${d.cpuCore1?.toFixed(0)||'?'}%`;
+
+    // Dashboard
+    setVal('d-mode', d.mode||'?');
+    setVal('d-roll', (d.roll>=0?'+':'')+d.roll?.toFixed(1)+'°');
+    setVal('d-pitch', (d.pitch>=0?'+':'')+d.pitch?.toFixed(1)+'°');
+    setVal('d-yaw', d.yaw?.toFixed(1)+'°');
+    setVal('d-thr', (d.thr*100)?.toFixed(0)+'%');
+    setVal('d-rchz', d.rcHz?.toFixed(1)+' Hz', d.rcHz>=70?'ok':'err');
+    setVal('d-cpu0', d.cpuCore0?.toFixed(1)+'%');
+    setVal('d-cpu1', d.cpuCore1?.toFixed(1)+'%');
+    document.getElementById('d-cpu0-bar').style.width = d.cpuCore0+'%';
+    document.getElementById('d-cpu0-bar').style.background = cpuColor(d.cpuCore0);
+    document.getElementById('d-cpu1-bar').style.width = d.cpuCore1+'%';
+    document.getElementById('d-cpu1-bar').style.background = cpuColor(d.cpuCore1);
+    setVal('d-btemp', d.bmpTempC?.toFixed(1), d.bmpValid?'ok':'err');
+    setVal('d-bpress', d.bmpPressureHpa?.toFixed(1), d.bmpValid?'ok':'err');
+    setVal('d-balt', d.bmpAltitudeM?.toFixed(2), d.bmpValid?'ok':'err');
+    setVal('d-loops', d.tick?.toLocaleString());
+    setVal('d-req', d.requests?.toLocaleString());
+    if (d.gpsValid) setVal('d-gps', `FIX ${d.gpsSats}sat`, 'ok');
+    else setVal('d-gps', 'No Fix', 'warn');
+    setVal('d-mfl', (d.motFL*100)?.toFixed(0)+'%');
+    setVal('d-mfr', (d.motFR*100)?.toFixed(0)+'%');
+    setVal('d-mrl', (d.motRL*100)?.toFixed(0)+'%');
+    setVal('d-mrr', (d.motRR*100)?.toFixed(0)+'%');
+
+    // Test 7.2 live data
+    setVal('t72-hz', d.rcHz?.toFixed(1)+' Hz', (d.rcHz>=70&&d.rcHz<=95)?'ok':'warn');
+    setVal('t72-valid', d.rcValid?'YES':'NO', d.rcValid?'ok':'err');
+    setVal('t72-mode', d.mode||'?');
+    if (t72Watching && d.mode === 'FAILSAFE') t72Detected();
+
+    // Test 7.5 active tuning values
+    setVal('t75-maxangle', fmtMaybe(d.maxAngleDeg ?? d.max_angle_deg, 2));
+    setVal('t75-maxrate', fmtMaybe(d.maxRateDps ?? d.max_rate_dps, 1));
+    setVal('t75-rollout', fmtMaybe(d.rollOutputLimit ?? d.roll_output_limit, 3));
+    setVal('t75-threxpo', fmtMaybe(d.throttleExpo ?? d.throttle_expo, 3));
+    setVal('t75-rkp', fmtMaybe(d.pidRollKp, 6));
+    setVal('t75-rki', fmtMaybe(d.pidRollKi, 6));
+    setVal('t75-rkd', fmtMaybe(d.pidRollKd, 6));
+    setVal('t75-pkp', fmtMaybe(d.pidPitchKp, 6));
+    setVal('t75-ykp', fmtMaybe(d.pidYawKp, 6));
+    setVal('t75-arkp', fmtMaybe(d.pidAngleRollKp, 3));
+    setVal('t75-apkp', fmtMaybe(d.pidAnglePitchKp, 3));
+    setVal('t75-aykp', fmtMaybe(d.pidAngleYawKp ?? d.pid_angle_yaw_kp, 3));
+    setVal('t75-mkp', fmtMaybe(d.mahonyKp, 4));
+    setVal('t75-mki', fmtMaybe(d.mahonyKi, 5));
+
+    // Test 7.6 BMP live
+    setVal('t76-valid', d.bmpValid?'YES':'NO', d.bmpValid?'ok':'err');
+    setVal('t76-temp', d.bmpTempC?.toFixed(2));
+    setVal('t76-press', d.bmpPressureHpa?.toFixed(2));
+    setVal('t76-alt', d.bmpAltitudeM?.toFixed(2));
+    if (d.t76base !== undefined) {
+      const delta = d.bmpAltitudeM - t76base;
+      setVal('t76-delta', delta.toFixed(2)+' m', (delta>=0.5&&delta<=2.0)?'ok':'warn');
+    }
+
+    // Test 7.7 recording
+    if (t77Recording) {
+      t77Samples.push({c0: d.cpuCore0, c1: d.cpuCore1, ts: Date.now()});
+      t77UpdateStats(d.cpuCore0, d.cpuCore1);
+    }
+    setVal('t77-c0', d.cpuCore0?.toFixed(1)+'%');
+    setVal('t77-c1', d.cpuCore1?.toFixed(1)+'%');
+    document.getElementById('t77-c0-bar').style.width = d.cpuCore0+'%';
+    document.getElementById('t77-c0-bar').style.background = cpuColor(d.cpuCore0);
+    document.getElementById('t77-c1-bar').style.width = d.cpuCore1+'%';
+    document.getElementById('t77-c1-bar').style.background = cpuColor(d.cpuCore1);
+
+  } catch(e) {
+    document.getElementById('conn-dot').className = '';
+    document.getElementById('hdr-mode').textContent = 'DISCONNECTED';
+    document.getElementById('hdr-mode').style.color = '#f85149';
+  }
+}
+
+// ═══ TEST 7.1 — TIMING ═══════════════════════════════════════
+let t71Timer = null, t71Elapsed = 0, t71Running = false;
+
+async function t71PollStats() {
+  try {
+    const d = await fetchJson(BASE + '/timing');
+    if (!d.ok) return;
+    setVal('t71-count', d.count?.toLocaleString());
+    setVal('t71-mean', d.period_mean_us?.toFixed(2));
+    setVal('t71-std', d.period_std_us?.toFixed(2));
+    setVal('t71-jmean', d.jitter_mean_us?.toFixed(2));
+    setVal('t71-jmax', d.jitter_max_us);
+    setVal('t71-p99', d.jitter_p99_us?.toFixed(1));
+    setVal('t71-viol', d.violations);
+    const pass = d.jitter_p99_us < 200 && d.violations < d.count * 0.01;
+    setVal('t71-pass', pass ? 'PASS' : 'FAIL', pass ? 'ok' : 'err');
+    window._lastT71 = d;
+  } catch(e) {}
+}
+
+async function t71Reset() {
+  try { await fetch(BASE+'/timing/reset', {method:'POST'}); } catch(e){}
+  setVal('t71-count','—'); setVal('t71-mean','—'); setVal('t71-std','—');
+  setVal('t71-jmean','—'); setVal('t71-jmax','—'); setVal('t71-p99','—');
+  setVal('t71-viol','—'); setVal('t71-pass','—');
+  t71Elapsed = 0;
+  document.getElementById('t71-timer').textContent = '00:00';
+  document.getElementById('t71-bar').style.width = '0%';
+}
+
+function t71Start() {
+  if (t71Running) return;
+  t71Running = true;
+  t71Elapsed = 0;
+  document.getElementById('t71-progress').style.display = 'block';
+  document.getElementById('t71-start').disabled = true;
+  t71Timer = setInterval(() => {
+    t71Elapsed++;
+    const m = Math.floor(t71Elapsed/60).toString().padStart(2,'0');
+    const s = (t71Elapsed%60).toString().padStart(2,'0');
+    document.getElementById('t71-timer').textContent = m+':'+s;
+    document.getElementById('t71-bar').style.width = Math.min(100, t71Elapsed/300*100)+'%';
+    if (t71Elapsed >= 300) {
+      clearInterval(t71Timer);
+      t71Running = false;
+      document.getElementById('t71-start').disabled = false;
+      document.getElementById('t71-timer').style.color = '#3fb950';
+      t71PollStats();
+    }
+  }, 1000);
+}
+
+function t71SaveRow() {
+  const d = window._lastT71;
+  if (!d) return;
+  const cond = document.getElementById('t71-cond').value;
+  document.getElementById(`r71-${cond}-n`).textContent = d.count?.toLocaleString();
+  document.getElementById(`r71-${cond}-mean`).textContent = d.period_mean_us?.toFixed(2);
+  document.getElementById(`r71-${cond}-std`).textContent = d.period_std_us?.toFixed(2);
+  document.getElementById(`r71-${cond}-jm`).textContent = d.jitter_mean_us?.toFixed(2);
+  document.getElementById(`r71-${cond}-p99`).textContent = d.jitter_p99_us?.toFixed(1);
+  document.getElementById(`r71-${cond}-jmax`).textContent = d.jitter_max_us;
+  document.getElementById(`r71-${cond}-viol`).textContent = d.violations;
+  const ok = d.jitter_p99_us < 200 && d.violations < d.count * 0.01;
+  document.getElementById(`r71-${cond}-pass`).innerHTML = pass(ok);
+}
+
+async function t71Download() {
+  try {
+    const r = await fetch(BASE+'/timing/csv');
+    const text = await r.text();
+    const blob = new Blob([text], {type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const cond = document.getElementById('t71-cond').value;
+    a.download = `timing_condition_${cond}.csv`;
+    a.click();
+  } catch(e) { alert('Download failed: '+e); }
+}
+
+// ═══ TEST 7.2 — RC FAILSAFE ══════════════════════════════════
+let t72Watching = false, t72TxOffTime = null;
+
+function t72TxOff() {
+  t72Watching = true;
+  t72TxOffTime = Date.now();
+  document.getElementById('t72-fs-timer').textContent = 'Timer running... turn TX OFF NOW';
+  document.getElementById('t72-txoff').disabled = true;
+}
+
+function t72Detected() {
+  const ms = Date.now() - t72TxOffTime;
+  t72Watching = false;
+  setVal('t72-fs', 'DETECTED', 'ok');
+  setVal('t72-fst', ms+' ms', ms<500?'ok':'err');
+  document.getElementById('t72-fs-timer').textContent = `Failsafe in ${ms} ms`;
+  document.getElementById('t72-fs-timer').style.color = ms<500?'#3fb950':'#f85149';
+  const hz = lastTelem?.rcHz || 0;
+  document.getElementById('c72-hz').textContent = hz.toFixed(1)+' Hz';
+  document.getElementById('c72-hz-p').innerHTML = pass(hz>=70&&hz<=95);
+  document.getElementById('c72-fst').textContent = ms+' ms';
+  document.getElementById('c72-fst-p').innerHTML = pass(ms<500);
+  document.getElementById('c72-fsmode').textContent = 'FAILSAFE';
+  document.getElementById('c72-fsmode-p').innerHTML = pass(true);
+  setVal('t72-result', (hz>=70&&hz<=95&&ms<500)?'PASS':'FAIL', (hz>=70&&hz<=95&&ms<500)?'ok':'err');
+}
+
+function t72Reset() {
+  t72Watching = false; t72TxOffTime = null;
+  document.getElementById('t72-fs-timer').textContent = 'Waiting for TX-OFF...';
+  document.getElementById('t72-fs-timer').style.color = '#f85149';
+  document.getElementById('t72-txoff').disabled = false;
+  setVal('t72-fs','Waiting...'); setVal('t72-fst','—'); setVal('t72-result','—');
+}
+
+// ═══ TEST 7.3 — TELEM RATE ═══════════════════════════════════
+let t73Running = false, t73Timer = null, t73Elapsed = 0;
+let t73Ok = 0, t73Err = 0, t73Lats = [];
+
+async function t73Start() {
+  if (t73Running) return;
+  t73Running = true;
+  t73Ok = 0; t73Err = 0; t73Lats = [];
+  t73Elapsed = 0;
+  document.getElementById('t73-start').disabled = true;
+
+  t73Timer = setInterval(() => {
+    t73Elapsed++;
+    const m = Math.floor(t73Elapsed/60).toString().padStart(2,'0');
+    const s = (t73Elapsed%60).toString().padStart(2,'0');
+    document.getElementById('t73-timer').textContent = m+':'+s;
+    if (t73Elapsed >= 60) {
+      clearInterval(t73Timer);
+      t73Running = false;
+      document.getElementById('t73-start').disabled = false;
+      t73Finish();
+    }
+  }, 1000);
+
+  // Fire requests as fast as possible
+  while (t73Running) {
+    const t0 = Date.now();
+    try {
+      const r = await fetch(BASE+'/telemetry', {cache:'no-store'});
+      if (r.ok) { t73Ok++; t73Lats.push(Date.now()-t0); }
+      else t73Err++;
+    } catch(e) { t73Err++; }
+    const rate = t73Ok / Math.max(1, t73Elapsed);
+    setVal('t73-ok', t73Ok);
+    setVal('t73-err', t73Err);
+    setVal('t73-rate', rate.toFixed(1)+' Hz', rate>=10?'ok':'err');
+    const ep = (t73Err/(t73Ok+t73Err)*100)||0;
+    setVal('t73-errpct', ep.toFixed(1)+'%', ep<5?'ok':'err');
+    if (t73Lats.length) {
+      setVal('t73-latmin', Math.min(...t73Lats)+' ms');
+      setVal('t73-latmax', Math.max(...t73Lats)+' ms');
+      setVal('t73-latavg', (t73Lats.reduce((a,b)=>a+b,0)/t73Lats.length).toFixed(0)+' ms');
+    }
+  }
+}
+
+function t73Finish() {
+  const rate = t73Ok / 60;
+  const ep = (t73Err/(t73Ok+t73Err)*100)||0;
+  const ok = rate >= 10 && ep < 5;
+  setVal('t73-result', ok?'PASS':'FAIL', ok?'ok':'err');
+}
+
+function t73Reset() {
+  t73Running = false; clearInterval(t73Timer);
+  t73Ok=0; t73Err=0; t73Lats=[];
+  document.getElementById('t73-timer').textContent = '00:00';
+  document.getElementById('t73-start').disabled = false;
+  ['t73-ok','t73-err','t73-rate','t73-errpct','t73-latmin','t73-latmax','t73-latavg','t73-result']
+    .forEach(id => setVal(id,'—'));
+}
+
+// ═══ TEST 7.4 — CALIBRATION ══════════════════════════════════
+let t74Seq = 0;
+const t74Checks = [
+  {id:'c74-1', text:'SWD flipped UP'},
+  {id:'c74-2', text:'GYRO done'},
+  {id:'c74-3', text:'ACCEL done'},
+  {id:'c74-4', text:'MAG done'},
+  {id:'c74-5', text:'COMPLETE'},
+];
+
+async function t74Poll() {
+  try {
+    const d = await fetchJson(BASE+`/log?since=${t74Seq}`);
+    if (!d.ok) return;
+    if (d.nextSeq) t74Seq = d.nextSeq;
+    const log = document.getElementById('t74-log');
+    d.lines?.forEach(l => {
+      const div = document.createElement('div');
+      div.className = 'line';
+      const t = l.text;
+      if (t.includes('✓'))     div.classList.add('ok');
+      else if (t.includes('REQUESTED')) div.classList.add('info');
+      else if (t.includes('SKIPPED'))   div.classList.add('warn');
+      div.textContent = t;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+      t74Check(t);
+    });
+  } catch(e) {}
+}
+
+function t74Check(text) {
+  const checks = {
+    'c74-1': 'SWD flipped UP',
+    'c74-2': 'GYRO done',
+    'c74-3': 'ACCEL done',
+    'c74-4': 'MAG',
+    'c74-5': 'COMPLETE',
+  };
+  let allDone = true;
+  Object.entries(checks).forEach(([id, keyword]) => {
+    const el = document.getElementById(id);
+    if (text.includes(keyword)) {
+      el.innerHTML = 'YES';
+      el.className = 'badge badge-green';
+    }
+    if (el.textContent !== 'YES') allDone = false;
+  });
+  const ov = document.getElementById('c74-overall');
+  if (allDone) { ov.textContent = 'Overall: PASS'; ov.style.color='#3fb950'; }
+}
+
+function t74Clear() {
+  document.getElementById('t74-log').innerHTML = '';
+  t74Seq = 0;
+  ['c74-1','c74-2','c74-3','c74-4','c74-5'].forEach(id => {
+    const el = document.getElementById(id);
+    el.textContent = 'No'; el.className = 'badge badge-gray';
+  });
+  document.getElementById('c74-overall').textContent = 'Overall: Incomplete';
+  document.getElementById('c74-overall').style.color = '#8b949e';
+}
+
+// Poll log continuously when on that tab
+setInterval(() => {
+  if (document.getElementById('panel-t74').classList.contains('active')) t74Poll();
+}, 2000);
+
+// ═══ TEST 7.5 — PID / FULL TUNING LEVERS ════════════════════
+let t75DisarmedKp = null;
+
+const T75_MAP = {
+    max_angle_deg: 'in-max-angle',
+    max_rate_dps: 'in-max-rate',
+    yaw_max_rate_dps: 'in-yaw-max-rate',
+    yaw_deadband: 'in-yaw-deadband',
+    roll_output_limit: 'in-roll-outlim',
+    pitch_output_limit: 'in-pitch-outlim',
+    yaw_output_limit: 'in-yaw-outlim',
+    throttle_expo: 'in-thr-expo',
+    throttle_up_rate_per_sec: 'in-thr-up',
+    throttle_down_rate_per_sec: 'in-thr-down',
+    motor_idle: 'in-motor-idle',
+    motor_max: 'in-motor-max',
+    throttle_cut: 'in-thr-cut',
+    idle_ramp_end: 'in-idle-ramp',
+    pid_roll_kp: 'in-roll-kp',
+    pid_roll_ki: 'in-roll-ki',
+    pid_roll_kd: 'in-roll-kd',
+    pid_pitch_kp: 'in-pitch-kp',
+    pid_pitch_ki: 'in-pitch-ki',
+    pid_pitch_kd: 'in-pitch-kd',
+    pid_yaw_kp: 'in-yaw-kp',
+    pid_yaw_ki: 'in-yaw-ki',
+    pid_yaw_kd: 'in-yaw-kd',
+    pid_angle_roll_kp: 'in-angle-roll-kp',
+    pid_angle_roll_ki: 'in-angle-roll-ki',
+    pid_angle_roll_kd: 'in-angle-roll-kd',
+    pid_angle_pitch_kp: 'in-angle-pitch-kp',
+    pid_angle_pitch_ki: 'in-angle-pitch-ki',
+    pid_angle_pitch_kd: 'in-angle-pitch-kd',
+    pid_angle_yaw_kp: 'in-angle-yaw-kp',
+    mahony_kp: 'in-mkp',
+    mahony_ki: 'in-mki'
+};
+
+function t75BuildPayload() {
+  const body = {};
+  Object.entries(T75_MAP).forEach(([key,id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const v = parseFloat(el.value);
+    if (!isNaN(v)) body[key] = v;
+  });
+  return body;
+}
+
+async function t75Send() {
+  const body = t75BuildPayload();
+  t75DisarmedKp = body.pid_roll_kp;
+  try {
+    const r = await fetch(BASE+'/tune', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d = await r.json();
+    const div = document.getElementById('t75-result');
+    if (!r.ok || d.ok === false) {
+      div.innerHTML = '<span class="badge badge-red">DISARMED TEST: FAIL — /tune rejected payload</span>';
+      document.getElementById('c75-dis').textContent = 'Rejected';
+      document.getElementById('c75-dis-p').innerHTML = pass(false);
+      return;
+    }
+    setTimeout(async () => {
+      const t = await fetchJson(BASE+'/telemetry');
+      const applied = t.pidRollKp == null ? true : Math.abs(t.pidRollKp - body.pid_roll_kp) < 0.0001;
+      div.innerHTML = applied
+        ? '<span class="badge badge-green">DISARMED TEST: PASS — tuning payload accepted</span>'
+        : '<span class="badge badge-red">DISARMED TEST: FAIL — roll Kp did not update</span>';
+      document.getElementById('c75-dis').textContent = applied ? 'Accepted' : 'Not applied';
+      document.getElementById('c75-dis-p').innerHTML = pass(applied);
+    }, 500);
+  } catch(e) { document.getElementById('t75-result').textContent = 'Error: '+e; }
+}
+
+async function t75SendArmed() {
+  if (!lastTelem?.armed) {
+    document.getElementById('t75-result').innerHTML =
+      '<span class="badge badge-gray">ARM the drone first (SWA UP), then click again</span>';
+    return;
+  }
+  const prevKp = lastTelem.pidRollKp;
+  const body = { pid_roll_kp: Number((prevKp + 0.0001).toFixed(6)) };
+  try {
+    await fetch(BASE+'/tune', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    setTimeout(async () => {
+      const t = await fetchJson(BASE+'/telemetry');
+      const changed = Math.abs(t.pidRollKp - prevKp) > 0.00005;
+      const div = document.getElementById('t75-result');
+      div.innerHTML = !changed
+        ? '<span class="badge badge-green">ARMED TEST: PASS — tuning correctly rejected</span>'
+        : '<span class="badge badge-red">ARMED TEST: FAIL — tuning applied while armed!</span>';
+      document.getElementById('c75-arm').textContent = changed ? 'Applied (BAD)' : 'Rejected';
+      document.getElementById('c75-arm-p').innerHTML = pass(!changed);
+    }, 500);
+  } catch(e) {}
+}
+
+// ═══ TEST 7.6 — BMP280 ══════════════════════════════════════
+let t76base = null, t76high = null;
+
+function t76Snap() {
+  if (!lastTelem) return;
+  t76base = lastTelem.bmpAltitudeM;
+  setVal('t76-base', t76base?.toFixed(2)+' m');
+  t76Criteria();
+}
+
+function t76SnapHigh() {
+  if (!lastTelem) return;
+  t76high = lastTelem.bmpAltitudeM;
+  setVal('t76-high', t76high?.toFixed(2)+' m');
+  if (t76base !== null) {
+    const delta = t76high - t76base;
+    setVal('t76-delta', delta.toFixed(2)+' m', (delta>=0.5&&delta<=2.0)?'ok':'warn');
+  }
+  t76Criteria();
+}
+
+function t76Criteria() {
+  if (!lastTelem) return;
+  document.getElementById('c76-v').textContent = lastTelem.bmpValid?'true':'false';
+  document.getElementById('c76-v-p').innerHTML = pass(lastTelem.bmpValid);
+  document.getElementById('c76-t').textContent = lastTelem.bmpTempC?.toFixed(1)+'°C';
+  document.getElementById('c76-t-p').innerHTML = pass(lastTelem.bmpTempC>=10&&lastTelem.bmpTempC<=45);
+  document.getElementById('c76-p').textContent = lastTelem.bmpPressureHpa?.toFixed(1)+' hPa';
+  document.getElementById('c76-p-p').innerHTML = pass(lastTelem.bmpPressureHpa>=950&&lastTelem.bmpPressureHpa<=1050);
+  if (t76base !== null && t76high !== null) {
+    const delta = t76high - t76base;
+    document.getElementById('c76-d').textContent = delta.toFixed(2)+' m';
+    document.getElementById('c76-d-p').innerHTML = pass(delta>=0.5&&delta<=2.0);
+    const allOk = lastTelem.bmpValid &&
+                  lastTelem.bmpTempC>=10 && lastTelem.bmpTempC<=45 &&
+                  lastTelem.bmpPressureHpa>=950 && lastTelem.bmpPressureHpa<=1050 &&
+                  delta>=0.5 && delta<=2.0;
+    setVal('t76-result', allOk?'PASS':'FAIL', allOk?'ok':'err');
+  }
+}
+
+function t76Reset() { t76base=null; t76high=null; setVal('t76-base','—'); setVal('t76-high','—'); setVal('t76-delta','—'); setVal('t76-result','—'); }
+
+// ═══ TEST 7.7 — CPU LOAD ════════════════════════════════════
+let t77Recording = false, t77Timer = null, t77Elapsed = 0;
+let t77Samples = [], t77C0max = 0, t77C1max = 0;
+
+function t77Start() {
+  if (t77Recording) return;
+  t77Recording = true;
+  t77Samples = []; t77C0max = 0; t77C1max = 0; t77Elapsed = 0;
+  document.getElementById('t77-start').disabled = true;
+  t77Timer = setInterval(() => {
+    t77Elapsed++;
+    const m = Math.floor(t77Elapsed/60).toString().padStart(2,'0');
+    const s = (t77Elapsed%60).toString().padStart(2,'0');
+    document.getElementById('t77-timer').textContent = m+':'+s;
+    setVal('t77-n', t77Samples.length);
+    if (t77Elapsed >= 60) {
+      clearInterval(t77Timer);
+      t77Recording = false;
+      document.getElementById('t77-start').disabled = false;
+      t77Finish();
+    }
+  }, 1000);
+}
+
+function t77UpdateStats(c0, c1) {
+  if (c0 > t77C0max) t77C0max = c0;
+  if (c1 > t77C1max) t77C1max = c1;
+  setVal('t77-c0max', t77C0max.toFixed(1)+'%', cpuColor(t77C0max)==='#f85149'?'err':cpuColor(t77C0max)==='#d29922'?'warn':'ok');
+  setVal('t77-c1max', t77C1max.toFixed(1)+'%', t77C1max>90?'err':t77C1max>70?'warn':'ok');
+  const c0avg = t77Samples.reduce((a,s)=>a+s.c0,0)/t77Samples.length;
+  const c1avg = t77Samples.reduce((a,s)=>a+s.c1,0)/t77Samples.length;
+  setVal('t77-c0avg', c0avg.toFixed(1)+'%');
+  setVal('t77-c1avg', c1avg.toFixed(1)+'%');
+}
+
+function t77Finish() {
+  document.getElementById('c77-c0p').textContent = t77C0max.toFixed(1)+'%';
+  document.getElementById('c77-c0p-p').innerHTML = pass(t77C0max<80);
+  document.getElementById('c77-c1p').textContent = t77C1max.toFixed(1)+'%';
+  document.getElementById('c77-c1p-p').innerHTML = pass(t77C1max<80);
+  document.getElementById('c77-100').textContent = Math.max(t77C0max,t77C1max).toFixed(1)+'%';
+  document.getElementById('c77-100-p').innerHTML = pass(Math.max(t77C0max,t77C1max)<100);
+  const ok = t77C0max<80 && t77C1max<80;
+  setVal('t77-result', ok?'PASS':'FAIL', ok?'ok':'err');
+}
+
+function t77Reset() {
+  t77Recording=false; clearInterval(t77Timer);
+  t77Samples=[]; t77C0max=0; t77C1max=0; t77Elapsed=0;
+  document.getElementById('t77-start').disabled=false;
+  document.getElementById('t77-timer').textContent='00:00';
+}
+
+function t77Download() {
+  let csv = 'ts_ms,core0_pct,core1_pct\n';
+  t77Samples.forEach(s => csv += `${s.ts},${s.c0.toFixed(1)},${s.c1.toFixed(1)}\n`);
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cpu_load.csv'; a.click();
+}
+
+// ═══ GLOBAL SESSION LOGGER ══════════════════════════════════
+// Logs every telemetry poll to an in-memory CSV.
+// Start/Stop button in the header — works on any tab.
+let logActive = false;
+let logRows   = [];
+const LOG_FIELDS = [
+  'ts_ms','tick','mode','armed','rcValid',
+  'roll','pitch','yaw','ax','ay','az',
+  'gx','gy','gz','thr','rcHz',
+  'motFL','motFR','motRL','motRR',
+  'bmpTempC','bmpPressureHpa','bmpAltitudeM','bmpValid',
+  'cpuCore0','cpuCore1',
+  'gpsValid','gpsLat','gpsLon','gpsAltM','gpsSats','gpsHdop'
+];
+
+function logToggle() {
+  logActive = !logActive;
+  const btn = document.getElementById('log-btn');
+  const dot = document.getElementById('log-dot');
+  if (logActive) {
+    btn.textContent = '⏹ Stop Logging';
+    btn.className = 'btn btn-red';
+    dot.style.background = '#f85149';
+    dot.style.boxShadow = '0 0 6px #f85149';
+    logAppendDash('[LOG] Recording started — ' + new Date().toLocaleTimeString());
+  } else {
+    btn.textContent = '⏺ Start Logging';
+    btn.className = 'btn btn-green';
+    dot.style.background = '#3fb950';
+    dot.style.boxShadow = 'none';
+    logAppendDash('[LOG] Recording stopped — ' + logRows.length + ' rows saved.');
+  }
+}
+
+function logRecord(d) {
+  if (!logActive) return;
+  const row = {
+    ts_ms:          Date.now(),
+    tick:           d.tick,
+    mode:           d.mode,
+    armed:          d.armed ? 1 : 0,
+    rcValid:        d.rcValid ? 1 : 0,
+    roll:           d.roll?.toFixed(3),
+    pitch:          d.pitch?.toFixed(3),
+    yaw:            d.yaw?.toFixed(3),
+    ax:             d.ax?.toFixed(4),
+    ay:             d.ay?.toFixed(4),
+    az:             d.az?.toFixed(4),
+    gx:             d.gx?.toFixed(3),
+    gy:             d.gy?.toFixed(3),
+    gz:             d.gz?.toFixed(3),
+    thr:            d.thr?.toFixed(3),
+    rcHz:           d.rcHz?.toFixed(1),
+    motFL:          d.motFL?.toFixed(3),
+    motFR:          d.motFR?.toFixed(3),
+    motRL:          d.motRL?.toFixed(3),
+    motRR:          d.motRR?.toFixed(3),
+    bmpTempC:       d.bmpTempC?.toFixed(2),
+    bmpPressureHpa: d.bmpPressureHpa?.toFixed(2),
+    bmpAltitudeM:   d.bmpAltitudeM?.toFixed(3),
+    bmpValid:       d.bmpValid ? 1 : 0,
+    cpuCore0:       d.cpuCore0?.toFixed(1),
+    cpuCore1:       d.cpuCore1?.toFixed(1),
+    gpsValid:       d.gpsValid ? 1 : 0,
+    gpsLat:         d.gpsLat?.toFixed(6),
+    gpsLon:         d.gpsLon?.toFixed(6),
+    gpsAltM:        d.gpsAltM?.toFixed(2),
+    gpsSats:        d.gpsSats,
+    gpsHdop:        d.gpsHdop?.toFixed(2),
+  };
+  logRows.push(row);
+
+  // Update count displays
+  const countStr = logRows.length + ' rows';
+  document.getElementById('log-count').textContent = countStr;
+  document.getElementById('log-live-count').textContent = countStr + ' recorded';
+
+  // Live log line every 10 rows
+  if (logRows.length % 10 === 0) {
+    logAppendDash(`[LOG] ${logRows.length} rows | R=${row.roll}° P=${row.pitch}° | C1=${row.cpuCore1}%`);
+  }
+}
+
+function logAppendDash(text) {
+  const log = document.getElementById('dash-log');
+  const div = document.createElement('div');
+  div.className = 'line';
+  if (text.includes('started')) div.style.color = '#3fb950';
+  else if (text.includes('stopped')) div.style.color = '#d29922';
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function logDownload() {
+  if (logRows.length === 0) { alert('No data logged yet. Click Start Logging first.'); return; }
+  let csv = LOG_FIELDS.join(',') + '\n';
+  logRows.forEach(r => {
+    csv += LOG_FIELDS.map(f => r[f] ?? '').join(',') + '\n';
+  });
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  a.download = `drone_log_${ts}.csv`;
+  a.click();
+  logAppendDash(`[LOG] Downloaded ${logRows.length} rows → drone_log_${ts}.csv`);
+}
+
+function logClear() {
+  if (logActive) { alert('Stop logging before clearing.'); return; }
+  logRows = [];
+  document.getElementById('log-count').textContent = '0 rows';
+  document.getElementById('log-live-count').textContent = '0 rows recorded';
+  document.getElementById('dash-log').innerHTML = '';
+}
+
+// ─── Polling intervals ────────────────────────────────────────
+setInterval(pollTelemetry, 500);
+setInterval(t71PollStats, 3000);
+pollTelemetry();
+</script>
+</body>
+</html>

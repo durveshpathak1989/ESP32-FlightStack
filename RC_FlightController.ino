@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════╗
- * ║  RC_FlightController.ino  v2.3.2                                  ║
+ * ║  RC_FlightController.ino  v3.0.0                                 ║
  * ║  FlySky FS-iA6B iBUS  +  MPU-9250/6500  +  BMP280  +  GPS       ║
  * ║  Fully autonomous — no keyboard required                         ║
  * ╠══════════════════════════════════════════════════════════════════╣
@@ -31,6 +31,7 @@
  * ║  HTTP ENDPOINTS                                                   ║
  * ║   GET  /telemetry     — full state JSON                          ║
  * ║   POST /tune          — apply PID / Mahony gains (disarmed)      ║
+ * ║   GET/POST /update    — Web OTA update (disarmed/motors off)     ║
  * ║   GET  /log?since=N   — calibration log lines                    ║
  * ║   GET  /timing        — IMU jitter stats JSON (Test 7.1)         ║
  * ║   POST /timing/reset  — reset jitter stats (between conditions)  ║
@@ -83,16 +84,16 @@
 #define RC_LPF_HZ             50.0f    // stick setpoint smoothing
 
 // ── Pilot command limits ────────────────────────────────────
-static constexpr float TUNE_MAX_ANGLE_DEG = 15.0f;
+static constexpr float TUNE_MAX_ANGLE_DEG = 25.0f;
 static constexpr float TUNE_MAX_RATE_DPS  = 150.0f;
 
 // ── PID output authority limits before motor mixing ─────────
-static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.200f;
-static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.200f;
-static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.150f;
+static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.500f;
+static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.500f;
+static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.200f;
 
 // ── Throttle shaping + motor output limits ──────────────────
-static constexpr float TUNE_THROTTLE_EXPO              = 0.35f;
+static constexpr float TUNE_THROTTLE_EXPO              = 0.60f;
 static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
 static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
 static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
@@ -102,24 +103,24 @@ static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 
 // ── Initial PID gains loaded at boot ────────────────────────
 // Inner Loop
-static constexpr float TUNE_RATE_ROLL_KP   = 0.00005f;
+static constexpr float TUNE_RATE_ROLL_KP   = 0.00015f;
 static constexpr float TUNE_RATE_ROLL_KI   = 0.00000f;
 static constexpr float TUNE_RATE_ROLL_KD   = 0.00001f;
-static constexpr float TUNE_RATE_PITCH_KP  = 0.00005f;
+static constexpr float TUNE_RATE_PITCH_KP  = 0.00015f;
 static constexpr float TUNE_RATE_PITCH_KI  = 0.00000f;
 static constexpr float TUNE_RATE_PITCH_KD  = 0.00001f;
-static constexpr float TUNE_RATE_YAW_KP    = 0.00005f;
+static constexpr float TUNE_RATE_YAW_KP    = 0.00015f;
 static constexpr float TUNE_RATE_YAW_KI    = 0.0000000f;
 static constexpr float TUNE_RATE_YAW_KD    = 0.00001f;
 // Outer Loop
-static constexpr float TUNE_ANGLE_ROLL_KP  = 2.00f;
+static constexpr float TUNE_ANGLE_ROLL_KP  = 8.00f;
 static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
-static constexpr float TUNE_ANGLE_ROLL_KD  = 0.0010f;
-static constexpr float TUNE_ANGLE_PITCH_KP = 2.00f;
+static constexpr float TUNE_ANGLE_ROLL_KD  = 0.010f;
+static constexpr float TUNE_ANGLE_PITCH_KP = 8.00f;
 static constexpr float TUNE_ANGLE_PITCH_KI = 0.000f;
-static constexpr float TUNE_ANGLE_PITCH_KD = 0.0010f;
+static constexpr float TUNE_ANGLE_PITCH_KD = 0.010f;
 // Outer Loop — Yaw heading hold
-static constexpr float TUNE_ANGLE_YAW_KP     = 2.00f;   // heading-hold Kp (tune up if soft)
+static constexpr float TUNE_ANGLE_YAW_KP     = 6.00f;   // heading-hold Kp (tune up if soft)
 static constexpr float TUNE_YAW_DEADBAND     = 0.05f;   // |yaw stick| below this = hold
 static constexpr float TUNE_YAW_MAX_RATE_DPS = 90.0f;   // cap on commanded yaw rate
 
@@ -219,11 +220,43 @@ static volatile bool g_pidTrace = false;
 //  Tuning state
 // ─────────────────────────────────────────────────────────────
 struct TuningState {
+    // Pilot command limits
+    float max_angle_deg;
+    float max_rate_dps;
+    float max_pitch_rate_dps;
+
+    // PID output authority limits before motor mixing
+    float roll_output_limit;
+    float pitch_output_limit;
+    float yaw_output_limit;
+
+    // Throttle shaping + motor output limits
+    float throttle_expo;
+    float throttle_up_rate_per_sec;
+    float throttle_down_rate_per_sec;
+    float motor_idle;
+    float motor_max;
+    float throttle_cut;
+    float idle_ramp_end;
+    float pid_ilimit;
+
+    // Inner rate loop PID
     float pid_roll_kp,  pid_roll_ki,  pid_roll_kd;
     float pid_pitch_kp, pid_pitch_ki, pid_pitch_kd;
     float pid_yaw_kp,   pid_yaw_ki,   pid_yaw_kd;
-    float pid_angle_roll_kp, pid_angle_pitch_kp;
+
+    // Outer angle loop PID
+    float pid_angle_roll_kp,  pid_angle_roll_ki,  pid_angle_roll_kd;
+    float pid_angle_pitch_kp, pid_angle_pitch_ki, pid_angle_pitch_kd;
+
+    // Outer yaw heading-hold loop
+    float pid_angle_yaw_kp;
+    float yaw_deadband;
+    float yaw_max_rate_dps;
+
+    // AHRS
     float mahony_kp, mahony_ki;
+
     volatile bool dirty;
 };
 static TuningState       g_tuning;
@@ -277,25 +310,52 @@ static PID pidAngleYaw  (TUNE_ANGLE_YAW_KP,   0.0f,                0.0f);
 // ─────────────────────────────────────────────────────────────
 static void syncTuningFromObjects()
 {
-    g_tuning.pid_roll_kp        = pidRateRoll.kp;
-    g_tuning.pid_roll_ki        = pidRateRoll.ki;
-    g_tuning.pid_roll_kd        = pidRateRoll.kd;
-    g_tuning.pid_pitch_kp       = pidRatePitch.kp;
-    g_tuning.pid_pitch_ki       = pidRatePitch.ki;
-    g_tuning.pid_pitch_kd       = pidRatePitch.kd;
-    g_tuning.pid_yaw_kp         = pidRateYaw.kp;
-    g_tuning.pid_yaw_ki         = pidRateYaw.ki;
-    g_tuning.pid_yaw_kd         = pidRateYaw.kd;
-    g_tuning.pid_angle_roll_kp  = pidAngleRoll.kp;
-    g_tuning.pid_angle_pitch_kp = pidAnglePitch.kp;
-    g_tuning.mahony_kp          = imu.mahonyKp;
-    g_tuning.mahony_ki          = imu.mahonyKi;
-    g_tuning.dirty              = false;
-}
+    // Copy compile-time defaults into runtime-tunable state at boot.
+    g_tuning.max_angle_deg              = TUNE_MAX_ANGLE_DEG;
+    g_tuning.max_rate_dps               = TUNE_MAX_RATE_DPS;
+    g_tuning.max_pitch_rate_dps         = TUNE_MAX_RATE_DPS;
 
+    g_tuning.roll_output_limit          = TUNE_ROLL_OUTPUT_LIMIT;
+    g_tuning.pitch_output_limit         = TUNE_PITCH_OUTPUT_LIMIT;
+    g_tuning.yaw_output_limit           = TUNE_YAW_OUTPUT_LIMIT;
+
+    g_tuning.throttle_expo              = TUNE_THROTTLE_EXPO;
+    g_tuning.throttle_up_rate_per_sec   = TUNE_THROTTLE_UP_RATE_PER_SEC;
+    g_tuning.throttle_down_rate_per_sec = TUNE_THROTTLE_DOWN_RATE_PER_SEC;
+    g_tuning.motor_idle                 = TUNE_MOTOR_IDLE;
+    g_tuning.motor_max                  = TUNE_MOTOR_MAX;
+    g_tuning.throttle_cut               = TUNE_THROTTLE_CUT;
+    g_tuning.idle_ramp_end              = TUNE_IDLE_RAMP_END;
+    g_tuning.pid_ilimit                 = pidRateRoll.iLimit;
+
+    g_tuning.pid_roll_kp                = pidRateRoll.kp;
+    g_tuning.pid_roll_ki                = pidRateRoll.ki;
+    g_tuning.pid_roll_kd                = pidRateRoll.kd;
+    g_tuning.pid_pitch_kp               = pidRatePitch.kp;
+    g_tuning.pid_pitch_ki               = pidRatePitch.ki;
+    g_tuning.pid_pitch_kd               = pidRatePitch.kd;
+    g_tuning.pid_yaw_kp                 = pidRateYaw.kp;
+    g_tuning.pid_yaw_ki                 = pidRateYaw.ki;
+    g_tuning.pid_yaw_kd                 = pidRateYaw.kd;
+
+    g_tuning.pid_angle_roll_kp          = pidAngleRoll.kp;
+    g_tuning.pid_angle_roll_ki          = pidAngleRoll.ki;
+    g_tuning.pid_angle_roll_kd          = pidAngleRoll.kd;
+    g_tuning.pid_angle_pitch_kp         = pidAnglePitch.kp;
+    g_tuning.pid_angle_pitch_ki         = pidAnglePitch.ki;
+    g_tuning.pid_angle_pitch_kd         = pidAnglePitch.kd;
+    g_tuning.pid_angle_yaw_kp           = pidAngleYaw.kp;
+    g_tuning.yaw_deadband               = TUNE_YAW_DEADBAND;
+    g_tuning.yaw_max_rate_dps           = TUNE_YAW_MAX_RATE_DPS;
+
+    g_tuning.mahony_kp                  = imu.mahonyKp;
+    g_tuning.mahony_ki                  = imu.mahonyKi;
+    g_tuning.dirty                      = false;
+}
 static void applyTuningToObjects()
 {
     if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+
     pidRateRoll.kp         = g_tuning.pid_roll_kp;
     pidRateRoll.ki         = g_tuning.pid_roll_ki;
     pidRateRoll.kd         = g_tuning.pid_roll_kd;
@@ -305,15 +365,30 @@ static void applyTuningToObjects()
     pidRateYaw.kp          = g_tuning.pid_yaw_kp;
     pidRateYaw.ki          = g_tuning.pid_yaw_ki;
     pidRateYaw.kd          = g_tuning.pid_yaw_kd;
+
     pidAngleRoll.kp        = g_tuning.pid_angle_roll_kp;
+    pidAngleRoll.ki        = g_tuning.pid_angle_roll_ki;
+    pidAngleRoll.kd        = g_tuning.pid_angle_roll_kd;
     pidAnglePitch.kp       = g_tuning.pid_angle_pitch_kp;
+    pidAnglePitch.ki       = g_tuning.pid_angle_pitch_ki;
+    pidAnglePitch.kd       = g_tuning.pid_angle_pitch_kd;
+    pidAngleYaw.kp         = g_tuning.pid_angle_yaw_kp;
+
+    // Apply the global I-limit to every PID object so the Config tab lever works.
+    pidRateRoll.iLimit     = g_tuning.pid_ilimit;
+    pidRatePitch.iLimit    = g_tuning.pid_ilimit;
+    pidRateYaw.iLimit      = g_tuning.pid_ilimit;
+    pidAngleRoll.iLimit    = g_tuning.pid_ilimit;
+    pidAnglePitch.iLimit   = g_tuning.pid_ilimit;
+    pidAngleYaw.iLimit     = g_tuning.pid_ilimit;
+
     imu.mahonyKp           = g_tuning.mahony_kp;
     imu.mahonyKi           = g_tuning.mahony_ki;
+
     g_tuning.dirty         = false;
     xSemaphoreGive(g_tuneMutex);
-    calLog("[TUNE] New gains applied.");
+    calLog("[TUNE] Runtime tune values applied.");
 }
-
 // ─────────────────────────────────────────────────────────────
 //  Log helpers (push to WiFi ring buffer + Serial)
 // ─────────────────────────────────────────────────────────────
@@ -457,11 +532,34 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.bmp_altitude_m=s.bmpAltitude_m; out.bmp_valid=s.bmpValid;
     out.cpu_core0_pct=s.cpuCore0_pct; out.cpu_core1_pct=s.cpuCore1_pct;
     out.cpu_valid=s.cpuValid;
+
+    out.max_angle_deg              = t.max_angle_deg;
+    out.max_rate_dps               = t.max_rate_dps;
+    out.max_pitch_rate_dps         = t.max_pitch_rate_dps;
+    out.roll_output_limit          = t.roll_output_limit;
+    out.pitch_output_limit         = t.pitch_output_limit;
+    out.yaw_output_limit           = t.yaw_output_limit;
+    out.throttle_expo              = t.throttle_expo;
+    out.throttle_up_rate_per_sec   = t.throttle_up_rate_per_sec;
+    out.throttle_down_rate_per_sec = t.throttle_down_rate_per_sec;
+    out.motor_idle                 = t.motor_idle;
+    out.motor_max                  = t.motor_max;
+    out.throttle_cut               = t.throttle_cut;
+    out.idle_ramp_end              = t.idle_ramp_end;
+    out.pid_ilimit                 = t.pid_ilimit;
+
     out.pid_roll_kp=t.pid_roll_kp;   out.pid_roll_ki=t.pid_roll_ki;   out.pid_roll_kd=t.pid_roll_kd;
     out.pid_pitch_kp=t.pid_pitch_kp; out.pid_pitch_ki=t.pid_pitch_ki; out.pid_pitch_kd=t.pid_pitch_kd;
     out.pid_yaw_kp=t.pid_yaw_kp;     out.pid_yaw_ki=t.pid_yaw_ki;     out.pid_yaw_kd=t.pid_yaw_kd;
     out.pid_angle_roll_kp=t.pid_angle_roll_kp;
+    out.pid_angle_roll_ki=t.pid_angle_roll_ki;
+    out.pid_angle_roll_kd=t.pid_angle_roll_kd;
     out.pid_angle_pitch_kp=t.pid_angle_pitch_kp;
+    out.pid_angle_pitch_ki=t.pid_angle_pitch_ki;
+    out.pid_angle_pitch_kd=t.pid_angle_pitch_kd;
+    out.pid_angle_yaw_kp=t.pid_angle_yaw_kp;
+    out.yaw_deadband=t.yaw_deadband;
+    out.yaw_max_rate_dps=t.yaw_max_rate_dps;
     out.mahony_kp=t.mahony_kp; out.mahony_ki=t.mahony_ki;
     out.gps_valid       = s.gps.valid;
     out.gps_lat         = s.gps.latitude;
@@ -490,6 +588,28 @@ static void handleTune(const TunePacket& in)
     if (armed) { calLog("[TUNE] REJECTED — disarm first."); return; }
 
     if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
+
+    if (in.has_max_angle_deg)              g_tuning.max_angle_deg              = constrain(in.max_angle_deg, 5.0f, 80.0f);
+    if (in.has_max_rate_dps)               g_tuning.max_rate_dps               = constrain(in.max_rate_dps, 30.0f, 1200.0f);
+    if (in.has_max_pitch_rate_dps)         g_tuning.max_pitch_rate_dps         = constrain(in.max_pitch_rate_dps, 30.0f, 1200.0f);
+
+    if (in.has_roll_output_limit)          g_tuning.roll_output_limit          = constrain(in.roll_output_limit, 0.02f, 1.00f);
+    if (in.has_pitch_output_limit)         g_tuning.pitch_output_limit         = constrain(in.pitch_output_limit, 0.02f, 1.00f);
+    if (in.has_yaw_output_limit)           g_tuning.yaw_output_limit           = constrain(in.yaw_output_limit, 0.01f, 1.00f);
+
+    if (in.has_throttle_expo)              g_tuning.throttle_expo              = constrain(in.throttle_expo, 0.0f, 0.95f);
+    if (in.has_throttle_up_rate_per_sec)   g_tuning.throttle_up_rate_per_sec   = constrain(in.throttle_up_rate_per_sec, 0.05f, 10.0f);
+    if (in.has_throttle_down_rate_per_sec) g_tuning.throttle_down_rate_per_sec = constrain(in.throttle_down_rate_per_sec, 0.05f, 10.0f);
+    if (in.has_motor_idle)                 g_tuning.motor_idle                 = constrain(in.motor_idle, 0.0f, 0.40f);
+    if (in.has_motor_max)                  g_tuning.motor_max                  = constrain(in.motor_max, 0.10f, 1.00f);
+    if (in.has_throttle_cut)               g_tuning.throttle_cut               = constrain(in.throttle_cut, 0.0f, 0.30f);
+    if (in.has_idle_ramp_end)              g_tuning.idle_ramp_end              = constrain(in.idle_ramp_end, 0.01f, 0.60f);
+    if (in.has_pid_ilimit)                 g_tuning.pid_ilimit                 = constrain(in.pid_ilimit, 0.0f, 1000.0f);
+
+    // Keep idle/ramp relationships sane.
+    if (g_tuning.motor_idle > g_tuning.motor_max) g_tuning.motor_idle = g_tuning.motor_max;
+    if (g_tuning.idle_ramp_end <= g_tuning.throttle_cut) g_tuning.idle_ramp_end = g_tuning.throttle_cut + 0.01f;
+
     if (in.has_pid_roll_kp)        g_tuning.pid_roll_kp        = in.pid_roll_kp;
     if (in.has_pid_roll_ki)        g_tuning.pid_roll_ki        = in.pid_roll_ki;
     if (in.has_pid_roll_kd)        g_tuning.pid_roll_kd        = in.pid_roll_kd;
@@ -500,7 +620,14 @@ static void handleTune(const TunePacket& in)
     if (in.has_pid_yaw_ki)         g_tuning.pid_yaw_ki         = in.pid_yaw_ki;
     if (in.has_pid_yaw_kd)         g_tuning.pid_yaw_kd         = in.pid_yaw_kd;
     if (in.has_pid_angle_roll_kp)  g_tuning.pid_angle_roll_kp  = in.pid_angle_roll_kp;
+    if (in.has_pid_angle_roll_ki)  g_tuning.pid_angle_roll_ki  = in.pid_angle_roll_ki;
+    if (in.has_pid_angle_roll_kd)  g_tuning.pid_angle_roll_kd  = in.pid_angle_roll_kd;
     if (in.has_pid_angle_pitch_kp) g_tuning.pid_angle_pitch_kp = in.pid_angle_pitch_kp;
+    if (in.has_pid_angle_pitch_ki) g_tuning.pid_angle_pitch_ki = in.pid_angle_pitch_ki;
+    if (in.has_pid_angle_pitch_kd) g_tuning.pid_angle_pitch_kd = in.pid_angle_pitch_kd;
+    if (in.has_pid_angle_yaw_kp)   g_tuning.pid_angle_yaw_kp   = in.pid_angle_yaw_kp;
+    if (in.has_yaw_deadband)       g_tuning.yaw_deadband       = constrain(in.yaw_deadband, 0.0f, 0.50f);
+    if (in.has_yaw_max_rate_dps)   g_tuning.yaw_max_rate_dps   = constrain(in.yaw_max_rate_dps, 10.0f, 500.0f);
     if (in.has_mahony_kp)          g_tuning.mahony_kp          = in.mahony_kp;
     if (in.has_mahony_ki)          g_tuning.mahony_ki          = in.mahony_ki;
     g_tuning.dirty = true;
@@ -739,6 +866,7 @@ static void taskRC(void* /*pv*/)
     TickType_t lastWake = xTaskGetTickCount();
     bool swdPrev = false;
 
+
     for (;;) {
         rcReceiver.update();
         RCCommand cmd = rcReceiver.getCommand();
@@ -753,6 +881,20 @@ static void taskRC(void* /*pv*/)
             }
         }
         swdPrev = cmd.swdHigh;
+        // ── Per-second iBUS health: good rate vs checksum failures ──
+        static uint32_t lastReportMs = 0;
+        static uint32_t lastCsumFail = 0;
+        uint32_t nowMs = millis();
+        if (nowMs - lastReportMs >= 1000) {
+            uint32_t fails    = rcReceiver.getChecksumFailCount();
+            uint32_t failPerS = fails - lastCsumFail;
+            lastCsumFail = fails;
+            lastReportMs = nowMs;
+            Serial.printf("[iBUS] %.0f Hz good | %lu bad/s | %lu bad total\n",
+                          rcReceiver.getFrameRate(),
+                          (unsigned long)failPerS,
+                          (unsigned long)fails);
+        }
         vTaskDelayUntil(&lastWake, period);
     }
 }
@@ -1019,8 +1161,33 @@ static void taskControl(void* /*pv*/)
         float gy    = imuOk ? gyf : 0.0f;
         float gz    = imuOk ? gzf : 0.0f;
 
-        const float MAX_ANGLE_DEG = TUNE_MAX_ANGLE_DEG;
-        const float MAX_RATE_DPS  = TUNE_MAX_RATE_DPS;
+        TuningState tune;
+        if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+            tune = g_tuning;
+            xSemaphoreGive(g_tuneMutex);
+        } else {
+            // Extremely rare: keep flying with compile-time safe defaults for this cycle.
+            memset(&tune, 0, sizeof(tune));
+            tune.max_angle_deg              = TUNE_MAX_ANGLE_DEG;
+            tune.max_rate_dps               = TUNE_MAX_RATE_DPS;
+            tune.max_pitch_rate_dps         = TUNE_MAX_RATE_DPS;
+            tune.roll_output_limit          = TUNE_ROLL_OUTPUT_LIMIT;
+            tune.pitch_output_limit         = TUNE_PITCH_OUTPUT_LIMIT;
+            tune.yaw_output_limit           = TUNE_YAW_OUTPUT_LIMIT;
+            tune.throttle_expo              = TUNE_THROTTLE_EXPO;
+            tune.throttle_up_rate_per_sec   = TUNE_THROTTLE_UP_RATE_PER_SEC;
+            tune.throttle_down_rate_per_sec = TUNE_THROTTLE_DOWN_RATE_PER_SEC;
+            tune.motor_idle                 = TUNE_MOTOR_IDLE;
+            tune.motor_max                  = TUNE_MOTOR_MAX;
+            tune.throttle_cut               = TUNE_THROTTLE_CUT;
+            tune.idle_ramp_end              = TUNE_IDLE_RAMP_END;
+            tune.yaw_deadband               = TUNE_YAW_DEADBAND;
+            tune.yaw_max_rate_dps           = TUNE_YAW_MAX_RATE_DPS;
+        }
+
+        const float MAX_ANGLE_DEG      = tune.max_angle_deg;
+        const float MAX_RATE_DPS       = tune.max_rate_dps;
+        const float MAX_PITCH_RATE_DPS = tune.max_pitch_rate_dps;
         float rO=0, pO=0, yO=0;
 
         float rollCmd  = lpfSpRoll .apply(cmd.roll,  dt, RC_LPF_HZ);
@@ -1034,11 +1201,11 @@ static void taskControl(void* /*pv*/)
             pO = pidRatePitch.update(pSP - gy, dt);
         } else {   // ACRO
             rO = pidRateRoll .update(rollCmd *MAX_RATE_DPS - gx, dt);
-            pO = pidRatePitch.update(pitchCmd*MAX_RATE_DPS - gy, dt);
+            pO = pidRatePitch.update(pitchCmd*MAX_PITCH_RATE_DPS - gy, dt);
         }
 
         // ── Yaw: heading-hold when stick centered, rate when moving ──
-        if (imuOk && fabsf(yawCmd) < TUNE_YAW_DEADBAND) {
+        if (imuOk && fabsf(yawCmd) < tune.yaw_deadband) {
             if (!g_yawHoldActive) {
                 g_yawSetpoint   = att.yaw;
                 g_yawHoldActive = true;
@@ -1048,27 +1215,27 @@ static void taskControl(void* /*pv*/)
             while (yawErr >  180.0f) yawErr -= 360.0f;
             while (yawErr < -180.0f) yawErr += 360.0f;
             float yawRateSP = pidAngleYaw.update(yawErr, dt);
-            yawRateSP = constrain(yawRateSP, -TUNE_YAW_MAX_RATE_DPS, TUNE_YAW_MAX_RATE_DPS);
+            yawRateSP = constrain(yawRateSP, -tune.yaw_max_rate_dps, tune.yaw_max_rate_dps);
             yO = pidRateYaw.update(yawRateSP - gz, dt);
         } else {
             g_yawHoldActive = false;
-            yO = pidRateYaw.update(-yawCmd*MAX_RATE_DPS - gz, dt);
+            yO = pidRateYaw.update(-yawCmd*tune.yaw_max_rate_dps - gz, dt);
         }
 
-        rO = constrain(rO, -TUNE_ROLL_OUTPUT_LIMIT,  TUNE_ROLL_OUTPUT_LIMIT);
-        pO = constrain(pO, -TUNE_PITCH_OUTPUT_LIMIT, TUNE_PITCH_OUTPUT_LIMIT);
-        yO = constrain(yO, -TUNE_YAW_OUTPUT_LIMIT,   TUNE_YAW_OUTPUT_LIMIT);
+        rO = constrain(rO, -tune.roll_output_limit,  tune.roll_output_limit);
+        pO = constrain(pO, -tune.pitch_output_limit, tune.pitch_output_limit);
+        yO = constrain(yO, -tune.yaw_output_limit,   tune.yaw_output_limit);
 
         // ── Throttle expo + smoothing ─────────────────────────
         static float thrSmooth = 0.0f;
 
-        const float THROTTLE_EXPO              = TUNE_THROTTLE_EXPO;
-        const float THROTTLE_UP_RATE_PER_SEC   = TUNE_THROTTLE_UP_RATE_PER_SEC;
-        const float THROTTLE_DOWN_RATE_PER_SEC = TUNE_THROTTLE_DOWN_RATE_PER_SEC;
-        const float MOTOR_IDLE                 = TUNE_MOTOR_IDLE;
-        const float MOTOR_MAX                  = TUNE_MOTOR_MAX;
-        const float THROTTLE_CUT               = TUNE_THROTTLE_CUT;
-        const float IDLE_RAMP_END              = TUNE_IDLE_RAMP_END;
+        const float THROTTLE_EXPO              = tune.throttle_expo;
+        const float THROTTLE_UP_RATE_PER_SEC   = tune.throttle_up_rate_per_sec;
+        const float THROTTLE_DOWN_RATE_PER_SEC = tune.throttle_down_rate_per_sec;
+        const float MOTOR_IDLE                 = tune.motor_idle;
+        const float MOTOR_MAX                  = tune.motor_max;
+        const float THROTTLE_CUT               = tune.throttle_cut;
+        const float IDLE_RAMP_END              = tune.idle_ramp_end;
 
         float thrRaw = constrain(cmd.throttle, 0.0f, 1.0f);
 
@@ -1282,6 +1449,28 @@ static void taskCPU(void* /*pv*/)
     }
 }
 
+
+// ─────────────────────────────────────────────────────────────
+//  OTA safety gate — Web firmware update is bench-only.
+//  OTA is allowed only when DISARMED, throttle low, and motors inactive.
+// ─────────────────────────────────────────────────────────────
+static bool otaIsSafeToStart()
+{
+    FlightState s;
+    memset(&s, 0, sizeof(s));
+
+    if (!g_flightMutex) return false;
+    if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) != pdTRUE) return false;
+    s = g_state;
+    xSemaphoreGive(g_flightMutex);
+
+    const float motorMax = max(max(s.motorFL, s.motorFR), max(s.motorRL, s.motorRR));
+    const bool throttleLow = s.rc.throttle <= 0.03f;
+    const bool motorsOff   = motorMax <= 0.001f;
+
+    return (!s.armed) && throttleLow && motorsOff;
+}
+
 // ─────────────────────────────────────────────────────────────
 //  taskWiFi — Core 0, priority 1, event-driven
 // ─────────────────────────────────────────────────────────────
@@ -1289,6 +1478,7 @@ static void taskWiFi(void* /*pv*/)
 {
     telemetryWiFi.setTelemetryProvider(provideTelemetry);
     telemetryWiFi.setTuneHandler(handleTune);
+    telemetryWiFi.setOtaAllowedProvider(otaIsSafeToStart);
 
     telemetryWiFi.setTimingProvider(provideTimingJson);
     telemetryWiFi.setTimingCsvProvider(provideTimingCsv);

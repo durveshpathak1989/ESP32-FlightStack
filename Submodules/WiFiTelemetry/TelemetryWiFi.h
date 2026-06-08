@@ -12,6 +12,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <Update.h>
 #include "FlySkyiBUS.h"
 
 #define WIFI_LOG_CAPACITY   60
@@ -42,10 +43,44 @@ struct TelemetryPacket {
     float cpu_core0_pct, cpu_core1_pct;
     bool  cpu_valid;
 
+    // Runtime tuning values reported back to GCS/TestScreen
+    // Pilot command limits
+    float max_angle_deg;
+    float max_rate_dps;
+    float max_pitch_rate_dps;
+
+    // PID output authority limits before motor mixing
+    float roll_output_limit;
+    float pitch_output_limit;
+    float yaw_output_limit;
+
+    // Throttle shaping + motor output limits
+    float throttle_expo;
+    float throttle_up_rate_per_sec;
+    float throttle_down_rate_per_sec;
+    float motor_idle;
+    float motor_max;
+    float throttle_cut;
+    float idle_ramp_end;
+
+    // Shared PID integrator clamp
+    float pid_ilimit;
+
+    // Inner rate loop PID
     float pid_roll_kp,  pid_roll_ki,  pid_roll_kd;
     float pid_pitch_kp, pid_pitch_ki, pid_pitch_kd;
     float pid_yaw_kp,   pid_yaw_ki,   pid_yaw_kd;
-    float pid_angle_roll_kp, pid_angle_pitch_kp;
+
+    // Outer angle loop PID
+    float pid_angle_roll_kp,  pid_angle_roll_ki,  pid_angle_roll_kd;
+    float pid_angle_pitch_kp, pid_angle_pitch_ki, pid_angle_pitch_kd;
+
+    // Outer yaw heading-hold loop
+    float pid_angle_yaw_kp;
+    float yaw_deadband;
+    float yaw_max_rate_dps;
+
+    // AHRS
     float mahony_kp, mahony_ki;
 
     // GPS block
@@ -65,16 +100,73 @@ struct TelemetryPacket {
 //  Tune packet
 // ─────────────────────────────────────────────────────────────
 struct TunePacket {
+    // Pilot command limits
+    bool has_max_angle_deg;
+    bool has_max_rate_dps;
+    bool has_max_pitch_rate_dps;
+
+    // PID output authority limits before motor mixing
+    bool has_roll_output_limit;
+    bool has_pitch_output_limit;
+    bool has_yaw_output_limit;
+
+    // Throttle shaping + motor output limits
+    bool has_throttle_expo;
+    bool has_throttle_up_rate_per_sec;
+    bool has_throttle_down_rate_per_sec;
+    bool has_motor_idle;
+    bool has_motor_max;
+    bool has_throttle_cut;
+    bool has_idle_ramp_end;
+
+    // Shared PID integrator clamp
+    bool has_pid_ilimit;
+
+    // Inner rate loop PID
     bool has_pid_roll_kp,  has_pid_roll_ki,  has_pid_roll_kd;
     bool has_pid_pitch_kp, has_pid_pitch_ki, has_pid_pitch_kd;
     bool has_pid_yaw_kp,   has_pid_yaw_ki,   has_pid_yaw_kd;
-    bool has_pid_angle_roll_kp, has_pid_angle_pitch_kp;
+
+    // Outer angle loop PID
+    bool has_pid_angle_roll_kp,  has_pid_angle_roll_ki,  has_pid_angle_roll_kd;
+    bool has_pid_angle_pitch_kp, has_pid_angle_pitch_ki, has_pid_angle_pitch_kd;
+
+    // Outer yaw heading-hold loop
+    bool has_pid_angle_yaw_kp;
+    bool has_yaw_deadband;
+    bool has_yaw_max_rate_dps;
+
+    // AHRS
     bool has_mahony_kp, has_mahony_ki;
+
+    float max_angle_deg;
+    float max_rate_dps;
+    float max_pitch_rate_dps;
+
+    float roll_output_limit;
+    float pitch_output_limit;
+    float yaw_output_limit;
+
+    float throttle_expo;
+    float throttle_up_rate_per_sec;
+    float throttle_down_rate_per_sec;
+    float motor_idle;
+    float motor_max;
+    float throttle_cut;
+    float idle_ramp_end;
+    float pid_ilimit;
 
     float pid_roll_kp,  pid_roll_ki,  pid_roll_kd;
     float pid_pitch_kp, pid_pitch_ki, pid_pitch_kd;
     float pid_yaw_kp,   pid_yaw_ki,   pid_yaw_kd;
-    float pid_angle_roll_kp, pid_angle_pitch_kp;
+
+    float pid_angle_roll_kp,  pid_angle_roll_ki,  pid_angle_roll_kd;
+    float pid_angle_pitch_kp, pid_angle_pitch_ki, pid_angle_pitch_kd;
+
+    float pid_angle_yaw_kp;
+    float yaw_deadband;
+    float yaw_max_rate_dps;
+
     float mahony_kp, mahony_ki;
 };
 
@@ -96,6 +188,7 @@ public:
     // Providers / handlers registered by the main sketch
     void setTelemetryProvider(bool (*provider)(TelemetryPacket& out));
     void setTuneHandler(void (*handler)(const TunePacket& in));
+    void setOtaAllowedProvider(bool (*provider)());
 
     // v2.4 — timing endpoint providers
     void setTimingProvider(String (*provider)());
@@ -118,6 +211,10 @@ private:
     WebServer  _server;
     bool     (*_provider)(TelemetryPacket& out);
     void     (*_tuneHandler)(const TunePacket& in);
+    bool     (*_otaAllowedProvider)();
+    bool      _otaInProgress;
+    bool      _otaRejected;
+    String    _otaError;
 
     // v2.4 timing callbacks
     String   (*_timingProvider)();
@@ -141,6 +238,10 @@ private:
     void _handleRoot();
     void _handleTelemetry();
     void _handleTune();
+    void _handleOtaPage();
+    void _handleOtaUpload();
+    void _handleOtaFinish();
+    bool _isOtaAllowed() const;
     void _handleLog();
     void _handleTiming();
     void _handleTimingReset();

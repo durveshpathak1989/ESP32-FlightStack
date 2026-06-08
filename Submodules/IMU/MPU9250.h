@@ -157,7 +157,7 @@ public:
     // ── AHRS ────────────────────────────────────────────────
     void mahonyUpdate(const MPU_SensorData& s, float dt, MPU_Attitude& att);
 
-    float mahonyKp = 2.0f;
+    float mahonyKp = 1.0f;
     float mahonyKi = 0.005f;
 
     // ── Calibration ─────────────────────────────────────────
