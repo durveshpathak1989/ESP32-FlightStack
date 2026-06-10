@@ -1,10 +1,10 @@
 {
-  "additionalFiles": "..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..",
-  "builtInLibrariesFolders": "C:\\Users\\durve\\AppData\\Local\\Arduino15\\libraries",
-  "compiler.optimization_flags": "-Og -g3",
-  "customBuildProperties": "",
+  "additionalFiles": "../..,../..,../..,../..,../..,../..,../..,../..,../..,../..,../..,../..,../..,../..",
+  "builtInLibrariesFolders": "/Users/durveshpathak/Library/Arduino15/libraries",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "build.warn_data_percentage=75",
   "fqbn": "esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default",
-  "hardwareFolders": "C:\\Users\\durve\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.8,C:\\Users\\durve\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.8",
-  "otherLibrariesFolders": "c:\\Users\\durve\\Documents\\Arduino\\libraries",
-  "sketchLocation": "C:\\Users\\durve\\OneDrive\\Documentos\\Arduino\\Quad\\papers\\papers\\Test Paper A\\masterTest\\RC_FlightController_OTA\\RC_FlightController"
+  "hardwareFolders": "/Users/durveshpathak/Library/Arduino15/packages",
+  "otherLibrariesFolders": "/Users/durveshpathak/Documents/Arduino/libraries",
+  "sketchLocation": "/Users/durveshpathak/Documents/Drone/Untitled/untitled folder/RC_FlightController"
 }
