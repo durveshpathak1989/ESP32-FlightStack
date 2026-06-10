@@ -55,37 +55,67 @@
 // ─────────────────────────────────────────────────────────────
 //  Pin assignments
 // ─────────────────────────────────────────────────────────────
+/* PINs for IMU */
 #define PIN_SPI_SCK   5
 #define PIN_SPI_MISO  19
 #define PIN_SPI_MOSI  18
 #define PIN_MPU_CS    33
 #define PIN_MPU_INT   27   // optional, not driven by firmware
 
+/* Pins For Motor */
 #define PIN_MOTOR_FL  25
 #define PIN_MOTOR_FR  15
 #define PIN_MOTOR_RL  14
 #define PIN_MOTOR_RR  32
+
+/*Pins For RC controller*/
 #define PIN_IBUS_RX   16
 #define PIN_IBUS_TX   4    // spare GPIO, not connected — avoids GPIO17 conflict with GPS TX
+
+/* Pins for BMP sensor */
 #define PIN_BMP_SDA   21
 #define PIN_BMP_SCL   22
+
+/* Pins for GPS*/
 #define PIN_GPS_RX    13
 #define PIN_GPS_TX    17   // GPS module RXD (optional for read-only operation)
 
-// ═════════════════════════════════════════════════════════════
-//  TUNING DASHBOARD — edit flight behavior here first
-// ═════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
+//  Calibration timing
+// ─────────────────────────────────────────────────────────────
+#define SWC_THRESHOLD      1700
+#define GYRO_SETTLE_MS     3000
+#define GYRO_SAMPLE_MS     5000
+#define ACCEL_HOLD_MS      3000
+#define ACCEL_WAIT_MAX_MS 30000
+#define MAG_DURATION_MS   30000
+
+// ─────────────────────────────────────────────────────────────
+//  Motor RPM estimation constants
+// ─────────────────────────────────────────────────────────────
+#define MOTOR_KV         920.0f
+#define BATTERY_VOLTAGE    11.1f
+
+
 
 // ── Loop timing + software filtering ────────────────────────
 #define TIMING_BUF_SIZE       3000     // ring buffer depth (samples)
 #define TIMING_TARGET_US      2500     // nominal control period (400 Hz = 2500 µs)
 #define JITTER_VIOLATION_US    100     // threshold: counts as a violation
+
+/* Filter  for IMU and RC*/
 #define GYRO_LPF_HZ           50.0f    // lower = smoother but more lag
 #define RC_LPF_HZ             50.0f    // stick setpoint smoothing
 
+#define FLIGHT_LOG_SIZE 400   // 400 samples @ 100 Hz = 4 s
+
+// ═════════════════════════════════════════════════════════════
+//  TUNING DASHBOARD — edit flight behavior here first
+// ═════════════════════════════════════════════════════════════
+
 // ── Pilot command limits ────────────────────────────────────
-static constexpr float TUNE_MAX_ANGLE_DEG = 25.0f;
-static constexpr float TUNE_MAX_RATE_DPS  = 150.0f;
+static constexpr float TUNE_MAX_ANGLE_DEG = 15.0f;
+static constexpr float TUNE_MAX_RATE_DPS  = 120.0f;
 
 // ── PID output authority limits before motor mixing ─────────
 static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.500f;
@@ -93,7 +123,7 @@ static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.500f;
 static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.200f;
 
 // ── Throttle shaping + motor output limits ──────────────────
-static constexpr float TUNE_THROTTLE_EXPO              = 0.60f;
+static constexpr float TUNE_THROTTLE_EXPO              = 0.40f;
 static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
 static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
 static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
@@ -103,20 +133,20 @@ static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 
 // ── Initial PID gains loaded at boot ────────────────────────
 // Inner Loop
-static constexpr float TUNE_RATE_ROLL_KP   = 0.00015f;
-static constexpr float TUNE_RATE_ROLL_KI   = 0.00000f;
-static constexpr float TUNE_RATE_ROLL_KD   = 0.00001f;
-static constexpr float TUNE_RATE_PITCH_KP  = 0.00015f;
-static constexpr float TUNE_RATE_PITCH_KI  = 0.00000f;
-static constexpr float TUNE_RATE_PITCH_KD  = 0.00001f;
-static constexpr float TUNE_RATE_YAW_KP    = 0.00015f;
-static constexpr float TUNE_RATE_YAW_KI    = 0.0000000f;
-static constexpr float TUNE_RATE_YAW_KD    = 0.00001f;
+static constexpr float TUNE_RATE_ROLL_KP   = 0.0002f;
+static constexpr float TUNE_RATE_ROLL_KI   = 0.0000001f;
+static constexpr float TUNE_RATE_ROLL_KD   = 0.00002f;
+static constexpr float TUNE_RATE_PITCH_KP  = 0.0002f;
+static constexpr float TUNE_RATE_PITCH_KI  = 0.0000001f;
+static constexpr float TUNE_RATE_PITCH_KD  = 0.00002f;
+static constexpr float TUNE_RATE_YAW_KP    = 0.0002f;
+static constexpr float TUNE_RATE_YAW_KI    = 0.0000001f;
+static constexpr float TUNE_RATE_YAW_KD    = 0.00002f;
 // Outer Loop
-static constexpr float TUNE_ANGLE_ROLL_KP  = 8.00f;
+static constexpr float TUNE_ANGLE_ROLL_KP  = 5.00f;
 static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
 static constexpr float TUNE_ANGLE_ROLL_KD  = 0.010f;
-static constexpr float TUNE_ANGLE_PITCH_KP = 8.00f;
+static constexpr float TUNE_ANGLE_PITCH_KP = 5.00f;
 static constexpr float TUNE_ANGLE_PITCH_KI = 0.000f;
 static constexpr float TUNE_ANGLE_PITCH_KD = 0.010f;
 // Outer Loop — Yaw heading hold
@@ -139,21 +169,7 @@ struct FlightLogRow {
 };
 
 
-// ─────────────────────────────────────────────────────────────
-//  Calibration timing
-// ─────────────────────────────────────────────────────────────
-#define SWC_THRESHOLD      1700
-#define GYRO_SETTLE_MS     3000
-#define GYRO_SAMPLE_MS     5000
-#define ACCEL_HOLD_MS      3000
-#define ACCEL_WAIT_MAX_MS 30000
-#define MAG_DURATION_MS   30000
 
-// ─────────────────────────────────────────────────────────────
-//  Motor RPM estimation constants
-// ─────────────────────────────────────────────────────────────
-#define MOTOR_KV         920.0f
-#define BATTERY_VOLTAGE    11.1f
 
 // ─────────────────────────────────────────────────────────────
 //  IMU loop timing instrumentation — Test 7.1
@@ -186,9 +202,6 @@ static void resetTimingStats()
 //  IMU object
 // ─────────────────────────────────────────────────────────────
 MPU9250 imu(PIN_MPU_CS);
-
-#define FLIGHT_LOG_SIZE 400   // 400 samples @ 100 Hz = 4 s
-
 
 
 // ─────────────────────────────────────────────────────────────
@@ -1047,7 +1060,7 @@ static String flightLogRowCsv(uint16_t i)
 // ─────────────────────────────────────────────────────────────
 static void taskControl(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(3);
+    const TickType_t period = pdMS_TO_TICKS(3 );
     TickType_t lastWake = xTaskGetTickCount();
     uint32_t lastUs = micros();
     const uint32_t TARGET_US = TIMING_TARGET_US;
