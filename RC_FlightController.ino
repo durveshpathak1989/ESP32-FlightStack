@@ -51,71 +51,42 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "esp_timer.h"
 
 // ─────────────────────────────────────────────────────────────
 //  Pin assignments
 // ─────────────────────────────────────────────────────────────
-/* PINs for IMU */
 #define PIN_SPI_SCK   5
 #define PIN_SPI_MISO  19
 #define PIN_SPI_MOSI  18
 #define PIN_MPU_CS    33
 #define PIN_MPU_INT   27   // optional, not driven by firmware
 
-/* Pins For Motor */
 #define PIN_MOTOR_FL  25
 #define PIN_MOTOR_FR  15
 #define PIN_MOTOR_RL  14
 #define PIN_MOTOR_RR  32
-
-/*Pins For RC controller*/
 #define PIN_IBUS_RX   16
 #define PIN_IBUS_TX   4    // spare GPIO, not connected — avoids GPIO17 conflict with GPS TX
-
-/* Pins for BMP sensor */
 #define PIN_BMP_SDA   21
 #define PIN_BMP_SCL   22
-
-/* Pins for GPS*/
 #define PIN_GPS_RX    13
 #define PIN_GPS_TX    17   // GPS module RXD (optional for read-only operation)
-
-// ─────────────────────────────────────────────────────────────
-//  Calibration timing
-// ─────────────────────────────────────────────────────────────
-#define SWC_THRESHOLD      1700
-#define GYRO_SETTLE_MS     3000
-#define GYRO_SAMPLE_MS     5000
-#define ACCEL_HOLD_MS      3000
-#define ACCEL_WAIT_MAX_MS 30000
-#define MAG_DURATION_MS   30000
-
-// ─────────────────────────────────────────────────────────────
-//  Motor RPM estimation constants
-// ─────────────────────────────────────────────────────────────
-#define MOTOR_KV         920.0f
-#define BATTERY_VOLTAGE    11.1f
-
-
-
-// ── Loop timing + software filtering ────────────────────────
-#define TIMING_BUF_SIZE       3000     // ring buffer depth (samples)
-#define TIMING_TARGET_US      2500     // nominal control period (400 Hz = 2500 µs)
-#define JITTER_VIOLATION_US    100     // threshold: counts as a violation
-
-/* Filter  for IMU and RC*/
-#define GYRO_LPF_HZ           50.0f    // lower = smoother but more lag
-#define RC_LPF_HZ             50.0f    // stick setpoint smoothing
-
-#define FLIGHT_LOG_SIZE 400   // 400 samples @ 100 Hz = 4 s
 
 // ═════════════════════════════════════════════════════════════
 //  TUNING DASHBOARD — edit flight behavior here first
 // ═════════════════════════════════════════════════════════════
 
+// ── Loop timing + software filtering ────────────────────────
+#define TIMING_BUF_SIZE       3000     // ring buffer depth (samples)
+#define TIMING_TARGET_US      2500     // nominal control period (400 Hz = 2500 µs)
+#define JITTER_VIOLATION_US    100     // threshold: counts as a violation
+#define GYRO_LPF_HZ           50.0f    // lower = smoother but more lag
+#define RC_LPF_HZ             50.0f    // stick setpoint smoothing
+
 // ── Pilot command limits ────────────────────────────────────
-static constexpr float TUNE_MAX_ANGLE_DEG = 15.0f;
-static constexpr float TUNE_MAX_RATE_DPS  = 120.0f;
+static constexpr float TUNE_MAX_ANGLE_DEG = 25.0f;
+static constexpr float TUNE_MAX_RATE_DPS  = 150.0f;
 
 // ── PID output authority limits before motor mixing ─────────
 static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.500f;
@@ -123,7 +94,7 @@ static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.500f;
 static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.200f;
 
 // ── Throttle shaping + motor output limits ──────────────────
-static constexpr float TUNE_THROTTLE_EXPO              = 0.40f;
+static constexpr float TUNE_THROTTLE_EXPO              = 0.60f;
 static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
 static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
 static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
@@ -133,20 +104,20 @@ static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 
 // ── Initial PID gains loaded at boot ────────────────────────
 // Inner Loop
-static constexpr float TUNE_RATE_ROLL_KP   = 0.0002f;
-static constexpr float TUNE_RATE_ROLL_KI   = 0.0000001f;
-static constexpr float TUNE_RATE_ROLL_KD   = 0.00002f;
-static constexpr float TUNE_RATE_PITCH_KP  = 0.0002f;
-static constexpr float TUNE_RATE_PITCH_KI  = 0.0000001f;
-static constexpr float TUNE_RATE_PITCH_KD  = 0.00002f;
-static constexpr float TUNE_RATE_YAW_KP    = 0.0002f;
-static constexpr float TUNE_RATE_YAW_KI    = 0.0000001f;
-static constexpr float TUNE_RATE_YAW_KD    = 0.00002f;
+static constexpr float TUNE_RATE_ROLL_KP   = 0.00015f;
+static constexpr float TUNE_RATE_ROLL_KI   = 0.00000f;
+static constexpr float TUNE_RATE_ROLL_KD   = 0.00001f;
+static constexpr float TUNE_RATE_PITCH_KP  = 0.00015f;
+static constexpr float TUNE_RATE_PITCH_KI  = 0.00000f;
+static constexpr float TUNE_RATE_PITCH_KD  = 0.00001f;
+static constexpr float TUNE_RATE_YAW_KP    = 0.00015f;
+static constexpr float TUNE_RATE_YAW_KI    = 0.0000000f;
+static constexpr float TUNE_RATE_YAW_KD    = 0.00001f;
 // Outer Loop
-static constexpr float TUNE_ANGLE_ROLL_KP  = 5.00f;
+static constexpr float TUNE_ANGLE_ROLL_KP  = 8.00f;
 static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
 static constexpr float TUNE_ANGLE_ROLL_KD  = 0.010f;
-static constexpr float TUNE_ANGLE_PITCH_KP = 5.00f;
+static constexpr float TUNE_ANGLE_PITCH_KP = 8.00f;
 static constexpr float TUNE_ANGLE_PITCH_KI = 0.000f;
 static constexpr float TUNE_ANGLE_PITCH_KD = 0.010f;
 // Outer Loop — Yaw heading hold
@@ -169,7 +140,21 @@ struct FlightLogRow {
 };
 
 
+// ─────────────────────────────────────────────────────────────
+//  Calibration timing
+// ─────────────────────────────────────────────────────────────
+#define SWC_THRESHOLD      1700
+#define GYRO_SETTLE_MS     3000
+#define GYRO_SAMPLE_MS     5000
+#define ACCEL_HOLD_MS      3000
+#define ACCEL_WAIT_MAX_MS 30000
+#define MAG_DURATION_MS   30000
 
+// ─────────────────────────────────────────────────────────────
+//  Motor RPM estimation constants
+// ─────────────────────────────────────────────────────────────
+#define MOTOR_KV         920.0f
+#define BATTERY_VOLTAGE    11.1f
 
 // ─────────────────────────────────────────────────────────────
 //  IMU loop timing instrumentation — Test 7.1
@@ -187,6 +172,79 @@ struct TimingStats {
     bool     bufFull;
 };
 
+// Loop Jitter timing stats
+
+struct ExecTimingStats {
+    uint32_t lastControlUs;
+    uint32_t lastFullUs;
+    uint32_t maxControlUs;
+    uint32_t maxFullUs;
+    uint32_t controlOverruns;
+    uint32_t fullOverruns;
+
+    // Phase timing to identify the blocker when ctrl time is too high.
+    uint32_t lastImuUs;
+    uint32_t lastRcUs;
+    uint32_t lastMotorUs;
+    uint32_t lastStateUs;
+    uint32_t missedTimerReleases;
+};
+
+static volatile ExecTimingStats g_execTiming = {0,0,0,0,0,0,0,0,0,0,0};
+
+static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
+                                     uint32_t periodUs, uint32_t targetUs)
+{
+    g_execTiming.lastControlUs = controlUs;
+    g_execTiming.lastFullUs    = fullUs;
+
+    if (controlUs > g_execTiming.maxControlUs) {
+        g_execTiming.maxControlUs = controlUs;
+    }
+
+    if (fullUs > g_execTiming.maxFullUs) {
+        g_execTiming.maxFullUs = fullUs;
+    }
+
+    if (controlUs > targetUs) {
+        g_execTiming.controlOverruns++;
+    }
+
+    if (fullUs > targetUs) {
+        g_execTiming.fullOverruns++;
+    }
+
+    // Print only once per second so Serial does not dominate the control loop.
+    static uint32_t lastPrintMs = 0;
+    uint32_t nowMs = millis();
+
+    if (nowMs - lastPrintMs >= 1000) {
+        lastPrintMs = nowMs;
+
+        int32_t jitterSigned  = (int32_t)periodUs - (int32_t)targetUs;
+        int32_t headroomFull  = (int32_t)targetUs - (int32_t)fullUs;
+
+        Serial.printf("[TIME] period=%luus jitter=%+ldus ctrl=%luus full=%luus "
+                      "headroom=%+ldus maxCtrl=%luus maxFull=%luus "
+                      "overCtrl=%lu overFull=%lu missed=%lu "
+                      "phase imu=%luus rc=%luus motor=%luus state=%luus\n",
+                      (unsigned long)periodUs,
+                      (long)jitterSigned,
+                      (unsigned long)controlUs,
+                      (unsigned long)fullUs,
+                      (long)headroomFull,
+                      (unsigned long)g_execTiming.maxControlUs,
+                      (unsigned long)g_execTiming.maxFullUs,
+                      (unsigned long)g_execTiming.controlOverruns,
+                      (unsigned long)g_execTiming.fullOverruns,
+                      (unsigned long)g_execTiming.missedTimerReleases,
+                      (unsigned long)g_execTiming.lastImuUs,
+                      (unsigned long)g_execTiming.lastRcUs,
+                      (unsigned long)g_execTiming.lastMotorUs,
+                      (unsigned long)g_execTiming.lastStateUs);
+    }
+}
+
 static TimingStats       g_timing;
 static SemaphoreHandle_t g_timingMutex;
 
@@ -202,6 +260,9 @@ static void resetTimingStats()
 //  IMU object
 // ─────────────────────────────────────────────────────────────
 MPU9250 imu(PIN_MPU_CS);
+
+#define FLIGHT_LOG_SIZE 400   // 400 samples @ 100 Hz = 4 s
+
 
 
 // ─────────────────────────────────────────────────────────────
@@ -225,6 +286,8 @@ struct FlightState {
 };
 static FlightState       g_state;
 static SemaphoreHandle_t g_flightMutex;
+
+
 
 // PID-trace toggle (Serial 'p'). Off at boot so the log stays clean.
 static volatile bool g_pidTrace = false;
@@ -294,6 +357,19 @@ static TaskHandle_t hTaskWiFi   = nullptr;
 static TaskHandle_t hTaskBMP    = nullptr;
 static TaskHandle_t hTaskCPU    = nullptr;
 static TaskHandle_t hTaskGPS    = nullptr;
+
+// High-resolution 400 Hz release timer.
+// This is better than vTaskDelayUntil() when the FreeRTOS tick is coarse,
+// and better than a busy-wait because the control task blocks between releases
+// so the watchdog/idle task still gets CPU time.
+static esp_timer_handle_t g_controlTimer = nullptr;
+
+static void controlTimerCallback(void* /*arg*/)
+{
+    if (hTaskControl != nullptr) {
+        xTaskNotifyGive(hTaskControl);
+    }
+}
 
 // ─────────────────────────────────────────────────────────────
 //  PID controller
@@ -871,7 +947,10 @@ static void taskGPS(void* /*pv*/)
 }
 
 // ─────────────────────────────────────────────────────────────
-//  taskRC — Core 0, priority 3, 200 Hz
+//  taskRC — Core 0, priority 3
+//  Important: do NOT use vTaskDelayUntil(5 ms) here if the FreeRTOS tick
+//  is coarse. On this build, one tick is behaving like ~40 ms, which can
+//  starve the iBUS parser. Use micros() pacing + taskYIELD() instead.
 // ─────────────────────────────────────────────────────────────
 static void taskRC(void* /*pv*/)
 {
@@ -953,6 +1032,11 @@ static LPF lpfGx, lpfGy, lpfGz, lpfSpRoll, lpfSpPitch, lpfSpYaw;
 
 static float g_yawSetpoint   = 0.0f;
 static bool  g_yawHoldActive = false;
+
+// Tracks whether we have already commanded the ESC outputs off.
+// motorOff() is intentionally NOT called every 400 Hz cycle because the
+// current MotorControl implementation appears to block for ~40 ms.
+static bool  g_motorOutputsActive = false;
 
 // ═════════════════════════════════════════════════════════════
 //  HIGH-SPEED ON-BOARD FLIGHT LOG  (Test 7.1 / 7.3 / 7.4 capture)
@@ -1058,12 +1142,18 @@ static String flightLogRowCsv(uint16_t i)
 // ─────────────────────────────────────────────────────────────
 //  taskControl — Core 1, priority 5, 400 Hz  (2.5 ms period)
 // ─────────────────────────────────────────────────────────────
+// ============================================================================
+// BLOCK B — Replace your taskControl() with this version
+// ============================================================================
+
 static void taskControl(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(3 );
-    TickType_t lastWake = xTaskGetTickCount();
-    uint32_t lastUs = micros();
-    const uint32_t TARGET_US = TIMING_TARGET_US;
+    const uint32_t TARGET_US = TIMING_TARGET_US;   // 2500 us = 400 Hz
+
+    // The loop is released by esp_timer every 2500 us.
+    // Do not use vTaskDelay(1) here, and do not busy-wait: both caused
+    // either 40 ms periods or watchdog resets on this build.
+    uint32_t lastUs = 0;
 
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
@@ -1074,25 +1164,36 @@ static void taskControl(void* /*pv*/)
         if (g_tuning.dirty) applyTuningToObjects();
 
         if (g_calibState == CalibState::REQUESTED) {
-            motorsOff();
+            if (g_motorOutputsActive) {
+                motorsOff();
+                g_motorOutputsActive = false;
+            }
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
             pidAngleYaw.reset();
             g_yawHoldActive = false;
             runAutonomousCalibration();
             g_calibState = CalibState::IDLE;
-            lastUs   = micros();
-            lastWake = xTaskGetTickCount();
+            ulTaskNotifyTake(pdTRUE, 0);  // discard stale timer releases
+            lastUs = 0;
             continue;
         }
 
-        vTaskDelay(1);   // yield — allows WiFi, BMP, GPS, Serial to run
-        while ((micros() - lastUs) < TARGET_US) { }   // busy-wait remainder
+        // Block until the high-resolution 400 Hz timer releases this task.
+        // pdTRUE clears any accumulated notifications, so if a previous cycle
+        // ran long we skip stale releases instead of trying to catch up.
+        uint32_t releases = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if (releases > 1) {
+            g_execTiming.missedTimerReleases += (releases - 1);
+        }
 
-        uint32_t nowUs    = micros();
-        uint32_t periodUs = nowUs - lastUs;
+        uint32_t nowUs = micros();
+        uint32_t periodUs = (lastUs == 0) ? TARGET_US : (nowUs - lastUs);
         lastUs = nowUs;
-        lastWake = xTaskGetTickCount();
+
+        // Execution timer starts AFTER the period wait.
+        // This measures actual control work, not intentional wait time.
+        uint32_t execStartUs = micros();
 
         float dt = (float)periodUs * 1e-6f;
         if (dt <= 0.0f || dt > 0.05f) {
@@ -1128,7 +1229,10 @@ static void taskControl(void* /*pv*/)
         // ── IMU read + Mahony AHRS ────────────────────────────
         MPU_SensorData s;
         MPU_Attitude   att;
+        uint32_t phaseStartUs = micros();
         bool imuOk = imu.readScaled(s);
+        g_execTiming.lastImuUs = micros() - phaseStartUs;
+
         float gxf = 0, gyf = 0, gzf = 0;
         if (imuOk) {
             imu.mahonyUpdate(s, dt, att);
@@ -1137,11 +1241,22 @@ static void taskControl(void* /*pv*/)
             gzf = lpfGz.apply(s.gz_dps, dt, GYRO_LPF_HZ);
         }
 
+        phaseStartUs = micros();
         RCCommand cmd = rcReceiver.getCommand();
+        g_execTiming.lastRcUs = micros() - phaseStartUs;
 
         // ── DISARMED / FAILSAFE ───────────────────────────────
         if (cmd.mode == FlightMode::DISARMED || cmd.mode == FlightMode::FAILSAFE) {
-            motorsOff();
+            phaseStartUs = micros();
+            if (g_motorOutputsActive) {
+                // One-shot stop only. Repeating motorOff() at 400 Hz was measured
+                // as ~40 ms in your log, which destroys the loop timing.
+                motorsOff();
+                g_motorOutputsActive = false;
+            }
+            g_execTiming.lastMotorUs = micros() - phaseStartUs;
+            uint32_t controlDoneUs = micros();
+
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
             lpfGx.reset(); lpfGy.reset(); lpfGz.reset();
@@ -1149,7 +1264,8 @@ static void taskControl(void* /*pv*/)
             pidAngleYaw.reset();
             g_yawHoldActive = false;
 
-            if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+            phaseStartUs = micros();
+            if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
                 g_state.armed   = false;
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
                 g_state.pidRollOut = g_state.pidPitchOut = g_state.pidYawOut = 0;
@@ -1164,6 +1280,13 @@ static void taskControl(void* /*pv*/)
                 }
                 xSemaphoreGive(g_flightMutex);
             }
+            g_execTiming.lastStateUs = micros() - phaseStartUs;
+
+            uint32_t fullDoneUs = micros();
+            updateExecTimingAndPrint(controlDoneUs - execStartUs,
+                                     fullDoneUs - execStartUs,
+                                     periodUs,
+                                     TARGET_US);
             continue;
         }
 
@@ -1292,7 +1415,11 @@ static void taskControl(void* /*pv*/)
             fl = fr = rl = rr = 0.0f;
         }
 
+        phaseStartUs = micros();
         writeMotors(fl, fr, rl, rr);
+        g_motorOutputsActive = true;
+        g_execTiming.lastMotorUs = micros() - phaseStartUs;
+        uint32_t controlDoneUs = micros();
 
         // ── High-speed flight log @ 100 Hz (every 4th cycle) ──
         static uint8_t logDiv = 0;
@@ -1317,6 +1444,7 @@ static void taskControl(void* /*pv*/)
         }
 
         // ── Publish flight state (incl. true PID outputs) ─────
+        phaseStartUs = micros();
         if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE){
             if (imuOk) {
                 g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
@@ -1332,6 +1460,13 @@ static void taskControl(void* /*pv*/)
             g_state.armed=true; g_state.rc=cmd;
             xSemaphoreGive(g_flightMutex);
         }
+        g_execTiming.lastStateUs = micros() - phaseStartUs;
+
+        uint32_t fullDoneUs = micros();
+        updateExecTimingAndPrint(controlDoneUs - execStartUs,
+                                 fullDoneUs - execStartUs,
+                                 periodUs,
+                                 TARGET_US);
     }
 }
 
@@ -1348,7 +1483,7 @@ static void taskSerial(void* /*pv*/)
     Serial.println(F("\n╔══════════════════════════════════════════════════════╗"));
     Serial.println(F("║  FlySky iBUS + MPU-9250/6500 + BMP280 + GPS  v2.3.2 ║"));
     Serial.println(F("║  Wi-Fi: ESP32-DRONE / 12345678 → 192.168.4.1        ║"));
-    Serial.println(F("║  taskControl: merged IMU+PID @ 400 Hz, Core 1       ║"));
+    Serial.println(F("║  taskControl: timer 400 Hz, original RC      ║"));
     Serial.println(F("║  Type 'p' to toggle the [PID] tuning trace.         ║"));
     Serial.println(F("╚══════════════════════════════════════════════════════╝"));
 
@@ -1526,11 +1661,12 @@ void setup()
     configASSERT(g_tuneMutex);
     configASSERT(g_timingMutex);
 
-    memset(&g_state,  0, sizeof(g_state));
-    memset(&g_timing, 0, sizeof(g_timing));
+    memset(&g_state,    0, sizeof(g_state));
+    memset(&g_timing,   0, sizeof(g_timing));
 
     motorsBegin();
     motorEscArm();   // sends 1000 µs for 3 s; comment out after ESC calibration done
+    g_motorOutputsActive = false;
 
     SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_MPU_CS);
     delay(10);
@@ -1582,6 +1718,19 @@ void setup()
     xTaskCreatePinnedToCore(taskGPS,     "GPS",    4096,  nullptr, 1, &hTaskGPS,     0);
     xTaskCreatePinnedToCore(taskControl, "Ctrl",   10240, nullptr, 5, &hTaskControl, 1);
     hTaskIMU = hTaskControl;
+
+    esp_timer_create_args_t controlTimerArgs;
+    memset(&controlTimerArgs, 0, sizeof(controlTimerArgs));
+    controlTimerArgs.callback = &controlTimerCallback;
+    controlTimerArgs.arg = nullptr;
+    controlTimerArgs.dispatch_method = ESP_TIMER_TASK;
+    controlTimerArgs.name = "ctrl400";
+
+    if (esp_timer_create(&controlTimerArgs, &g_controlTimer) != ESP_OK ||
+        esp_timer_start_periodic(g_controlTimer, TIMING_TARGET_US) != ESP_OK) {
+        Serial.println(F("[BOOT][ERROR] Failed to start 400 Hz control timer."));
+        while (true) delay(1000);
+    }
 
     Serial.println(F("[BOOT] All tasks running."));
     Serial.println(F("[BOOT] Timing target: 2500 us (400 Hz control loop)."));
