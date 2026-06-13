@@ -928,7 +928,8 @@ const S={
   bmpTemp:NaN,bmpPressure:NaN,bmpAlt:NaN,bmpValid:false,
   cpu0:NaN,cpu1:NaN,
   gpsValid:false,gpsLat:0,gpsLon:0,gpsAlt:0,gpsSpd:0,gpsCrs:0,
-  gpsSats:0,gpsHdop:0,gpsFix:0,gpsH:0,gpsM:0,gpsSec:0
+  gpsSats:0,gpsHdop:0,gpsFix:0,gpsH:0,gpsM:0,gpsSec:0,
+  tuneRequestSeq:0,tuneApplySeq:0,tuneRejectSeq:0,tuneDirty:false
 };
 const BUF=300;
 const hist={
@@ -1208,6 +1209,8 @@ function applyJson(j){
   S.gpsAlt=+j.gpsAltM||0;S.gpsSpd=+j.gpsSpeedKmh||0;S.gpsCrs=+j.gpsCourse||0;
   S.gpsSats=+j.gpsSats||0;S.gpsHdop=+j.gpsHdop||0;S.gpsFix=+j.gpsQuality||0;
   S.gpsH=+j.gpsHour||0;S.gpsM=+j.gpsMin||0;S.gpsSec=+j.gpsSec||0;
+  S.tuneRequestSeq=+j.tuneRequestSeq||0;S.tuneApplySeq=+j.tuneApplySeq||0;
+  S.tuneRejectSeq=+j.tuneRejectSeq||0;S.tuneDirty=!!j.tuneDirty;
   syncI('rKp',j.pidRollKp,4);syncI('rKi',j.pidRollKi,5);syncI('rKd',j.pidRollKd,4);
   syncI('pKp',j.pidPitchKp,4);syncI('pKi',j.pidPitchKi,5);syncI('pKd',j.pidPitchKd,4);
   syncI('yKp',j.pidYawKp,4);syncI('yKi',j.pidYawKi,5);syncI('yKd',j.pidYawKd,4);
@@ -1351,13 +1354,125 @@ async function sendAllGains(){
   await postTune(payload);
 }
 async function postTune(payload){
-  const s=document.getElementById('tuneStatusTune');s.textContent='Sending...';s.style.color='var(--orange)';
-  try{const r=await fetch(tuneUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();
-    if(j.ok){s.textContent='✓ Applied';s.style.color='var(--green)';addCalLog('[TUNE] Gains applied: '+JSON.stringify(payload),'lTUNE');}
-    else{s.textContent='ESP32 error';s.style.color='var(--red)';}}
-  catch(e){s.textContent='POST failed';s.style.color='var(--red)';}
-  setTimeout(()=>{s.textContent='Ready';s.style.color='var(--t3)';},3000);
+  const status=document.getElementById('tuneStatusTune');
+  const active=document.activeElement;
+  if(active && active.classList && active.classList.contains('tval')) active.blur();
+
+  const tuneEndpoint = tuneUrl2 || tuneUrl;
+  const telemEndpoint = wifiUrl2 || wifiUrl;
+  const beforeReq = S.tuneRequestSeq || 0;
+  const beforeApply = S.tuneApplySeq || 0;
+  const beforeReject = S.tuneRejectSeq || 0;
+
+  status.textContent='Sending tune...';
+  status.style.color='var(--orange)';
+
+  try{
+    const r=await fetch(tuneEndpoint,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+      cache:'no-store'
+    });
+    let reply={};
+    try{ reply=await r.json(); }catch(e){}
+    if(!r.ok || reply.ok===false){
+      status.textContent='Rejected: '+(reply.error||('HTTP '+r.status));
+      status.style.color='var(--red)';
+      addCalLog('[TUNE] Rejected by firmware: '+JSON.stringify(reply),'lWARN');
+      return false;
+    }
+
+    status.textContent='POST accepted — verifying telemetry...';
+    status.style.color='var(--orange)';
+    addCalLog('[TUNE] POST accepted: '+JSON.stringify(payload),'lTUNE');
+
+    const verify = await verifyTuneApplied(payload, telemEndpoint, beforeReq, beforeApply, beforeReject);
+    if(verify.ok){
+      status.textContent='✓ Applied seq '+verify.applySeq;
+      status.style.color='var(--green)';
+      addCalLog('[TUNE] Verified applied seq='+verify.applySeq,'lTUNE');
+      forceTuneInputsFromTelemetry(verify.telemetry);
+      return true;
+    }
+
+    status.textContent='Not verified: '+verify.reason;
+    status.style.color='var(--red)';
+    addCalLog('[TUNE] Verify failed: '+verify.reason,'lWARN');
+    return false;
+  }catch(e){
+    status.textContent='POST failed: '+e.message;
+    status.style.color='var(--red)';
+    addCalLog('[TUNE] POST failed: '+e.message,'lWARN');
+    return false;
+  }finally{
+    setTimeout(()=>{ if(status.textContent.startsWith('✓')){status.textContent='Ready';status.style.color='var(--t3)';}},3500);
+  }
 }
+
+const TUNE_TELEM_KEY={
+  max_angle_deg:'maxAngleDeg', max_rate_dps:'maxRateDps', max_pitch_rate_dps:'maxPitchRateDps',
+  yaw_max_rate_dps:'yawMaxRateDps', max_yaw_rate_dps:'yawMaxRateDps', yaw_deadband:'yawDeadband',
+  roll_output_limit:'rollOutputLimit', pitch_output_limit:'pitchOutputLimit', yaw_output_limit:'yawOutputLimit',
+  throttle_expo:'throttleExpo', throttle_up_rate_per_sec:'throttleUpRatePerSec', throttle_down_rate_per_sec:'throttleDownRatePerSec',
+  motor_idle:'motorIdle', motor_max:'motorMax', throttle_cut:'throttleCut', idle_ramp_end:'idleRampEnd', pid_ilimit:'pidILimit',
+  pid_roll_kp:'pidRollKp', pid_roll_ki:'pidRollKi', pid_roll_kd:'pidRollKd',
+  pid_pitch_kp:'pidPitchKp', pid_pitch_ki:'pidPitchKi', pid_pitch_kd:'pidPitchKd',
+  pid_yaw_kp:'pidYawKp', pid_yaw_ki:'pidYawKi', pid_yaw_kd:'pidYawKd',
+  pid_angle_roll_kp:'pidAngleRollKp', pid_angle_roll_ki:'pidAngleRollKi', pid_angle_roll_kd:'pidAngleRollKd',
+  pid_angle_pitch_kp:'pidAnglePitchKp', pid_angle_pitch_ki:'pidAnglePitchKi', pid_angle_pitch_kd:'pidAnglePitchKd',
+  pid_angle_yaw_kp:'pidAngleYawKp', mahony_kp:'mahonyKp', mahony_ki:'mahonyKi'
+};
+
+async function verifyTuneApplied(payload, telemEndpoint, beforeReq, beforeApply, beforeReject){
+  const deadline=Date.now()+2500;
+  let last=null;
+  while(Date.now()<deadline){
+    try{
+      const r=await fetch(telemEndpoint,{cache:'no-store'});
+      last=await r.json();
+      if(last.ok===false) throw new Error(last.error||'telemetry not ok');
+      if((+last.tuneRejectSeq||0)>beforeReject) return {ok:false,reason:'firmware rejected tune',telemetry:last};
+      const seqAdvanced=(+last.tuneRequestSeq||0)>beforeReq && (+last.tuneApplySeq||0)>= (+last.tuneRequestSeq||0) && !last.tuneDirty;
+      const valuesMatch=tunePayloadMatchesTelemetry(payload,last);
+      if(seqAdvanced && valuesMatch) return {ok:true,applySeq:+last.tuneApplySeq,telemetry:last};
+    }catch(e){}
+    await new Promise(res=>setTimeout(res,120));
+  }
+  const seqInfo=last?` seq req=${last.tuneRequestSeq} apply=${last.tuneApplySeq} reject=${last.tuneRejectSeq} dirty=${last.tuneDirty}`:' no telemetry';
+  return {ok:false,reason:'timeout waiting for applied telemetry;'+seqInfo,telemetry:last};
+}
+
+function tunePayloadMatchesTelemetry(payload,t){
+  for(const [k,v] of Object.entries(payload)){
+    const tk=TUNE_TELEM_KEY[k];
+    if(!tk || t[tk]==null) continue;
+    const want=Number(v), got=Number(t[tk]);
+    const tol=Math.max(1e-6,Math.abs(want)*0.002);
+    if(!Number.isFinite(got) || Math.abs(got-want)>tol) return false;
+  }
+  return true;
+}
+
+function forceTuneInputsFromTelemetry(t){
+  const m={
+    limMaxAngle:['maxAngleDeg',2],limMaxRate:['maxRateDps',2],yawMaxRate:['yawMaxRateDps',2],yawDeadband:['yawDeadband',3],
+    outRollLim:['rollOutputLimit',3],outPitchLim:['pitchOutputLimit',3],outYawLim:['yawOutputLimit',3],
+    thrExpo:['throttleExpo',3],thrUpRate:['throttleUpRatePerSec',3],thrDownRate:['throttleDownRatePerSec',3],
+    motorIdle:['motorIdle',3],motorMax:['motorMax',3],thrCut:['throttleCut',3],idleRampEnd:['idleRampEnd',3],
+    rKp:['pidRollKp',6],rKi:['pidRollKi',6],rKd:['pidRollKd',6],
+    pKp:['pidPitchKp',6],pKi:['pidPitchKi',6],pKd:['pidPitchKd',6],
+    yKp:['pidYawKp',6],yKi:['pidYawKi',7],yKd:['pidYawKd',6],
+    arKp:['pidAngleRollKp',3],arKi:['pidAngleRollKi',5],arKd:['pidAngleRollKd',5],
+    apKp:['pidAnglePitchKp',3],apKi:['pidAnglePitchKi',5],apKd:['pidAnglePitchKd',5],
+    ayKp:['pidAngleYawKp',3],mKp:['mahonyKp',4],mKi:['mahonyKi',5]
+  };
+  for(const [id,[key,dp]] of Object.entries(m)){
+    const el=document.getElementById(id);
+    if(el && t[key]!=null) el.value=fmtGain(t[key],dp);
+  }
+}
+
 
 
 // ─── OTA firmware upload ─────────────────────────────────────────────────────

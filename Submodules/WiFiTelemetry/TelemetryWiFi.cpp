@@ -47,7 +47,7 @@ bool TelemetryWiFi::begin(const char* ssid, const char* password,
 }
 
 void TelemetryWiFi::setTelemetryProvider(bool (*p)(TelemetryPacket& out)) { _provider             = p; }
-void TelemetryWiFi::setTuneHandler(void (*h)(const TunePacket& in))       { _tuneHandler          = h; }
+void TelemetryWiFi::setTuneHandler(bool (*h)(const TunePacket& in))       { _tuneHandler          = h; }
 void TelemetryWiFi::setOtaAllowedProvider(bool (*p)())                      { _otaAllowedProvider   = p; }
 void TelemetryWiFi::setTimingProvider(String (*p)())                       { _timingProvider       = p; }
 void TelemetryWiFi::setTimingCsvProvider(String (*p)())                    { _timingCsvProvider    = p; }
@@ -404,8 +404,12 @@ void TelemetryWiFi::_handleTune()
     // AHRS
     tryF("mahony_kp",               t.has_mahony_kp,               t.mahony_kp);
     tryF("mahony_ki",               t.has_mahony_ki,               t.mahony_ki);
-    _tuneHandler(t);
-    _server.send(200, "application/json", "{\"ok\":true}");
+    bool accepted = _tuneHandler(t);
+    if (accepted) {
+        _server.send(200, "application/json", "{\"ok\":true,\"accepted\":true}");
+    } else {
+        _server.send(423, "application/json", "{\"ok\":false,\"accepted\":false,\"error\":\"tune rejected by firmware; check armed state and serial log\"}");
+    }
 }
 
 void TelemetryWiFi::_handleOptions() { _sendCorsHeaders(); _server.send(204); }
@@ -420,7 +424,7 @@ void TelemetryWiFi::_handleNotFound() {
 String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
 {
     String j;
-    j.reserve(2300);
+    j.reserve(2800);
     j += "{\"ok\":true";
     j += ",\"tick\":"    + String(p.tick);
     j += ",\"mode\":\""  + String(p.mode ? p.mode : "UNKNOWN") + "\"";
@@ -492,6 +496,10 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"maxYawRateDps\":"           + String(p.yaw_max_rate_dps,              3);
     j += ",\"mahonyKp\":"                + String(p.mahony_kp,                     8);
     j += ",\"mahonyKi\":"                + String(p.mahony_ki,                     8);
+    j += ",\"tuneRequestSeq\":"          + String(p.tune_request_seq);
+    j += ",\"tuneApplySeq\":"            + String(p.tune_apply_seq);
+    j += ",\"tuneRejectSeq\":"           + String(p.tune_reject_seq);
+    j += ",\"tuneDirty\":"               + String(p.tune_dirty ? "true" : "false");
     j += ",\"clients\":"         + String(WiFi.softAPgetStationNum());
     j += ",\"requests\":"        + String(_requestCount);
     j += ",\"gpsValid\":"    + String(p.gps_valid ? "true" : "false");

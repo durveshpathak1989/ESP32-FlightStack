@@ -278,7 +278,13 @@ struct FlightState {
     float cpuCore0_pct, cpuCore1_pct;
     bool  cpuValid;
     float motorFL, motorFR, motorRL, motorRR;
-    float pidRollOut, pidPitchOut, pidYawOut;   // NEW — true PID outputs for tuning trace
+    float pidRollOut, pidPitchOut, pidYawOut;   // true PID outputs for tuning trace
+
+    // Diagnostic attitude sources for PID/AHRS review
+    float accelRoll_deg, accelPitch_deg;        // accel-only tilt estimate
+    float gyroRoll_deg,  gyroPitch_deg, gyroYaw_deg; // integrated gyro-only estimate
+    float rollAngleError_deg, pitchAngleError_deg;   // AHRS - accel estimate
+
     RCCommand rc;
     bool  armed;
     uint32_t loopCount;
@@ -337,6 +343,14 @@ struct TuningState {
 };
 static TuningState       g_tuning;
 static SemaphoreHandle_t g_tuneMutex;
+
+// Tune transaction diagnostics for GCS verification.
+// request_seq increments when /tune accepts a payload while disarmed.
+// apply_seq follows request_seq after taskControl applies the values to PID/AHRS objects.
+// reject_seq increments when /tune is rejected, typically because the drone is armed.
+static volatile uint32_t g_tuneRequestSeq = 0;
+static volatile uint32_t g_tuneApplySeq   = 0;
+static volatile uint32_t g_tuneRejectSeq  = 0;
 
 // ─────────────────────────────────────────────────────────────
 //  Calibration state machine
@@ -441,10 +455,9 @@ static void syncTuningFromObjects()
     g_tuning.mahony_ki                  = imu.mahonyKi;
     g_tuning.dirty                      = false;
 }
-static void applyTuningToObjects()
+// Copy g_tuning into live PID/AHRS objects. Caller already holds g_tuneMutex.
+static void applyTuningToObjectsLocked()
 {
-    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
-
     pidRateRoll.kp         = g_tuning.pid_roll_kp;
     pidRateRoll.ki         = g_tuning.pid_roll_ki;
     pidRateRoll.kd         = g_tuning.pid_roll_kd;
@@ -475,6 +488,13 @@ static void applyTuningToObjects()
     imu.mahonyKi           = g_tuning.mahony_ki;
 
     g_tuning.dirty         = false;
+    g_tuneApplySeq         = g_tuneRequestSeq;
+}
+
+static void applyTuningToObjects()
+{
+    if (xSemaphoreTake(g_tuneMutex, 0) != pdTRUE) return;
+    applyTuningToObjectsLocked();
     xSemaphoreGive(g_tuneMutex);
     calLog("[TUNE] Runtime tune values applied.");
 }
@@ -528,9 +548,19 @@ static String provideTimingJson()
         p99 = (float)sortBuf[idx];
     }
 
+    const float targetHz = 1000000.0f / (float)TIMING_TARGET_US;
+    const float violationRatePct = (count > 0)
+                                 ? (100.0f * (float)violations / (float)count)
+                                 : 0.0f;
+
     String j;
-    j.reserve(320);
+    j.reserve(520);
     j += F("{\"ok\":true");
+    j += F(",\"loop_name\":\"control\"");
+    j += F(",\"target_us\":");      j += String(TIMING_TARGET_US);
+    j += F(",\"period_target_us\":"); j += String(TIMING_TARGET_US); // alias for GCS clarity
+    j += F(",\"target_hz\":");      j += String(targetHz, 1);
+    j += F(",\"violation_thresh_us\":"); j += String(JITTER_VIOLATION_US);
     j += F(",\"count\":");          j += String(count);
     j += F(",\"period_mean_us\":"); j += String((float)periodMean, 2);
     j += F(",\"period_std_us\":");  j += String((float)periodStd,  2);
@@ -539,9 +569,8 @@ static String provideTimingJson()
     j += F(",\"jitter_max_us\":");  j += String(jitterMax);
     j += F(",\"jitter_p99_us\":");  j += String(p99, 1);
     j += F(",\"violations\":");     j += String(violations);
+    j += F(",\"violation_rate_pct\":"); j += String(violationRatePct, 3);
     j += F(",\"buf_samples\":");    j += String(n);
-    j += F(",\"target_us\":");      j += String(TIMING_TARGET_US);
-    j += F(",\"violation_thresh_us\":"); j += String(JITTER_VIOLATION_US);
     j += '}';
     return j;
 }
@@ -597,6 +626,7 @@ static bool provideTelemetry(TelemetryPacket& out)
     xSemaphoreGive(g_flightMutex);
 
     TuningState t;
+    memset(&t, 0, sizeof(t));
     if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
         t = g_tuning; xSemaphoreGive(g_tuneMutex);
     }
@@ -609,6 +639,17 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.ax_g=s.ax_g; out.ay_g=s.ay_g; out.az_g=s.az_g;
     out.gx_dps=s.gx_dps; out.gy_dps=s.gy_dps; out.gz_dps=s.gz_dps;
     out.mx_uT=s.mx_uT;   out.my_uT=s.my_uT;   out.mz_uT=s.mz_uT;
+
+    out.accel_roll_deg  = s.accelRoll_deg;
+    out.accel_pitch_deg = s.accelPitch_deg;
+    out.gyro_roll_deg   = s.gyroRoll_deg;
+    out.gyro_pitch_deg  = s.gyroPitch_deg;
+    out.gyro_yaw_deg    = s.gyroYaw_deg;
+    out.roll_angle_error_deg  = s.rollAngleError_deg;
+    out.pitch_angle_error_deg = s.pitchAngleError_deg;
+    out.pid_roll_out  = s.pidRollOut;
+    out.pid_pitch_out = s.pidPitchOut;
+    out.pid_yaw_out   = s.pidYawOut;
     out.throttle=s.rc.throttle; out.rc_roll=s.rc.roll;
     out.rc_pitch=s.rc.pitch;    out.rc_yaw=s.rc.yaw;
     out.rc_hz=rcReceiver.getFrameRate();
@@ -650,6 +691,10 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.yaw_deadband=t.yaw_deadband;
     out.yaw_max_rate_dps=t.yaw_max_rate_dps;
     out.mahony_kp=t.mahony_kp; out.mahony_ki=t.mahony_ki;
+    out.tune_request_seq = g_tuneRequestSeq;
+    out.tune_apply_seq   = g_tuneApplySeq;
+    out.tune_reject_seq  = g_tuneRejectSeq;
+    out.tune_dirty       = t.dirty;
     out.gps_valid       = s.gps.valid;
     out.gps_lat         = s.gps.latitude;
     out.gps_lon         = s.gps.longitude;
@@ -668,15 +713,23 @@ static bool provideTelemetry(TelemetryPacket& out)
 // ─────────────────────────────────────────────────────────────
 //  Wi-Fi tune handler — /tune endpoint (Test 7.5)
 // ─────────────────────────────────────────────────────────────
-static void handleTune(const TunePacket& in)
+static bool handleTune(const TunePacket& in)
 {
     bool armed = false;
     if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
         armed = g_state.armed; xSemaphoreGive(g_flightMutex);
     }
-    if (armed) { calLog("[TUNE] REJECTED — disarm first."); return; }
+    if (armed) {
+        g_tuneRejectSeq++;
+        calLog("[TUNE] REJECTED — disarm first.");
+        return false;
+    }
 
-    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
+    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+        g_tuneRejectSeq++;
+        calLog("[TUNE] REJECTED — tune mutex timeout.");
+        return false;
+    }
 
     if (in.has_max_angle_deg)              g_tuning.max_angle_deg              = constrain(in.max_angle_deg, 5.0f, 80.0f);
     if (in.has_max_rate_dps)               g_tuning.max_rate_dps               = constrain(in.max_rate_dps, 30.0f, 1200.0f);
@@ -719,9 +772,18 @@ static void handleTune(const TunePacket& in)
     if (in.has_yaw_max_rate_dps)   g_tuning.yaw_max_rate_dps   = constrain(in.yaw_max_rate_dps, 10.0f, 500.0f);
     if (in.has_mahony_kp)          g_tuning.mahony_kp          = in.mahony_kp;
     if (in.has_mahony_ki)          g_tuning.mahony_ki          = in.mahony_ki;
+    // Accept and apply immediately while disarmed. This removes the confusing
+    // one-cycle handshake where the POST succeeded but telemetry still showed
+    // old values until taskControl got around to applying dirty tuning.
+    g_tuneRequestSeq++;
     g_tuning.dirty = true;
+    applyTuningToObjectsLocked();
+    uint32_t appliedSeq = g_tuneApplySeq;
     xSemaphoreGive(g_tuneMutex);
-    Serial.println(F("[TUNE] Gains queued — will apply on next IMU cycle."));
+
+    Serial.printf("[TUNE] Applied immediately seq=%lu.\n", (unsigned long)appliedSeq);
+    calLogf("[TUNE] Applied seq=%lu.", (unsigned long)appliedSeq);
+    return true;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1033,6 +1095,14 @@ static LPF lpfGx, lpfGy, lpfGz, lpfSpRoll, lpfSpPitch, lpfSpYaw;
 static float g_yawSetpoint   = 0.0f;
 static bool  g_yawHoldActive = false;
 
+// Diagnostic-only attitude estimates published to telemetry.
+// These are not used for control; they help compare AHRS fusion vs raw accel
+// tilt and gyro-only integration on the ground station.
+static float g_gyroRollDeg  = 0.0f;
+static float g_gyroPitchDeg = 0.0f;
+static float g_gyroYawDeg   = 0.0f;
+static bool  g_gyroAngleInit = false;
+
 // Tracks whether we have already commanded the ESC outputs off.
 // motorOff() is intentionally NOT called every 400 Hz cycle because the
 // current MotorControl implementation appears to block for ~40 ms.
@@ -1234,11 +1304,37 @@ static void taskControl(void* /*pv*/)
         g_execTiming.lastImuUs = micros() - phaseStartUs;
 
         float gxf = 0, gyf = 0, gzf = 0;
+        float accelRollDeg = 0.0f, accelPitchDeg = 0.0f;
+        float rollAngleErrDeg = 0.0f, pitchAngleErrDeg = 0.0f;
         if (imuOk) {
             imu.mahonyUpdate(s, dt, att);
             gxf = lpfGx.apply(s.gx_dps, dt, GYRO_LPF_HZ);
             gyf = lpfGy.apply(s.gy_dps, dt, GYRO_LPF_HZ);
             gzf = lpfGz.apply(s.gz_dps, dt, GYRO_LPF_HZ);
+
+            // Accel-only tilt estimate. This is noisy under vibration/acceleration,
+            // but useful as an independent reference for AHRS roll/pitch.
+            const float RAD_TO_DEG_LOCAL = 57.29577951308232f;
+            accelRollDeg  = atan2f(s.ay_g, s.az_g) * RAD_TO_DEG_LOCAL;
+            accelPitchDeg = atan2f(-s.ax_g, sqrtf(s.ay_g*s.ay_g + s.az_g*s.az_g)) * RAD_TO_DEG_LOCAL;
+
+            // Gyro-only integration. This will drift; that drift is exactly what
+            // the AHRS correction is meant to control.
+            if (!g_gyroAngleInit) {
+                g_gyroRollDeg  = att.roll;
+                g_gyroPitchDeg = att.pitch;
+                g_gyroYawDeg   = att.yaw;
+                g_gyroAngleInit = true;
+            } else {
+                g_gyroRollDeg  += gxf * dt;
+                g_gyroPitchDeg += gyf * dt;
+                g_gyroYawDeg   += gzf * dt;
+                while (g_gyroYawDeg >= 360.0f) g_gyroYawDeg -= 360.0f;
+                while (g_gyroYawDeg <    0.0f) g_gyroYawDeg += 360.0f;
+            }
+
+            rollAngleErrDeg  = att.roll  - accelRollDeg;
+            pitchAngleErrDeg = att.pitch - accelPitchDeg;
         }
 
         phaseStartUs = micros();
@@ -1276,6 +1372,13 @@ static void taskControl(void* /*pv*/)
                     g_state.ax_g=s.ax_g; g_state.ay_g=s.ay_g; g_state.az_g=s.az_g;
                     g_state.gx_dps=s.gx_dps; g_state.gy_dps=s.gy_dps; g_state.gz_dps=s.gz_dps;
                     g_state.mx_uT=s.mx_uT; g_state.my_uT=s.my_uT; g_state.mz_uT=s.mz_uT;
+                    g_state.accelRoll_deg = accelRollDeg;
+                    g_state.accelPitch_deg = accelPitchDeg;
+                    g_state.gyroRoll_deg = g_gyroRollDeg;
+                    g_state.gyroPitch_deg = g_gyroPitchDeg;
+                    g_state.gyroYaw_deg = g_gyroYawDeg;
+                    g_state.rollAngleError_deg = rollAngleErrDeg;
+                    g_state.pitchAngleError_deg = pitchAngleErrDeg;
                     g_state.loopCount++;
                 }
                 xSemaphoreGive(g_flightMutex);
@@ -1298,7 +1401,7 @@ static void taskControl(void* /*pv*/)
         float gz    = imuOk ? gzf : 0.0f;
 
         TuningState tune;
-        if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+        if (xSemaphoreTake(g_tuneMutex, 0) == pdTRUE) {
             tune = g_tuning;
             xSemaphoreGive(g_tuneMutex);
         } else {
@@ -1452,6 +1555,13 @@ static void taskControl(void* /*pv*/)
                 g_state.ax_g=s.ax_g; g_state.ay_g=s.ay_g; g_state.az_g=s.az_g;
                 g_state.gx_dps=s.gx_dps; g_state.gy_dps=s.gy_dps; g_state.gz_dps=s.gz_dps;
                 g_state.mx_uT=s.mx_uT; g_state.my_uT=s.my_uT; g_state.mz_uT=s.mz_uT;
+                g_state.accelRoll_deg = accelRollDeg;
+                g_state.accelPitch_deg = accelPitchDeg;
+                g_state.gyroRoll_deg = g_gyroRollDeg;
+                g_state.gyroPitch_deg = g_gyroPitchDeg;
+                g_state.gyroYaw_deg = g_gyroYawDeg;
+                g_state.rollAngleError_deg = rollAngleErrDeg;
+                g_state.pitchAngleError_deg = pitchAngleErrDeg;
                 g_state.loopCount++;
             }
             g_state.motorFL=fl; g_state.motorFR=fr;
@@ -1642,7 +1752,9 @@ static void taskWiFi(void* /*pv*/)
 
     for (;;) {
         telemetryWiFi.update();
-        vTaskDelay(pdMS_TO_TICKS(2));
+        // Give Core 0 idle time. 10 ms still supports 10–50 Hz GCS polling
+        // but avoids pegging Core 0 when Wi-Fi + RC are active.
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 

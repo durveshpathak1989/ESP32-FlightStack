@@ -32,6 +32,12 @@ struct TelemetryPacket {
     float gx_dps, gy_dps, gz_dps;
     float mx_uT, my_uT, mz_uT;
 
+    // Diagnostic attitude sources and PID corrections
+    float accel_roll_deg, accel_pitch_deg;
+    float gyro_roll_deg, gyro_pitch_deg, gyro_yaw_deg;
+    float roll_angle_error_deg, pitch_angle_error_deg;
+    float pid_roll_out, pid_pitch_out, pid_yaw_out;
+
     float throttle, rc_roll, rc_pitch, rc_yaw, rc_hz;
 
     float motor_fl, motor_fr, motor_rl, motor_rr;
@@ -82,6 +88,12 @@ struct TelemetryPacket {
 
     // AHRS
     float mahony_kp, mahony_ki;
+
+    // Tune transaction diagnostics
+    uint32_t tune_request_seq;
+    uint32_t tune_apply_seq;
+    uint32_t tune_reject_seq;
+    bool     tune_dirty;
 
     // GPS block
     double  gps_lat;
@@ -187,7 +199,7 @@ public:
 
     // Providers / handlers registered by the main sketch
     void setTelemetryProvider(bool (*provider)(TelemetryPacket& out));
-    void setTuneHandler(void (*handler)(const TunePacket& in));
+    void setTuneHandler(bool (*handler)(const TunePacket& in));
     void setOtaAllowedProvider(bool (*provider)());
 
     // v2.4 — timing endpoint providers
@@ -210,7 +222,7 @@ public:
 private:
     WebServer  _server;
     bool     (*_provider)(TelemetryPacket& out);
-    void     (*_tuneHandler)(const TunePacket& in);
+    bool     (*_tuneHandler)(const TunePacket& in);
     bool     (*_otaAllowedProvider)();
     bool      _otaInProgress;
     bool      _otaRejected;
