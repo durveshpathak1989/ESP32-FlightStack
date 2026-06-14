@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Drone GCS</string>
+    <string name="title_activity_main">Drone GCS</string>
+    <string name="package_name">com.durvesh.dronegcs</string>
+    <string name="custom_url_scheme">com.durvesh.dronegcs</string>
+</resources>

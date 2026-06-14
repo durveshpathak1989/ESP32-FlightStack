@@ -27,7 +27,14 @@ struct TelemetryPacket {
     bool armed;
     bool rc_valid;
 
+    // Raw AHRS attitude from estimator
     float roll_deg, pitch_deg, yaw_deg;
+
+    // Post-AHRS level-zero corrected attitude used by PID/control
+    float roll_ctrl_deg, pitch_ctrl_deg, yaw_ctrl_deg;
+
+    // Captured software level-zero offsets, subtracted after AHRS
+    float roll_offset_deg, pitch_offset_deg, yaw_offset_deg;
     float ax_g, ay_g, az_g;
     float gx_dps, gy_dps, gz_dps;
     float mx_uT, my_uT, mz_uT;

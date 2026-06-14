@@ -424,15 +424,26 @@ void TelemetryWiFi::_handleNotFound() {
 String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
 {
     String j;
-    j.reserve(2800);
+    j.reserve(3200);
     j += "{\"ok\":true";
     j += ",\"tick\":"    + String(p.tick);
     j += ",\"mode\":\""  + String(p.mode ? p.mode : "UNKNOWN") + "\"";
     j += ",\"armed\":"   + String(p.armed    ? "true" : "false");
     j += ",\"rcValid\":" + String(p.rc_valid ? "true" : "false");
+    // Raw AHRS values. These remain untouched by software level-zero trim.
     j += ",\"roll\":"    + String(p.roll_deg,  2);
     j += ",\"pitch\":"   + String(p.pitch_deg, 2);
     j += ",\"yaw\":"     + String(p.yaw_deg,   2);
+
+    // PID/control attitude after level-zero offset.
+    j += ",\"rollCtrl\":"  + String(p.roll_ctrl_deg,  2);
+    j += ",\"pitchCtrl\":" + String(p.pitch_ctrl_deg, 2);
+    j += ",\"yawCtrl\":"   + String(p.yaw_ctrl_deg,   2);
+
+    // Captured post-AHRS offsets. Flight page can display AHRS vs control attitude.
+    j += ",\"rollOffset\":"  + String(p.roll_offset_deg,  2);
+    j += ",\"pitchOffset\":" + String(p.pitch_offset_deg, 2);
+    j += ",\"yawOffset\":"   + String(p.yaw_offset_deg,   2);
     j += ",\"ax\":"      + String(p.ax_g,   4);
     j += ",\"ay\":"      + String(p.ay_g,   4);
     j += ",\"az\":"      + String(p.az_g,   4);

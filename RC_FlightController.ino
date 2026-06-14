@@ -125,6 +125,13 @@ static constexpr float TUNE_ANGLE_YAW_KP     = 6.00f;   // heading-hold Kp (tune
 static constexpr float TUNE_YAW_DEADBAND     = 0.05f;   // |yaw stick| below this = hold
 static constexpr float TUNE_YAW_MAX_RATE_DPS = 90.0f;   // cap on commanded yaw rate
 
+// ── Software level-zero trim ───────────────────────────────
+// DISARMED + SWB/ACRO high captures the current AHRS attitude
+// as the control zero. This is applied AFTER AHRS; it does not
+// modify MPU calibration or the Mahony quaternion state.
+static constexpr uint32_t LEVEL_ZERO_SAMPLE_MS = 1200;
+static constexpr uint16_t LEVEL_ZERO_SWB_THRESHOLD = 1700;
+
 struct FlightLogRow {
     uint32_t t_us;
     uint16_t period_us;
@@ -269,7 +276,14 @@ MPU9250 imu(PIN_MPU_CS);
 //  Shared flight state
 // ─────────────────────────────────────────────────────────────
 struct FlightState {
+    // Raw AHRS attitude from imu.mahonyUpdate(). Keep untouched for telemetry/debug.
     float roll_deg, pitch_deg, yaw_deg;
+
+    // Post-AHRS control attitude. PID uses these values after level-zero offset.
+    float roll_ctrl_deg, pitch_ctrl_deg, yaw_ctrl_deg;
+
+    // Captured software level-zero offsets subtracted from raw AHRS.
+    float roll_offset_deg, pitch_offset_deg, yaw_offset_deg;
     float ax_g, ay_g, az_g;
     float gx_dps, gy_dps, gz_dps;
     float mx_uT, my_uT, mz_uT;
@@ -293,7 +307,10 @@ struct FlightState {
 static FlightState       g_state;
 static SemaphoreHandle_t g_flightMutex;
 
-
+// Software level-zero trim state. Offset is post-AHRS only.
+static float g_levelRollOffsetDeg  = 0.0f;
+static float g_levelPitchOffsetDeg = 0.0f;
+static float g_levelYawOffsetDeg   = 0.0f;
 
 // PID-trace toggle (Serial 'p'). Off at boot so the log stays clean.
 static volatile bool g_pidTrace = false;
@@ -636,6 +653,12 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.armed     = s.armed;
     out.rc_valid  = s.rc.valid;
     out.roll_deg  = s.roll_deg;  out.pitch_deg = s.pitch_deg; out.yaw_deg = s.yaw_deg;
+    out.roll_ctrl_deg  = s.roll_ctrl_deg;
+    out.pitch_ctrl_deg = s.pitch_ctrl_deg;
+    out.yaw_ctrl_deg   = s.yaw_ctrl_deg;
+    out.roll_offset_deg  = s.roll_offset_deg;
+    out.pitch_offset_deg = s.pitch_offset_deg;
+    out.yaw_offset_deg   = s.yaw_offset_deg;
     out.ax_g=s.ax_g; out.ay_g=s.ay_g; out.az_g=s.az_g;
     out.gx_dps=s.gx_dps; out.gy_dps=s.gy_dps; out.gz_dps=s.gz_dps;
     out.mx_uT=s.mx_uT;   out.my_uT=s.my_uT;   out.mz_uT=s.mz_uT;
@@ -1067,6 +1090,23 @@ static float smoothStep01(float x)
     return x * x * (3.0f - 2.0f * x);
 }
 
+static float wrapDeg180(float a)
+{
+    while (a >  180.0f) a -= 360.0f;
+    while (a < -180.0f) a += 360.0f;
+    return a;
+}
+
+static void computeControlAttitude(const MPU_Attitude& att,
+                                   float& rollCtrl,
+                                   float& pitchCtrl,
+                                   float& yawCtrl)
+{
+    rollCtrl  = att.roll  - g_levelRollOffsetDeg;
+    pitchCtrl = att.pitch - g_levelPitchOffsetDeg;
+    yawCtrl   = wrapDeg180(att.yaw - g_levelYawOffsetDeg);
+}
+
 // First-order gyro/setpoint low-pass (one state per axis)
 struct LPF {
     float y = 0.0f;
@@ -1341,6 +1381,59 @@ static void taskControl(void* /*pv*/)
         RCCommand cmd = rcReceiver.getCommand();
         g_execTiming.lastRcUs = micros() - phaseStartUs;
 
+        float rollCtrlDeg = 0.0f, pitchCtrlDeg = 0.0f, yawCtrlDeg = 0.0f;
+        if (imuOk) computeControlAttitude(att, rollCtrlDeg, pitchCtrlDeg, yawCtrlDeg);
+
+        // Level-zero capture: DISARMED + SWB/ACRO high.
+        // Uses raw CH8 because cmd.mode is DISARMED while disarmed, even if SWB is high.
+        static bool levelZeroWasHigh = false;
+        static bool levelZeroCapturing = false;
+        static uint16_t levelZeroCount = 0;
+        static uint32_t levelZeroStartMs = 0;
+        static double levelRollSum = 0.0, levelPitchSum = 0.0, levelYawSum = 0.0;
+        const bool swbAcroHigh = (cmd.valid && cmd.raw[RC_CH_AUX2] >= LEVEL_ZERO_SWB_THRESHOLD);
+        const bool canCaptureLevelZero = (cmd.mode == FlightMode::DISARMED && imuOk && swbAcroHigh);
+
+        if (!swbAcroHigh) {
+            levelZeroWasHigh = false;
+            levelZeroCapturing = false;
+            levelZeroCount = 0;
+            levelZeroStartMs = 0;
+            levelRollSum = levelPitchSum = levelYawSum = 0.0;
+        } else if (canCaptureLevelZero && !levelZeroWasHigh) {
+            if (!levelZeroCapturing) {
+                levelZeroCapturing = true;
+                levelZeroCount = 0;
+                levelZeroStartMs = millis();
+                levelRollSum = levelPitchSum = levelYawSum = 0.0;
+                Serial.println(F("[LEVEL] Capturing software zero — keep drone still..."));
+                calLog("[LEVEL] Capturing software zero — keep drone still...");
+            }
+
+            levelRollSum  += att.roll;
+            levelPitchSum += att.pitch;
+            levelYawSum   += att.yaw;
+            levelZeroCount++;
+
+            if ((millis() - levelZeroStartMs) >= LEVEL_ZERO_SAMPLE_MS && levelZeroCount > 0) {
+                g_levelRollOffsetDeg  = (float)(levelRollSum  / (double)levelZeroCount);
+                g_levelPitchOffsetDeg = (float)(levelPitchSum / (double)levelZeroCount);
+                g_levelYawOffsetDeg   = (float)(levelYawSum   / (double)levelZeroCount);
+                computeControlAttitude(att, rollCtrlDeg, pitchCtrlDeg, yawCtrlDeg);
+
+                Serial.printf("[LEVEL] Zero saved: rollOff=%+.2f pitchOff=%+.2f yawOff=%+.2f deg\n",
+                              g_levelRollOffsetDeg, g_levelPitchOffsetDeg, g_levelYawOffsetDeg);
+                calLogf("[LEVEL] Zero saved: R=%+.2f P=%+.2f Y=%+.2f deg",
+                        g_levelRollOffsetDeg, g_levelPitchOffsetDeg, g_levelYawOffsetDeg);
+
+                levelZeroWasHigh = true;
+                levelZeroCapturing = false;
+                levelZeroCount = 0;
+                levelZeroStartMs = 0;
+                levelRollSum = levelPitchSum = levelYawSum = 0.0;
+            }
+        }
+
         // ── DISARMED / FAILSAFE ───────────────────────────────
         if (cmd.mode == FlightMode::DISARMED || cmd.mode == FlightMode::FAILSAFE) {
             phaseStartUs = micros();
@@ -1369,6 +1462,12 @@ static void taskControl(void* /*pv*/)
                 if (imuOk) {
                     g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
                     g_state.yaw_deg  = att.yaw;
+                    g_state.roll_ctrl_deg = rollCtrlDeg;
+                    g_state.pitch_ctrl_deg = pitchCtrlDeg;
+                    g_state.yaw_ctrl_deg = yawCtrlDeg;
+                    g_state.roll_offset_deg = g_levelRollOffsetDeg;
+                    g_state.pitch_offset_deg = g_levelPitchOffsetDeg;
+                    g_state.yaw_offset_deg = g_levelYawOffsetDeg;
                     g_state.ax_g=s.ax_g; g_state.ay_g=s.ay_g; g_state.az_g=s.az_g;
                     g_state.gx_dps=s.gx_dps; g_state.gy_dps=s.gy_dps; g_state.gz_dps=s.gz_dps;
                     g_state.mx_uT=s.mx_uT; g_state.my_uT=s.my_uT; g_state.mz_uT=s.mz_uT;
@@ -1394,8 +1493,8 @@ static void taskControl(void* /*pv*/)
         }
 
         // ── ARMED — cascaded PID ──────────────────────────────
-        float roll  = imuOk ? att.roll  : 0.0f;
-        float pitch = imuOk ? att.pitch : 0.0f;
+        float roll  = imuOk ? rollCtrlDeg  : 0.0f;
+        float pitch = imuOk ? pitchCtrlDeg : 0.0f;
         float gx    = imuOk ? gxf : 0.0f;
         float gy    = imuOk ? gyf : 0.0f;
         float gz    = imuOk ? gzf : 0.0f;
@@ -1446,13 +1545,11 @@ static void taskControl(void* /*pv*/)
         // ── Yaw: heading-hold when stick centered, rate when moving ──
         if (imuOk && fabsf(yawCmd) < tune.yaw_deadband) {
             if (!g_yawHoldActive) {
-                g_yawSetpoint   = att.yaw;
+                g_yawSetpoint   = yawCtrlDeg;
                 g_yawHoldActive = true;
                 pidAngleYaw.reset();
             }
-            float yawErr = g_yawSetpoint - att.yaw;
-            while (yawErr >  180.0f) yawErr -= 360.0f;
-            while (yawErr < -180.0f) yawErr += 360.0f;
+            float yawErr = wrapDeg180(g_yawSetpoint - yawCtrlDeg);
             float yawRateSP = pidAngleYaw.update(yawErr, dt);
             yawRateSP = constrain(yawRateSP, -tune.yaw_max_rate_dps, tune.yaw_max_rate_dps);
             yO = pidRateYaw.update(yawRateSP - gz, dt);
@@ -1536,7 +1633,7 @@ static void taskControl(void* /*pv*/)
             row.rcThrottle = thrRaw;
             row.thr        = thr;
             row.rcRoll = rollCmd; row.rcPitch = pitchCmd; row.rcYaw = yawCmd;
-            row.roll = roll; row.pitch = pitch; row.yaw = imuOk ? att.yaw : 0.0f;
+            row.roll = roll; row.pitch = pitch; row.yaw = imuOk ? yawCtrlDeg : 0.0f;
             row.gxRaw = imuOk ? s.gx_dps : 0.0f;
             row.gyRaw = imuOk ? s.gy_dps : 0.0f;
             row.gzRaw = imuOk ? s.gz_dps : 0.0f;
@@ -1552,6 +1649,12 @@ static void taskControl(void* /*pv*/)
             if (imuOk) {
                 g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
                 g_state.yaw_deg  = att.yaw;
+                g_state.roll_ctrl_deg = rollCtrlDeg;
+                g_state.pitch_ctrl_deg = pitchCtrlDeg;
+                g_state.yaw_ctrl_deg = yawCtrlDeg;
+                g_state.roll_offset_deg = g_levelRollOffsetDeg;
+                g_state.pitch_offset_deg = g_levelPitchOffsetDeg;
+                g_state.yaw_offset_deg = g_levelYawOffsetDeg;
                 g_state.ax_g=s.ax_g; g_state.ay_g=s.ay_g; g_state.az_g=s.az_g;
                 g_state.gx_dps=s.gx_dps; g_state.gy_dps=s.gy_dps; g_state.gz_dps=s.gz_dps;
                 g_state.mx_uT=s.mx_uT; g_state.my_uT=s.my_uT; g_state.mz_uT=s.mz_uT;
@@ -1626,29 +1729,36 @@ static void taskSerial(void* /*pv*/)
 
         // 1 Hz status line
         if (tick % 20 == 0) {
-            Serial.printf("[%6lu] %s | R=%+6.1f P=%+6.1f Y=%6.1f | "
+            Serial.printf("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+                          "CTRL R=%+6.1f P=%+6.1f Y=%+6.1f | "
+                          "OFF R=%+5.2f P=%+5.2f Y=%+5.2f | "
                           "MOT %.2f %.2f %.2f %.2f | "
                           "BMP %.1fC %.1fhPa %.1fm | "
                           "GPS %s Sats=%d | "
                           "Mag:%s mKp=%.2f\n",
                           (unsigned long)tick, ms,
                           s.roll_deg, s.pitch_deg, s.yaw_deg,
+                          s.roll_ctrl_deg, s.pitch_ctrl_deg, s.yaw_ctrl_deg,
+                          s.roll_offset_deg, s.pitch_offset_deg, s.yaw_offset_deg,
                           s.motorFL, s.motorFR, s.motorRL, s.motorRR,
                           s.bmpTemp_c, s.bmpPressure_hpa, s.bmpAltitude_m,
                           s.gps.valid ? "FIX" : "---", s.gps.satellites,
                           imu.hasMag() ? "9DOF" : "6DOF",
                           imu.mahonyKp);
+            Serial.printf("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+                          s.rc.raw[0], s.rc.raw[1], s.rc.raw[2], s.rc.raw[3], s.rc.raw[4],
+                          s.rc.raw[5], s.rc.raw[6], s.rc.raw[7], s.rc.raw[8], s.rc.raw[9]);
         }
 
         // ~4 Hz PID tuning trace (sibling of the 1 Hz block; gated by 'p')
         if (g_pidTrace && s.armed && (tick % 5 == 0)) {
             Serial.printf("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
-                          "att R=%+6.2f P=%+6.2f Y=%+6.2f | "
+                          "ctrlAtt R=%+6.2f P=%+6.2f Y=%+6.2f | "
                           "gyro gx=%+7.1f gy=%+7.1f gz=%+7.1f | "
                           "out rO=%+.4f pO=%+.4f yO=%+.4f | "
                           "yawSP=%+6.1f hold=%d\n",
                           ms, s.rc.roll, s.rc.pitch, s.rc.yaw,
-                          s.roll_deg, s.pitch_deg, s.yaw_deg,
+                          s.roll_ctrl_deg, s.pitch_ctrl_deg, s.yaw_ctrl_deg,
                           s.gx_dps, s.gy_dps, s.gz_dps,
                           s.pidRollOut, s.pidPitchOut, s.pidYawOut,
                           g_yawSetpoint, (int)g_yawHoldActive);
