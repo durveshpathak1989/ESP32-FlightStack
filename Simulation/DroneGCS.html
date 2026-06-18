@@ -159,11 +159,29 @@ select{background:var(--bg3);color:var(--t2);border:1px solid var(--sep);border-
 .health-badge{border:1px solid var(--sep);border-radius:7px;padding:6px 8px;background:rgba(255,255,255,.035);font-size:11px;color:var(--t3)}
 .health-badge.ok{color:var(--green);border-color:rgba(48,209,88,.45);background:rgba(48,209,88,.08)}
 .health-badge.bad{color:var(--red);border-color:rgba(255,69,58,.45);background:rgba(255,69,58,.08)}
-.rpm-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px}
-.rpm-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-.rpm-lbl{font-size:11px;letter-spacing:1px}
-.rpm-item canvas{max-width:160px;width:100%}
-.rpm-item [id^="rpmVal"]{font-size:13px;font-weight:700;font-family:var(--mono)}
+.motor-track-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;min-height:0}
+.motor-track-card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;display:flex;flex-direction:column;justify-content:center;gap:9px;min-width:0}
+.motor-track-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.motor-track-title{font-size:12px;font-weight:700;letter-spacing:1.4px}
+.motor-track-status{font-size:10px;font-weight:700;letter-spacing:1px;border:1px solid var(--sep);border-radius:999px;padding:3px 8px;color:var(--t3);background:rgba(255,255,255,.04);white-space:nowrap}
+.motor-track-status.ok{color:var(--green);border-color:rgba(48,209,88,.45);background:rgba(48,209,88,.08)}
+.motor-track-status.warn{color:var(--orange);border-color:rgba(255,159,10,.45);background:rgba(255,159,10,.08)}
+.motor-track-status.bad{color:var(--red);border-color:rgba(255,69,58,.45);background:rgba(255,69,58,.08)}
+.motor-track-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.motor-metric{background:rgba(0,0,0,.20);border:1px solid rgba(255,255,255,.04);border-radius:8px;padding:7px 8px;min-width:0}
+.motor-metric .ml{font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase}
+.motor-metric .mv{font-family:var(--mono);font-weight:800;font-size:15px;color:var(--t1);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.motor-metric .mv.cmd{color:var(--cyan)}
+.motor-metric .mv.err.ok{color:var(--green)}
+.motor-metric .mv.err.warn{color:var(--orange)}
+.motor-metric .mv.err.bad{color:var(--red)}
+.motor-target-track{position:relative;height:34px;border-radius:9px;background:linear-gradient(90deg,rgba(48,209,88,.10),rgba(255,214,10,.10),rgba(255,69,58,.13));border:1px solid rgba(255,255,255,.08);overflow:hidden}
+.motor-target-track::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(25% - 1px),rgba(255,255,255,.08) calc(25% - 1px),rgba(255,255,255,.08) 25%)}
+.motor-actual-fill{position:absolute;left:0;top:7px;height:20px;border-radius:0 7px 7px 0;background:rgba(100,210,255,.28);border-right:2px solid var(--cyan);width:0%;transition:width .12s}
+.motor-command-marker{position:absolute;top:2px;bottom:2px;width:2px;background:var(--yellow);left:0%;box-shadow:0 0 8px var(--yellow);transition:left .12s}
+.motor-command-marker::after{content:'TARGET';position:absolute;top:-1px;left:5px;font-size:8px;color:var(--yellow);font-family:var(--mono);letter-spacing:.6px}
+.motor-track-scale{display:flex;justify-content:space-between;font-size:9px;color:var(--t3);font-family:var(--mono);margin-top:-4px}
+.motor-note{font-size:11px;color:var(--t3);line-height:1.45}
 
 /* ── GPS TAB ── */
 #tab-gps{display:none}
@@ -296,219 +314,57 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 <div id="serialWarn"></div>
 <div id="app">
 
-<!-- ═══ HEADER ═══ -->
-<header id="hdr">
-  <div id="brand">
-    <div class="led" id="led"></div>
-    <div>
-      <div id="gs-title">DRONE GCS</div>
-      <div id="gs-sub">ESP32 · MPU-9250 · FreeRTOS · EKF/Mahony/Madgwick</div>
-    </div>
-    <div id="badge" style="border-color:#3a3a3c;color:#636366;background:transparent">UNKNOWN</div>
-  </div>
-  <div id="hcontrols">
-    <span id="connLbl">OFFLINE</span>
-    <button class="hbtn" id="btnSerial" onclick="toggleSerial()">SERIAL</button>
-    <button class="hbtn" id="btnWifi" onclick="toggleWifi()">WI-FI</button>
-    <button class="hbtn" id="btnStatSim" onclick="toggleStationarySim()">STAT SIM</button>
-    <button class="hbtn" id="btnFlySim" onclick="toggleFlySim()">FLY SIM</button>
-    <button class="hbtn" id="btnAI" onclick="toggleAiLearning()">AI</button>
-    <button class="hbtn red" id="btnLog" onclick="toggleLog()">⏺ LOG</button>
-    <button class="hbtn" id="btnDL" onclick="downloadLog()" style="display:none">⬇ CSV</button>
-	<button class="hbtn" id="btnHsDL" onclick="downloadOnboardLog()">⬇ Download HighSpeed on board data</button>
-  </div>
-</header>
-
-<!-- ═══ TAB BAR ═══ -->
-<nav id="tabbar">
-  <button class="tab active" data-tab="flight" onclick="switchTab('flight')">FLIGHT</button>
-  <button class="tab" data-tab="sensors" onclick="switchTab('sensors')">SENSORS</button>
-  <button class="tab" data-tab="motors" onclick="switchTab('motors')">MOTORS</button>
-  <button class="tab" data-tab="gps" onclick="switchTab('gps')">GPS MAP</button>
-  <button class="tab" data-tab="spectrum" onclick="switchTab('spectrum')">SPECTRUM</button>
-  <button class="tab" data-tab="tune" onclick="switchTab('tune')">SYSTEM TUNE</button>
-  <button class="tab" data-tab="system" onclick="switchTab('system')">SYSTEM</button>
-  <button class="tab" data-tab="ota" onclick="switchTab('ota')">OTA UPDATE</button>
-  <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ CONFIG</button>
-</nav>
-
-<!-- ═══ CONTENT ═══ -->
-<main id="content">
-
-<!-- ① FLIGHT -->
-<section class="tab-panel active" id="tab-flight">
-  <!-- Left: RC + Barometer + CPU -->
-  <div class="panel" id="p-rc">
-    <div class="panel-title">RC INPUT</div>
-    <div class="sticks-row">
-      <div><div class="stick-lbl">THR / YAW</div><canvas class="stick" id="sL" width="88" height="88"></canvas></div>
-      <div><div class="stick-lbl">PITCH / ROLL</div><canvas class="stick" id="sR" width="88" height="88"></canvas></div>
-    </div>
-    <div class="gauge-wrap"><canvas id="rcGauge" width="160" height="92"></canvas>
-      <div id="gaugeVal">— Hz</div><div id="gaugeLbl">FRAME RATE</div></div>
-    <div class="data-row"><span class="dn">THROTTLE</span><span class="dv" id="vthr">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="bthr"></div></div>
-    <div class="data-row"><span class="dn">ROLL</span><span class="dv" id="vrll">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="brll"></div></div>
-    <div class="data-row"><span class="dn">PITCH</span><span class="dv" id="vpch">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="bpch"></div></div>
-    <div class="data-row"><span class="dn">YAW</span><span class="dv" id="vyaw">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="byaw"></div></div>
-    <div class="sec-title">BAROMETER</div>
-    <div class="data-row"><span class="dn">Temp</span><span class="dv" id="vbt">—</span></div>
-    <div class="data-row"><span class="dn">Pressure</span><span class="dv" id="vbp">—</span></div>
-    <div class="data-row"><span class="dn">Altitude</span><span class="dv" id="vba">—</span></div>
-    <div class="sec-title">CPU LOAD</div>
-    <div class="data-row"><span class="dn">Core 0</span><span class="dv" id="vcpu0">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="bcpu0"></div></div>
-    <div class="data-row"><span class="dn">Core 1</span><span class="dv" id="vcpu1">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="bcpu1"></div></div>
-  </div>
-
-  <!-- Center: Attitude -->
-  <div class="panel" id="p-att">
-    <div class="panel-title" style="align-self:flex-start">ATTITUDE · <span id="fltFilter">EKF</span></div>
-    <canvas id="ai" width="210" height="210"></canvas>
-    <canvas id="cmp" width="185" height="74"></canvas>
-    <div class="data-row" style="width:210px"><span class="dn">ALTITUDE</span><span class="dv" id="attAlt">—</span></div>
-    <div class="euler-row">
-      <div class="euler-item"><div class="euler-lbl">ROLL</div><div class="euler-val" id="eR">+0.0°</div></div>
-      <div class="euler-item"><div class="euler-lbl">PITCH</div><div class="euler-val" id="eP">+0.0°</div></div>
-      <div class="euler-item"><div class="euler-lbl">YAW</div><div class="euler-val" id="eY">0.0°</div></div>
-    </div>
-    <div class="att-compare">
-      <div class="att-block">
-        <div class="att-block-title">ESTIMATOR RAW · EKF/Mahony/Madgwick Output</div>
-        <div class="att-triplet">
-          <div class="att-mini"><div class="att-mini-lbl">ROLL</div><div class="att-mini-val" id="ahrsR">+0.0°</div></div>
-          <div class="att-mini"><div class="att-mini-lbl">PITCH</div><div class="att-mini-val" id="ahrsP">+0.0°</div></div>
-          <div class="att-mini"><div class="att-mini-lbl">YAW</div><div class="att-mini-val" id="ahrsY">0.0°</div></div>
-        </div>
-      </div>
-      <div class="att-block">
-        <div class="att-block-title">CONTROL INPUT · After Level Offset</div>
-        <div class="att-triplet">
-          <div class="att-mini"><div class="att-mini-lbl">ROLL</div><div class="att-mini-val ctrl" id="ctrlR">+0.0°</div></div>
-          <div class="att-mini"><div class="att-mini-lbl">PITCH</div><div class="att-mini-val ctrl" id="ctrlP">+0.0°</div></div>
-          <div class="att-mini"><div class="att-mini-lbl">YAW</div><div class="att-mini-val ctrl" id="ctrlY">0.0°</div></div>
-        </div>
-      </div>
-      <div class="att-block">
-        <div class="att-block-title">LEVEL OFFSET · Captured While Disarmed</div>
-        <div class="att-triplet">
-          <div class="att-mini"><div class="att-mini-lbl">ROLL</div><div class="att-mini-val off" id="offR">+0.0°</div></div>
-          <div class="att-mini"><div class="att-mini-lbl">PITCH</div><div class="att-mini-val off" id="offP">+0.0°</div></div>
-          <div class="att-mini"><div class="att-mini-lbl">YAW</div><div class="att-mini-val off" id="offY">0.0°</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Right: Motors + Health -->
-  <div class="panel" id="p-mot" style="overflow-y:auto">
-    <div class="panel-title">MOTORS</div>
-    <div class="motor-grid">
-      <div class="motor-item">
-        <div class="motor-lbl" style="color:#0a84ff">FL · CCW</div>
-        <div class="motor-val" id="mFL">0%</div>
-        <div class="bar-track"><div class="bar-fill" id="bmFL"></div></div>
-      </div>
-      <div class="motor-item">
-        <div class="motor-lbl" style="color:#30d158">FR · CW</div>
-        <div class="motor-val" id="mFR">0%</div>
-        <div class="bar-track"><div class="bar-fill" id="bmFR"></div></div>
-      </div>
-      <div class="motor-item">
-        <div class="motor-lbl" style="color:#ff9f0a">RL · CW</div>
-        <div class="motor-val" id="mRL">0%</div>
-        <div class="bar-track"><div class="bar-fill" id="bmRL"></div></div>
-      </div>
-      <div class="motor-item">
-        <div class="motor-lbl" style="color:#ff453a">RR · CCW</div>
-        <div class="motor-val" id="mRR">0%</div>
-        <div class="bar-track"><div class="bar-fill" id="bmRR"></div></div>
-      </div>
-    </div>
-    <div class="sec-title">TELEMETRY</div>
-    <div class="data-row"><span class="dn">Parser</span><span class="dv" id="sParse">WAIT</span></div>
-    <div class="data-row"><span class="dn">Tick</span><span class="dv" id="stk">—</span></div>
-    <div class="data-row"><span class="dn">RC Hz</span><span class="dv" id="shz">—</span></div>
-    <div class="data-row"><span class="dn">Data age</span><span class="dv" id="sAge">—</span></div>
-    <div class="sec-title">SENSOR STATUS</div>
-    <div class="health-grid">
-      <div class="health-badge" id="hImu">IMU —</div>
-      <div class="health-badge" id="hMag">MAG —</div>
-      <div class="health-badge" id="hBmp">BMP —</div>
-      <div class="health-badge" id="hCpu">CPU —</div>
-    </div>
-    <div id="aiPanel"><span class="chip warn" id="aiState">AI OFFLINE</span><span class="chip" id="aiBias">bias: —</span></div>
-    <div style="margin-top:6px;font-size:11px;color:var(--t3)" id="logCount">0 rows logged</div>
-    <div id="tuneStatus" style="display:none"></div>
-  </div>
-</section>
-
-<!-- ② SENSORS -->
-<section class="tab-panel" id="tab-sensors">
-  <div class="panel full-panel">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:12px;flex-wrap:wrap">
-      <div class="panel-title" style="margin:0">IMU SIGNAL PLOTTER</div>
-      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <div class="legend">
-          <span><span class="ldot" style="background:#0a84ff"></span>Roll</span>
-          <span><span class="ldot" style="background:#30d158"></span>Pitch</span>
-          <span><span class="ldot" style="background:#bf5af2"></span>Yaw</span>
-          <span><span class="ldot" style="background:#ff9f0a"></span>Gx</span>
-          <span><span class="ldot" style="background:#ff453a"></span>Gy</span>
-          <span><span class="ldot" style="background:#64d2ff"></span>Gz</span>
-        </div>
-        <select id="imuAxis">
-          <option value="rpy">Estimator raw R/P/Y (before offset)</option>
-          <option value="gyro">Gyro raw (°/s)</option>
-          <option value="accel">Accel (×90°)</option>
-          <option value="all">All overlaid</option>
-        </select>
-      </div>
-    </div>
-    <div class="plot-wrap"><canvas id="imuPlot"></canvas></div>
-    <div class="sensor-cards">
-      <div class="scard">
-        <div class="sc-title">GYROSCOPE (°/s)</div>
-        <div class="sc-vals"><span id="sc-gx">0.00</span><span id="sc-gy">0.00</span><span id="sc-gz">0.00</span></div>
-        <div class="sc-lbls"><span>GX</span><span>GY</span><span>GZ</span></div>
-      </div>
-      <div class="scard">
-        <div class="sc-title">ACCELEROMETER (g)</div>
-        <div class="sc-vals"><span id="sc-ax">0.000</span><span id="sc-ay">0.000</span><span id="sc-az">0.000</span></div>
-        <div class="sc-lbls"><span>AX</span><span>AY</span><span>AZ</span></div>
-      </div>
-      <div class="scard">
-        <div class="sc-title">MAGNETOMETER (µT)</div>
-        <div class="sc-vals"><span id="sc-mx">—</span><span id="sc-my">—</span><span id="sc-mz">—</span></div>
-        <div class="sc-lbls"><span>MX</span><span>MY</span><span>MZ</span></div>
-      </div>
-      <div class="scard">
-        <div class="sc-title">DIE TEMPERATURE</div>
-        <div class="sc-vals big"><span id="sc-temp">—</span></div>
-        <div class="sc-lbls"><span>°C</span></div>
-      </div>
-    </div>
-    <div class="sensor-cards" style="grid-template-columns:repeat(3,1fr);margin-top:8px">
-      <div class="scard"><div class="sc-title">ESTIMATOR RAW R/P/Y</div><div class="sc-vals"><span id="sensEkfR">—</span><span id="sensEkfP">—</span><span id="sensEkfY">—</span></div><div class="sc-lbls"><span>ROLL</span><span>PITCH</span><span>YAW</span></div></div>
-      <div class="scard"><div class="sc-title">CONTROL INPUT AFTER OFFSET</div><div class="sc-vals"><span id="sensCtrlR">—</span><span id="sensCtrlP">—</span><span id="sensCtrlY">—</span></div><div class="sc-lbls"><span>ROLL</span><span>PITCH</span><span>YAW</span></div></div>
-      <div class="scard"><div class="sc-title">LEVEL OFFSET</div><div class="sc-vals"><span id="sensOffR">—</span><span id="sensOffP">—</span><span id="sensOffY">—</span></div><div class="sc-lbls"><span>ROLL</span><span>PITCH</span><span>YAW</span></div></div>
-    </div>
-  </div>
-</section>
-
 <!-- ③ MOTORS -->
 <section class="tab-panel" id="tab-motors">
   <div class="panel full-panel">
-    <div class="panel-title">RPM GAUGES — estimated (throttle × KV × Vbat)</div>
-    <div class="rpm-grid">
-      <div class="rpm-item"><div class="rpm-lbl" style="color:#0a84ff">FL · CCW</div><canvas id="rpmGaugeFL"></canvas><div id="rpmValFL" style="color:#0a84ff">0 rpm</div><div class="dn" id="rpmCmdFL">cmd —</div><div class="dn" id="rpmActFL">actual —</div></div>
-      <div class="rpm-item"><div class="rpm-lbl" style="color:#30d158">FR · CW</div><canvas id="rpmGaugeFR"></canvas><div id="rpmValFR" style="color:#30d158">0 rpm</div><div class="dn" id="rpmCmdFR">cmd —</div><div class="dn" id="rpmActFR">actual —</div></div>
-      <div class="rpm-item"><div class="rpm-lbl" style="color:#ff9f0a">RL · CW</div><canvas id="rpmGaugeRL"></canvas><div id="rpmValRL" style="color:#ff9f0a">0 rpm</div><div class="dn" id="rpmCmdRL">cmd —</div><div class="dn" id="rpmActRL">actual —</div></div>
-      <div class="rpm-item"><div class="rpm-lbl" style="color:#ff453a">RR · CCW</div><canvas id="rpmGaugeRR"></canvas><div id="rpmValRR" style="color:#ff453a">0 rpm</div><div class="dn" id="rpmCmdRR">cmd —</div><div class="dn" id="rpmActRR">actual —</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div class="panel-title">MOTOR TARGET TRACKING</div>
+        <div class="motor-note">Yellow marker = commanded RPM target. Blue bar = actual RPM feedback. Without ESC RPM telemetry, the actual bar is hidden and the card shows command-only mode.</div>
+      </div>
+      <div class="chip" id="rpmTelemStatus">RPM TELEMETRY: —</div>
+    </div>
+    <div class="motor-track-grid">
+      <div class="motor-track-card" data-motor="FL">
+        <div class="motor-track-head"><div class="motor-track-title" style="color:#0a84ff">FL · CCW</div><div class="motor-track-status" id="trkStatusFL">—</div></div>
+        <div class="motor-track-values">
+          <div class="motor-metric"><div class="ml">Target</div><div class="mv cmd" id="rpmCmdFL">—</div></div>
+          <div class="motor-metric"><div class="ml">Actual</div><div class="mv" id="rpmActFL">—</div></div>
+          <div class="motor-metric"><div class="ml">Error</div><div class="mv err" id="rpmErrFL">—</div></div>
+        </div>
+        <div class="motor-target-track"><div class="motor-actual-fill" id="rpmFillFL"></div><div class="motor-command-marker" id="rpmTargetFL"></div></div>
+        <div class="motor-track-scale"><span>0</span><span id="rpmScaleFL">max</span></div>
+      </div>
+      <div class="motor-track-card" data-motor="FR">
+        <div class="motor-track-head"><div class="motor-track-title" style="color:#30d158">FR · CW</div><div class="motor-track-status" id="trkStatusFR">—</div></div>
+        <div class="motor-track-values">
+          <div class="motor-metric"><div class="ml">Target</div><div class="mv cmd" id="rpmCmdFR">—</div></div>
+          <div class="motor-metric"><div class="ml">Actual</div><div class="mv" id="rpmActFR">—</div></div>
+          <div class="motor-metric"><div class="ml">Error</div><div class="mv err" id="rpmErrFR">—</div></div>
+        </div>
+        <div class="motor-target-track"><div class="motor-actual-fill" id="rpmFillFR"></div><div class="motor-command-marker" id="rpmTargetFR"></div></div>
+        <div class="motor-track-scale"><span>0</span><span id="rpmScaleFR">max</span></div>
+      </div>
+      <div class="motor-track-card" data-motor="RL">
+        <div class="motor-track-head"><div class="motor-track-title" style="color:#ff9f0a">RL · CW</div><div class="motor-track-status" id="trkStatusRL">—</div></div>
+        <div class="motor-track-values">
+          <div class="motor-metric"><div class="ml">Target</div><div class="mv cmd" id="rpmCmdRL">—</div></div>
+          <div class="motor-metric"><div class="ml">Actual</div><div class="mv" id="rpmActRL">—</div></div>
+          <div class="motor-metric"><div class="ml">Error</div><div class="mv err" id="rpmErrRL">—</div></div>
+        </div>
+        <div class="motor-target-track"><div class="motor-actual-fill" id="rpmFillRL"></div><div class="motor-command-marker" id="rpmTargetRL"></div></div>
+        <div class="motor-track-scale"><span>0</span><span id="rpmScaleRL">max</span></div>
+      </div>
+      <div class="motor-track-card" data-motor="RR">
+        <div class="motor-track-head"><div class="motor-track-title" style="color:#ff453a">RR · CCW</div><div class="motor-track-status" id="trkStatusRR">—</div></div>
+        <div class="motor-track-values">
+          <div class="motor-metric"><div class="ml">Target</div><div class="mv cmd" id="rpmCmdRR">—</div></div>
+          <div class="motor-metric"><div class="ml">Actual</div><div class="mv" id="rpmActRR">—</div></div>
+          <div class="motor-metric"><div class="ml">Error</div><div class="mv err" id="rpmErrRR">—</div></div>
+        </div>
+        <div class="motor-target-track"><div class="motor-actual-fill" id="rpmFillRR"></div><div class="motor-command-marker" id="rpmTargetRR"></div></div>
+        <div class="motor-track-scale"><span>0</span><span id="rpmScaleRR">max</span></div>
+      </div>
     </div>
   </div>
 </section>
@@ -1726,21 +1582,38 @@ function drawImuPlot(){
   if(mode==='accel'||mode==='all'){plotLine(hist.ax,'#0a84ff',[5,3],mode==='all'?.4:1);plotLine(hist.ay,'#30d158',[5,3],mode==='all'?.4:1);plotLine(hist.az,'#bf5af2',[5,3],mode==='all'?.4:1);}
 }
 
-const MAX_RPM=()=>Math.round(CFG.kv*CFG.cells*CFG.cellV*1.05);
-function drawRpmGauge(canvasId,valId,rpm,color){
-  const c=document.getElementById(canvasId);if(!c)return;
+const MAX_RPM=()=>Math.max(1000,Math.round(CFG.kv*CFG.cells*CFG.cellV*1.05));
+function fmtRpm(rpm){return Number.isFinite(rpm)?Math.round(rpm).toLocaleString()+' rpm':'—';}
+function setTrackStatus(id,text,cls){const el=document.getElementById('trkStatus'+id);if(!el)return;el.textContent=text;el.className='motor-track-status '+(cls||'');}
+function setErrClass(id,cls){const el=document.getElementById('rpmErr'+id);if(!el)return;el.className='mv err '+(cls||'');}
+function drawMotorTrack(id,cmd,act){
   const maxRpm=MAX_RPM();
-  const disp=c.parentElement?c.parentElement.clientWidth:140;const SZ=Math.max(60,Math.min(160,disp*.8));
-  c.width=SZ;c.height=Math.round(SZ*.6);
-  const ctx=c.getContext('2d'),W=c.width,H=c.height,cx=W/2,cy=H-5,R=Math.min(cx-5,H-7);ctx.clearRect(0,0,W,H);
-  const frac=clamp(rpm/maxRpm,0,1);const col=frac>.8?'#ff453a':frac>.55?'#ff9f0a':color;
-  ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,0,false);ctx.lineWidth=8;ctx.strokeStyle='rgba(255,255,255,.08)';ctx.stroke();
-  if(frac>0){ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,Math.PI*(1+frac),false);ctx.lineWidth=8;ctx.strokeStyle=col;ctx.stroke();}
-  [0,.25,.5,.75,1].forEach(t=>{const ang=Math.PI*(1-t);const x1=cx+R*Math.cos(ang),y1=cy-R*Math.sin(ang);const x2=cx+(R-9)*Math.cos(ang),y2=cy-(R-9)*Math.sin(ang);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.lineWidth=1.5;ctx.strokeStyle='rgba(255,255,255,.15)';ctx.stroke();if(t===0||t===.5||t===1){const lx=cx+(R-17)*Math.cos(ang),ly=cy-(R-17)*Math.sin(ang);ctx.fillStyle='rgba(235,235,245,.4)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(Math.round(t*maxRpm/1000)+'k',lx,ly+3);}});
-  const nAng=Math.PI*(1-frac);ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+(R-4)*Math.cos(nAng),cy-(R-4)*Math.sin(nAng));ctx.lineWidth=2;ctx.strokeStyle='#ffd60a';ctx.stroke();ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fillStyle='#ffd60a';ctx.fill();
-  const el=document.getElementById(valId);if(el){el.textContent=rpm>10?Math.round(rpm)+' rpm':'0 rpm';el.style.color=col;}
+  const cmdPct=clamp((cmd||0)/maxRpm*100,0,100);
+  const actValid=!!S.rpmActualValid && Number.isFinite(act);
+  const actPct=actValid?clamp((act||0)/maxRpm*100,0,100):0;
+  const marker=document.getElementById('rpmTarget'+id); if(marker)marker.style.left=cmdPct+'%';
+  const fill=document.getElementById('rpmFill'+id); if(fill){fill.style.width=actValid?actPct+'%':'0%';fill.style.opacity=actValid?'1':'0.18';}
+  setText('rpmCmd'+id,fmtRpm(cmd));
+  setText('rpmAct'+id,actValid?fmtRpm(act):'no telem');
+  setText('rpmScale'+id,Math.round(maxRpm/1000)+'k rpm');
+  if(!actValid){
+    setText('rpmErr'+id,'—');setErrClass(id,'warn');setTrackStatus(id,'COMMAND ONLY','warn');
+    return;
+  }
+  const err=(act||0)-(cmd||0);
+  const errPct=(Math.abs(cmd)>250)?(err/cmd*100):0;
+  const absPct=Math.abs(errPct);
+  const cls=absPct<=5?'ok':absPct<=15?'warn':'bad';
+  const sign=err>=0?'+':'';
+  setText('rpmErr'+id,sign+Math.round(err).toLocaleString()+' / '+sign+errPct.toFixed(1)+'%');
+  setErrClass(id,cls);
+  setTrackStatus(id,cls==='ok'?'TRACKING':(err<0?'LOW':'HIGH'),cls);
 }
-function drawRpmGauges(){drawRpmGauge('rpmGaugeFL','rpmValFL',S.cmdRpmFL,'#0a84ff');drawRpmGauge('rpmGaugeFR','rpmValFR',S.cmdRpmFR,'#30d158');drawRpmGauge('rpmGaugeRL','rpmValRL',S.cmdRpmRL,'#ff9f0a');drawRpmGauge('rpmGaugeRR','rpmValRR',S.cmdRpmRR,'#ff453a');[['FL',S.cmdRpmFL,S.actualRpmFL],['FR',S.cmdRpmFR,S.actualRpmFR],['RL',S.cmdRpmRL,S.actualRpmRL],['RR',S.cmdRpmRR,S.actualRpmRR]].forEach(([id,cmd,act])=>{setText('rpmCmd'+id,'cmd '+Math.round(cmd)+' rpm');setText('rpmAct'+id,S.rpmActualValid?'actual '+Math.round(act)+' rpm':'actual — no ESC telem');});}
+function drawRpmGauges(){
+  const telem=document.getElementById('rpmTelemStatus');
+  if(telem){telem.textContent=S.rpmActualValid?'RPM TELEMETRY: ACTIVE':'RPM TELEMETRY: NOT AVAILABLE';telem.className='chip '+(S.rpmActualValid?'ok':'warn');}
+  [['FL',S.cmdRpmFL,S.actualRpmFL],['FR',S.cmdRpmFR,S.actualRpmFR],['RL',S.cmdRpmRL,S.actualRpmRL],['RR',S.cmdRpmRR,S.actualRpmRR]].forEach(([id,cmd,act])=>drawMotorTrack(id,cmd,act));
+}
 
 
 // ─── Frequency Spectrum ─────────────────────────────────────────────────────
