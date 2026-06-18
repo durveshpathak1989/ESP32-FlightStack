@@ -314,6 +314,167 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 <div id="serialWarn"></div>
 <div id="app">
 
+<header id="hdr">
+  <div id="brand">
+    <div class="led" id="led"></div>
+    <div>
+      <div id="gs-title">DRONE GCS</div>
+      <div id="gs-sub">ESP32 QUADCOPTER · EKF / MAHONY · OTA</div>
+    </div>
+    <div id="badge">UNKNOWN</div>
+  </div>
+  <div id="hcontrols">
+    <span id="connLbl">OFFLINE</span>
+    <button class="hbtn" id="btnSerial" onclick="toggleSerial()">SERIAL</button>
+    <button class="hbtn" id="btnWifi" onclick="toggleWifi()">WI-FI</button>
+    <button class="hbtn" id="btnLog" onclick="toggleLog()">⏺ LOG</button>
+    <button class="hbtn" id="btnDL" onclick="downloadLog()" style="display:none">CSV</button>
+    <button class="hbtn" id="btnHsDL" onclick="downloadOnboardLog()">HS LOG</button>
+    <button class="hbtn" id="btnAI" onclick="toggleAiLearning()">AI</button>
+    <button class="hbtn" id="btnStatSim" onclick="toggleStationarySim()">SIM</button>
+    <button class="hbtn" id="btnFlySim" onclick="toggleFlySim()">FLY SIM</button>
+  </div>
+</header>
+
+<nav id="tabbar">
+  <button class="tab active" data-tab="flight" onclick="switchTab('flight')">FLIGHT</button>
+  <button class="tab" data-tab="sensors" onclick="switchTab('sensors')">SENSORS</button>
+  <button class="tab" data-tab="motors" onclick="switchTab('motors')">MOTORS</button>
+  <button class="tab" data-tab="spectrum" onclick="switchTab('spectrum')">SPECTRUM</button>
+  <button class="tab" data-tab="gps" onclick="switchTab('gps')">GPS</button>
+  <button class="tab" data-tab="tune" onclick="switchTab('tune')">SYSTEM TUNE</button>
+  <button class="tab" data-tab="system" onclick="switchTab('system')">SYSTEM</button>
+  <button class="tab" data-tab="ota" onclick="switchTab('ota')">OTA</button>
+  <button class="tab" data-tab="config" onclick="switchTab('config')">CONFIG</button>
+</nav>
+
+<main id="content">
+
+<!-- ① FLIGHT -->
+<section class="tab-panel active" id="tab-flight">
+  <div class="panel" id="p-rc">
+    <div class="panel-title">RC INPUT</div>
+    <div class="data-row"><span class="dn">Throttle</span><span class="dv" id="vthr">—</span></div><div class="bar-track"><div class="bar-fill" id="bthr"></div></div>
+    <div class="data-row"><span class="dn">Roll</span><span class="dv" id="vrll">—</span></div><div class="bar-track"><div class="bar-fill" id="brll"></div></div>
+    <div class="data-row"><span class="dn">Pitch</span><span class="dv" id="vpch">—</span></div><div class="bar-track"><div class="bar-fill" id="bpch"></div></div>
+    <div class="data-row"><span class="dn">Yaw</span><span class="dv" id="vyaw">—</span></div><div class="bar-track"><div class="bar-fill" id="byaw"></div></div>
+
+    <div class="gauge-wrap">
+      <canvas id="rcGauge" width="160" height="92"></canvas>
+      <div id="gaugeVal">—</div>
+      <div id="gaugeLbl">RC FRAME RATE</div>
+    </div>
+
+    <div class="sticks-row">
+      <div><div class="stick-lbl">YAW / THR</div><canvas class="stick" id="sL" width="86" height="86"></canvas></div>
+      <div><div class="stick-lbl">ROLL / PITCH</div><canvas class="stick" id="sR" width="86" height="86"></canvas></div>
+    </div>
+
+    <div class="sec-title">TELEMETRY</div>
+    <div class="data-row"><span class="dn">Tick</span><span class="dv" id="stk">—</span></div>
+    <div class="data-row"><span class="dn">RC Hz</span><span class="dv" id="shz">—</span></div>
+    <div class="data-row"><span class="dn">Age</span><span class="dv" id="sAge">—</span></div>
+    <div class="data-row"><span class="dn">Parser</span><span class="dv" id="sParse">—</span></div>
+    <div class="data-row"><span class="dn">Logger</span><span class="dv" id="logCount">0 rows logged</span></div>
+  </div>
+
+  <div class="panel" id="p-att">
+    <div class="panel-title">EKF ATTITUDE · ALTITUDE</div>
+    <canvas id="ai" width="260" height="260"></canvas>
+    <div class="euler-row">
+      <div class="euler-item"><div class="euler-lbl">ROLL</div><div class="euler-val" id="eR">—</div></div>
+      <div class="euler-item"><div class="euler-lbl">PITCH</div><div class="euler-val" id="eP">—</div></div>
+      <div class="euler-item"><div class="euler-lbl">YAW</div><div class="euler-val" id="eY">—</div></div>
+    </div>
+    <canvas id="cmp" width="420" height="74"></canvas>
+
+    <div id="aiPanel">
+      <span class="chip">FILTER <b id="fltFilter">EKF</b></span>
+      <span class="chip">ALT <b id="attAlt">—</b></span>
+    </div>
+
+    <div class="att-compare">
+      <div class="att-block">
+        <div class="att-block-title">AHRS / EKF OUTPUT</div>
+        <div class="att-triplet">
+          <div class="att-mini"><div class="att-mini-lbl">R</div><div class="att-mini-val" id="ahrsR">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">P</div><div class="att-mini-val" id="ahrsP">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">Y</div><div class="att-mini-val" id="ahrsY">—</div></div>
+        </div>
+      </div>
+      <div class="att-block">
+        <div class="att-block-title">CONTROL ANGLE AFTER OFFSET</div>
+        <div class="att-triplet">
+          <div class="att-mini"><div class="att-mini-lbl">R</div><div class="att-mini-val ctrl" id="ctrlR">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">P</div><div class="att-mini-val ctrl" id="ctrlP">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">Y</div><div class="att-mini-val ctrl" id="ctrlY">—</div></div>
+        </div>
+      </div>
+      <div class="att-block">
+        <div class="att-block-title">ZERO OFFSET VALUES</div>
+        <div class="att-triplet">
+          <div class="att-mini"><div class="att-mini-lbl">R</div><div class="att-mini-val off" id="offR">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">P</div><div class="att-mini-val off" id="offP">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">Y</div><div class="att-mini-val off" id="offY">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">MOTORS / SENSORS</div>
+    <div class="motor-grid">
+      <div class="motor-item"><div class="motor-lbl">FL</div><div class="motor-val" id="mFL">—</div><div class="bar-track"><div class="bar-fill" id="bmFL"></div></div></div>
+      <div class="motor-item"><div class="motor-lbl">FR</div><div class="motor-val" id="mFR">—</div><div class="bar-track"><div class="bar-fill" id="bmFR"></div></div></div>
+      <div class="motor-item"><div class="motor-lbl">RL</div><div class="motor-val" id="mRL">—</div><div class="bar-track"><div class="bar-fill" id="bmRL"></div></div></div>
+      <div class="motor-item"><div class="motor-lbl">RR</div><div class="motor-val" id="mRR">—</div><div class="bar-track"><div class="bar-fill" id="bmRR"></div></div></div>
+    </div>
+
+    <div class="sec-title">BARO / CPU</div>
+    <div class="data-row"><span class="dn">BMP Temp</span><span class="dv" id="vbt">—</span></div>
+    <div class="data-row"><span class="dn">Pressure</span><span class="dv" id="vbp">—</span></div>
+    <div class="data-row"><span class="dn">Altitude</span><span class="dv" id="vba">—</span></div>
+    <div class="data-row"><span class="dn">CPU0</span><span class="dv" id="vcpu0">—</span></div><div class="bar-track"><div class="bar-fill" id="bcpu0"></div></div>
+    <div class="data-row"><span class="dn">CPU1</span><span class="dv" id="vcpu1">—</span></div><div class="bar-track"><div class="bar-fill" id="bcpu1"></div></div>
+
+    <div class="sec-title">SENSOR STATUS</div>
+    <div class="health-grid">
+      <div class="health-badge" id="hImu">IMU —</div>
+      <div class="health-badge" id="hMag">MAG —</div>
+      <div class="health-badge" id="hBmp">BMP —</div>
+      <div class="health-badge" id="hCpu">CPU —</div>
+    </div>
+  </div>
+</section>
+
+<!-- ② SENSORS -->
+<section class="tab-panel" id="tab-sensors">
+  <div class="panel full-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div class="panel-title">SENSOR COMPARISON</div>
+      <select id="imuAxis" onchange="drawImuPlot()">
+        <option value="all">All</option>
+        <option value="rpy">RPY / EKF</option>
+        <option value="gyro">Gyro</option>
+        <option value="accel">Accel</option>
+      </select>
+    </div>
+    <div class="plot-wrap"><canvas id="imuPlot"></canvas></div>
+    <div class="sensor-cards">
+      <div class="scard"><div class="sc-title">GYRO °/s</div><div class="sc-vals"><span id="sc-gx">—</span><span id="sc-gy">—</span><span id="sc-gz">—</span></div><div class="sc-lbls"><span>GX</span><span>GY</span><span>GZ</span></div></div>
+      <div class="scard"><div class="sc-title">ACCEL g</div><div class="sc-vals"><span id="sc-ax">—</span><span id="sc-ay">—</span><span id="sc-az">—</span></div><div class="sc-lbls"><span>AX</span><span>AY</span><span>AZ</span></div></div>
+      <div class="scard"><div class="sc-title">MAG µT</div><div class="sc-vals"><span id="sc-mx">—</span><span id="sc-my">—</span><span id="sc-mz">—</span></div><div class="sc-lbls"><span>MX</span><span>MY</span><span>MZ</span></div></div>
+      <div class="scard"><div class="sc-title">TEMP</div><div class="sc-vals big"><span id="sc-temp">—</span></div><div class="sc-lbls"><span>°C</span></div></div>
+    </div>
+    <div class="sensor-cards">
+      <div class="scard"><div class="sc-title">EKF OUTPUT</div><div class="sc-vals"><span id="sensEkfR">—</span><span id="sensEkfP">—</span><span id="sensEkfY">—</span></div><div class="sc-lbls"><span>R</span><span>P</span><span>Y</span></div></div>
+      <div class="scard"><div class="sc-title">CONTROL AFTER OFFSET</div><div class="sc-vals"><span id="sensCtrlR">—</span><span id="sensCtrlP">—</span><span id="sensCtrlY">—</span></div><div class="sc-lbls"><span>R</span><span>P</span><span>Y</span></div></div>
+      <div class="scard"><div class="sc-title">OFFSET VALUES</div><div class="sc-vals"><span id="sensOffR">—</span><span id="sensOffP">—</span><span id="sensOffY">—</span></div><div class="sc-lbls"><span>R</span><span>P</span><span>Y</span></div></div>
+      <div class="scard"><div class="sc-title">NOTE</div><div style="font-size:12px;color:var(--t3);line-height:1.5">EKF/AHRS is raw fused attitude. Control angle is the value after zero-offset compensation.</div></div>
+    </div>
+  </div>
+</section>
+
 <!-- ③ MOTORS -->
 <section class="tab-panel" id="tab-motors">
   <div class="panel full-panel">
