@@ -46,6 +46,11 @@
 #include "FlySkyiBUS.h"
 #include "TelemetryWiFi.h"
 #include "BMP280Sensor.h"
+#include "AttitudeEKF.h"
+#include "ToFSensor.h"
+#include "NotchFilter.h"
+#include "SpectrumAnalyzer.h"
+#include "MadgwickAHRS.h"
 #include "CPUUtilization.h"
 #include "GPSSensor.h"
 #include "freertos/FreeRTOS.h"
@@ -124,6 +129,26 @@ static constexpr float TUNE_ANGLE_PITCH_KD = 0.010f;
 static constexpr float TUNE_ANGLE_YAW_KP     = 6.00f;   // heading-hold Kp (tune up if soft)
 static constexpr float TUNE_YAW_DEADBAND     = 0.05f;   // |yaw stick| below this = hold
 static constexpr float TUNE_YAW_MAX_RATE_DPS = 90.0f;   // cap on commanded yaw rate
+
+// ── Motor vibration notch filter ────────────────────────────
+// Runs before EKF and before rate PID. Keep center below 0.45*sample rate.
+static constexpr bool  TUNE_NOTCH_ENABLE    = true;
+static constexpr float TUNE_NOTCH_FREQ_HZ   = 90.0f;   // start point; tune from motor log/FFT
+static constexpr float TUNE_NOTCH_Q         = 8.0f;    // higher = narrower notch
+static constexpr float NOTCH_SAMPLE_HZ      = 400.0f;  // control loop sample rate
+
+// ── EKF tuning knobs ────────────────────────────────────────
+// These are runtime-tunable from /tune while DISARMED.
+// Higher R = trust that sensor less. Higher Q = allow faster EKF state motion.
+static constexpr float TUNE_EKF_ANGLE_Q        = 0.0008f;
+static constexpr float TUNE_EKF_BIAS_Q         = 0.000001f;
+static constexpr float TUNE_EKF_ACCEL_R        = 0.060f;
+static constexpr float TUNE_EKF_MAG_R          = 0.200f;
+static constexpr float TUNE_EKF_MAG_DECL_DEG   = 0.0f;
+static constexpr float TUNE_EKF_MAG_YAW_OFF_DEG= 0.0f;
+static constexpr float TUNE_EKF_MAG_YAW_SIGN   = 1.0f;
+static constexpr float TUNE_AHRS_FILTER_MODE    = 0.0f;   // 0=EKF, 1=Mahony, 2=Madgwick
+static constexpr float TUNE_MADGWICK_BETA       = 0.080f;
 
 // ── Software level-zero trim ───────────────────────────────
 // DISARMED + SWB/ACRO high captures the current AHRS attitude
@@ -264,9 +289,14 @@ static void resetTimingStats()
 }
 
 // ─────────────────────────────────────────────────────────────
-//  IMU object
+//  IMU + attitude estimator objects
 // ─────────────────────────────────────────────────────────────
 MPU9250 imu(PIN_MPU_CS);
+AttitudeEKF attitudeEKF;
+MadgwickAHRS madgwickAHRS;
+NotchFilter notchAx, notchAy, notchAz;
+NotchFilter notchGx, notchGy, notchGz;
+SpectrumAnalyzer spectrumAnalyzer(NOTCH_SAMPLE_HZ);
 
 #define FLIGHT_LOG_SIZE 400   // 400 samples @ 100 Hz = 4 s
 
@@ -276,8 +306,11 @@ MPU9250 imu(PIN_MPU_CS);
 //  Shared flight state
 // ─────────────────────────────────────────────────────────────
 struct FlightState {
-    // Raw AHRS attitude from imu.mahonyUpdate(). Keep untouched for telemetry/debug.
+    // Raw estimator attitude from EKF/Mahony/Madgwick. Keep untouched for telemetry/debug.
     float roll_deg, pitch_deg, yaw_deg;
+    bool imuValid;
+    bool magValid;
+    uint8_t ahrsFilterMode;
 
     // Post-AHRS control attitude. PID uses these values after level-zero offset.
     float roll_ctrl_deg, pitch_ctrl_deg, yaw_ctrl_deg;
@@ -353,8 +386,24 @@ struct TuningState {
     float yaw_deadband;
     float yaw_max_rate_dps;
 
-    // AHRS
+    // AHRS / estimator selection
     float mahony_kp, mahony_ki;
+    float ahrs_filter_mode;
+    float madgwick_beta;
+
+    // Motor vibration notch filter
+    bool  notch_enable;
+    float notch_freq_hz;
+    float notch_q;
+
+    // Attitude EKF tuning
+    float ekf_angle_q;
+    float ekf_bias_q;
+    float ekf_accel_r;
+    float ekf_mag_r;
+    float ekf_mag_declination_deg;
+    float ekf_mag_yaw_offset_deg;
+    float ekf_mag_yaw_sign;
 
     volatile bool dirty;
 };
@@ -368,6 +417,7 @@ static SemaphoreHandle_t g_tuneMutex;
 static volatile uint32_t g_tuneRequestSeq = 0;
 static volatile uint32_t g_tuneApplySeq   = 0;
 static volatile uint32_t g_tuneRejectSeq  = 0;
+static volatile uint8_t  g_ahrsFilterModeActive = 0;
 
 // ─────────────────────────────────────────────────────────────
 //  Calibration state machine
@@ -470,6 +520,18 @@ static void syncTuningFromObjects()
 
     g_tuning.mahony_kp                  = imu.mahonyKp;
     g_tuning.mahony_ki                  = imu.mahonyKi;
+    g_tuning.ahrs_filter_mode           = TUNE_AHRS_FILTER_MODE;
+    g_tuning.madgwick_beta              = TUNE_MADGWICK_BETA;
+    g_tuning.notch_enable               = TUNE_NOTCH_ENABLE;
+    g_tuning.notch_freq_hz              = TUNE_NOTCH_FREQ_HZ;
+    g_tuning.notch_q                    = TUNE_NOTCH_Q;
+    g_tuning.ekf_angle_q                = TUNE_EKF_ANGLE_Q;
+    g_tuning.ekf_bias_q                 = TUNE_EKF_BIAS_Q;
+    g_tuning.ekf_accel_r                = TUNE_EKF_ACCEL_R;
+    g_tuning.ekf_mag_r                  = TUNE_EKF_MAG_R;
+    g_tuning.ekf_mag_declination_deg    = TUNE_EKF_MAG_DECL_DEG;
+    g_tuning.ekf_mag_yaw_offset_deg     = TUNE_EKF_MAG_YAW_OFF_DEG;
+    g_tuning.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
     g_tuning.dirty                      = false;
 }
 // Copy g_tuning into live PID/AHRS objects. Caller already holds g_tuneMutex.
@@ -503,6 +565,25 @@ static void applyTuningToObjectsLocked()
 
     imu.mahonyKp           = g_tuning.mahony_kp;
     imu.mahonyKi           = g_tuning.mahony_ki;
+    madgwickAHRS.setBeta(constrain(g_tuning.madgwick_beta, 0.001f, 1.000f));
+    g_tuning.ahrs_filter_mode = constrain(g_tuning.ahrs_filter_mode, 0.0f, 2.0f);
+
+    const float notchHz = constrain(g_tuning.notch_freq_hz, 1.0f, NOTCH_SAMPLE_HZ * 0.45f);
+    const float notchQ  = constrain(g_tuning.notch_q, 0.5f, 50.0f);
+    notchAx.configure(NOTCH_SAMPLE_HZ, notchHz, notchQ, g_tuning.notch_enable);
+    notchAy.configure(NOTCH_SAMPLE_HZ, notchHz, notchQ, g_tuning.notch_enable);
+    notchAz.configure(NOTCH_SAMPLE_HZ, notchHz, notchQ, g_tuning.notch_enable);
+    notchGx.configure(NOTCH_SAMPLE_HZ, notchHz, notchQ, g_tuning.notch_enable);
+    notchGy.configure(NOTCH_SAMPLE_HZ, notchHz, notchQ, g_tuning.notch_enable);
+    notchGz.configure(NOTCH_SAMPLE_HZ, notchHz, notchQ, g_tuning.notch_enable);
+
+    attitudeEKF.setProcessNoise(constrain(g_tuning.ekf_angle_q, 0.000001f, 0.050000f),
+                                constrain(g_tuning.ekf_bias_q,  0.000000001f, 0.001000f));
+    attitudeEKF.setAccelMeasurementNoise(constrain(g_tuning.ekf_accel_r, 0.001f, 2.000f));
+    attitudeEKF.setMagMeasurementNoise(constrain(g_tuning.ekf_mag_r, 0.001f, 5.000f));
+    attitudeEKF.setMagDeclinationDeg(constrain(g_tuning.ekf_mag_declination_deg, -30.0f, 30.0f));
+    attitudeEKF.setMagYawOffsetDeg(constrain(g_tuning.ekf_mag_yaw_offset_deg, -180.0f, 180.0f));
+    attitudeEKF.setMagYawSign(g_tuning.ekf_mag_yaw_sign);
 
     g_tuning.dirty         = false;
     g_tuneApplySeq         = g_tuneRequestSeq;
@@ -652,6 +733,10 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.mode      = flightModeToStr(s.rc.mode);
     out.armed     = s.armed;
     out.rc_valid  = s.rc.valid;
+    out.imu_valid = s.imuValid;
+    out.mag_valid = s.magValid;
+    out.ahrs_filter_mode = s.ahrsFilterMode;
+    out.ahrs_filter = (s.ahrsFilterMode == 1) ? "Mahony" : ((s.ahrsFilterMode == 2) ? "Madgwick" : "EKF");
     out.roll_deg  = s.roll_deg;  out.pitch_deg = s.pitch_deg; out.yaw_deg = s.yaw_deg;
     out.roll_ctrl_deg  = s.roll_ctrl_deg;
     out.pitch_ctrl_deg = s.pitch_ctrl_deg;
@@ -679,8 +764,13 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.motor_fl=s.motorFL; out.motor_fr=s.motorFR;
     out.motor_rl=s.motorRL; out.motor_rr=s.motorRR;
     float rpmScale = MOTOR_KV * BATTERY_VOLTAGE;
-    out.rpm_fl=s.motorFL*rpmScale; out.rpm_fr=s.motorFR*rpmScale;
-    out.rpm_rl=s.motorRL*rpmScale; out.rpm_rr=s.motorRR*rpmScale;
+    out.cmd_rpm_fl=s.motorFL*rpmScale; out.cmd_rpm_fr=s.motorFR*rpmScale;
+    out.cmd_rpm_rl=s.motorRL*rpmScale; out.cmd_rpm_rr=s.motorRR*rpmScale;
+    // Backward-compatible aliases: until ESC RPM telemetry is added, rpm* means commanded/estimated RPM.
+    out.rpm_fl=out.cmd_rpm_fl; out.rpm_fr=out.cmd_rpm_fr;
+    out.rpm_rl=out.cmd_rpm_rl; out.rpm_rr=out.cmd_rpm_rr;
+    out.actual_rpm_fl=0; out.actual_rpm_fr=0; out.actual_rpm_rl=0; out.actual_rpm_rr=0;
+    out.rpm_actual_valid=false;
     out.bmp_temp_c=s.bmpTemp_c; out.bmp_pressure_hpa=s.bmpPressure_hpa;
     out.bmp_altitude_m=s.bmpAltitude_m; out.bmp_valid=s.bmpValid;
     out.cpu_core0_pct=s.cpuCore0_pct; out.cpu_core1_pct=s.cpuCore1_pct;
@@ -714,6 +804,18 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.yaw_deadband=t.yaw_deadband;
     out.yaw_max_rate_dps=t.yaw_max_rate_dps;
     out.mahony_kp=t.mahony_kp; out.mahony_ki=t.mahony_ki;
+    out.ahrs_filter_mode=t.ahrs_filter_mode;
+    out.madgwick_beta=t.madgwick_beta;
+    out.notch_enable=t.notch_enable;
+    out.notch_freq_hz=t.notch_freq_hz;
+    out.notch_q=t.notch_q;
+    out.ekf_angle_q=t.ekf_angle_q;
+    out.ekf_bias_q=t.ekf_bias_q;
+    out.ekf_accel_r=t.ekf_accel_r;
+    out.ekf_mag_r=t.ekf_mag_r;
+    out.ekf_mag_declination_deg=t.ekf_mag_declination_deg;
+    out.ekf_mag_yaw_offset_deg=t.ekf_mag_yaw_offset_deg;
+    out.ekf_mag_yaw_sign=t.ekf_mag_yaw_sign;
     out.tune_request_seq = g_tuneRequestSeq;
     out.tune_apply_seq   = g_tuneApplySeq;
     out.tune_reject_seq  = g_tuneRejectSeq;
@@ -795,6 +897,19 @@ static bool handleTune(const TunePacket& in)
     if (in.has_yaw_max_rate_dps)   g_tuning.yaw_max_rate_dps   = constrain(in.yaw_max_rate_dps, 10.0f, 500.0f);
     if (in.has_mahony_kp)          g_tuning.mahony_kp          = in.mahony_kp;
     if (in.has_mahony_ki)          g_tuning.mahony_ki          = in.mahony_ki;
+    if (in.has_ahrs_filter_mode)   g_tuning.ahrs_filter_mode   = constrain(in.ahrs_filter_mode, 0.0f, 2.0f);
+    if (in.has_madgwick_beta)      g_tuning.madgwick_beta      = constrain(in.madgwick_beta, 0.001f, 1.000f);
+    if (in.has_notch_enable)       g_tuning.notch_enable       = in.notch_enable;
+    if (in.has_notch_freq_hz)      g_tuning.notch_freq_hz      = constrain(in.notch_freq_hz, 1.0f, NOTCH_SAMPLE_HZ * 0.45f);
+    if (in.has_notch_q)            g_tuning.notch_q            = constrain(in.notch_q, 0.5f, 50.0f);
+
+    if (in.has_ekf_angle_q)              g_tuning.ekf_angle_q             = constrain(in.ekf_angle_q, 0.000001f, 0.050000f);
+    if (in.has_ekf_bias_q)               g_tuning.ekf_bias_q              = constrain(in.ekf_bias_q, 0.000000001f, 0.001000f);
+    if (in.has_ekf_accel_r)              g_tuning.ekf_accel_r             = constrain(in.ekf_accel_r, 0.001f, 2.000f);
+    if (in.has_ekf_mag_r)                g_tuning.ekf_mag_r               = constrain(in.ekf_mag_r, 0.001f, 5.000f);
+    if (in.has_ekf_mag_declination_deg)  g_tuning.ekf_mag_declination_deg = constrain(in.ekf_mag_declination_deg, -30.0f, 30.0f);
+    if (in.has_ekf_mag_yaw_offset_deg)   g_tuning.ekf_mag_yaw_offset_deg  = constrain(in.ekf_mag_yaw_offset_deg, -180.0f, 180.0f);
+    if (in.has_ekf_mag_yaw_sign)         g_tuning.ekf_mag_yaw_sign        = (in.ekf_mag_yaw_sign < 0.0f) ? -1.0f : 1.0f;
     // Accept and apply immediately while disarmed. This removes the confusing
     // one-cycle handshake where the POST succeeded but telemetry still showed
     // old values until taskControl got around to applying dirty tuning.
@@ -1268,6 +1383,7 @@ static void taskControl(void* /*pv*/)
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
     pidAngleYaw.reset();
+    attitudeEKF.reset();
     g_yawHoldActive = false;
 
     for (;;) {
@@ -1281,6 +1397,7 @@ static void taskControl(void* /*pv*/)
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
             pidAngleYaw.reset();
+            attitudeEKF.reset();
             g_yawHoldActive = false;
             runAutonomousCalibration();
             g_calibState = CalibState::IDLE;
@@ -1336,7 +1453,7 @@ static void taskControl(void* /*pv*/)
             xSemaphoreGive(g_timingMutex);
         }
 
-        // ── IMU read + Mahony AHRS ────────────────────────────
+        // ── IMU read + EKF AHRS ───────────────────────────────
         MPU_SensorData s;
         MPU_Attitude   att;
         uint32_t phaseStartUs = micros();
@@ -1347,10 +1464,60 @@ static void taskControl(void* /*pv*/)
         float accelRollDeg = 0.0f, accelPitchDeg = 0.0f;
         float rollAngleErrDeg = 0.0f, pitchAngleErrDeg = 0.0f;
         if (imuOk) {
-            imu.mahonyUpdate(s, dt, att);
-            gxf = lpfGx.apply(s.gx_dps, dt, GYRO_LPF_HZ);
-            gyf = lpfGy.apply(s.gy_dps, dt, GYRO_LPF_HZ);
-            gzf = lpfGz.apply(s.gz_dps, dt, GYRO_LPF_HZ);
+            // Apply tunable motor-vibration notch before EKF and before PID.
+            // Keep original `s` for raw telemetry/logging; use `sf` for control.
+            MPU_SensorData sf = s;
+            sf.ax_g   = notchAx.apply(s.ax_g);
+            sf.ay_g   = notchAy.apply(s.ay_g);
+            sf.az_g   = notchAz.apply(s.az_g);
+            sf.gx_dps = notchGx.apply(s.gx_dps);
+            sf.gy_dps = notchGy.apply(s.gy_dps);
+            sf.gz_dps = notchGz.apply(s.gz_dps);
+
+            // Feed onboard vibration spectrum with RAW pre-notch IMU data.
+            // This lets you see the vibration peak even when the notch is enabled.
+            spectrumAnalyzer.push(s.ax_g, s.ay_g, s.az_g,
+                                  s.gx_dps, s.gy_dps, s.gz_dps,
+                                  g_motorOutputsActive);
+
+            AHRSInput ekfIn;
+            ekfIn.ax_g = sf.ax_g; ekfIn.ay_g = sf.ay_g; ekfIn.az_g = sf.az_g;
+            ekfIn.gx_dps = sf.gx_dps; ekfIn.gy_dps = sf.gy_dps; ekfIn.gz_dps = sf.gz_dps;
+            ekfIn.mx_uT = s.mx_uT; ekfIn.my_uT = s.my_uT; ekfIn.mz_uT = s.mz_uT;
+            ekfIn.magValid = imu.isMagConnected();
+
+            // Runtime-selectable attitude estimator.
+            // 0 = EKF, 1 = Mahony, 2 = Madgwick.
+            static uint8_t lastAhrsMode = 255;
+            uint8_t ahrsMode = 0;
+            if (xSemaphoreTake(g_tuneMutex, 0) == pdTRUE) {
+                ahrsMode = (uint8_t)constrain((int)roundf(g_tuning.ahrs_filter_mode), 0, 2);
+                xSemaphoreGive(g_tuneMutex);
+            }
+            if (ahrsMode != lastAhrsMode) {
+                attitudeEKF.reset();
+                madgwickAHRS.reset();
+                lastAhrsMode = ahrsMode;
+            }
+            g_ahrsFilterModeActive = ahrsMode;
+
+            if (ahrsMode == 1) {
+                imu.mahonyUpdate(sf, dt, att);
+            } else if (ahrsMode == 2) {
+                AttitudeEstimate madOut;
+                madgwickAHRS.update(ekfIn, dt, madOut);
+                att.roll = madOut.roll_deg; att.pitch = madOut.pitch_deg; att.yaw = madOut.yaw_deg;
+                att.q0 = madOut.q0; att.q1 = madOut.q1; att.q2 = madOut.q2; att.q3 = madOut.q3;
+            } else {
+                AttitudeEstimate ekfOut;
+                attitudeEKF.update(ekfIn, dt, ekfOut);
+                att.roll = ekfOut.roll_deg; att.pitch = ekfOut.pitch_deg; att.yaw = ekfOut.yaw_deg;
+                att.q0 = ekfOut.q0; att.q1 = ekfOut.q1; att.q2 = ekfOut.q2; att.q3 = ekfOut.q3;
+            }
+
+            gxf = lpfGx.apply(sf.gx_dps, dt, GYRO_LPF_HZ);
+            gyf = lpfGy.apply(sf.gy_dps, dt, GYRO_LPF_HZ);
+            gzf = lpfGz.apply(sf.gz_dps, dt, GYRO_LPF_HZ);
 
             // Accel-only tilt estimate. This is noisy under vibration/acceleration,
             // but useful as an independent reference for AHRS roll/pitch.
@@ -1449,6 +1616,8 @@ static void taskControl(void* /*pv*/)
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
             lpfGx.reset(); lpfGy.reset(); lpfGz.reset();
+            notchAx.reset(); notchAy.reset(); notchAz.reset();
+            notchGx.reset(); notchGy.reset(); notchGz.reset();
             lpfSpRoll.reset(); lpfSpPitch.reset(); lpfSpYaw.reset();
             pidAngleYaw.reset();
             g_yawHoldActive = false;
@@ -1462,6 +1631,9 @@ static void taskControl(void* /*pv*/)
                 if (imuOk) {
                     g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
                     g_state.yaw_deg  = att.yaw;
+                    g_state.imuValid = imuOk;
+                    g_state.magValid = imu.isMagConnected();
+                    g_state.ahrsFilterMode = g_ahrsFilterModeActive;
                     g_state.roll_ctrl_deg = rollCtrlDeg;
                     g_state.pitch_ctrl_deg = pitchCtrlDeg;
                     g_state.yaw_ctrl_deg = yawCtrlDeg;
@@ -1521,6 +1693,18 @@ static void taskControl(void* /*pv*/)
             tune.idle_ramp_end              = TUNE_IDLE_RAMP_END;
             tune.yaw_deadband               = TUNE_YAW_DEADBAND;
             tune.yaw_max_rate_dps           = TUNE_YAW_MAX_RATE_DPS;
+            tune.ahrs_filter_mode           = TUNE_AHRS_FILTER_MODE;
+            tune.madgwick_beta              = TUNE_MADGWICK_BETA;
+            tune.notch_enable               = TUNE_NOTCH_ENABLE;
+            tune.notch_freq_hz              = TUNE_NOTCH_FREQ_HZ;
+            tune.notch_q                    = TUNE_NOTCH_Q;
+            tune.ekf_angle_q                = TUNE_EKF_ANGLE_Q;
+            tune.ekf_bias_q                 = TUNE_EKF_BIAS_Q;
+            tune.ekf_accel_r                = TUNE_EKF_ACCEL_R;
+            tune.ekf_mag_r                  = TUNE_EKF_MAG_R;
+            tune.ekf_mag_declination_deg    = TUNE_EKF_MAG_DECL_DEG;
+            tune.ekf_mag_yaw_offset_deg     = TUNE_EKF_MAG_YAW_OFF_DEG;
+            tune.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
         }
 
         const float MAX_ANGLE_DEG      = tune.max_angle_deg;
@@ -1649,6 +1833,9 @@ static void taskControl(void* /*pv*/)
             if (imuOk) {
                 g_state.roll_deg = att.roll;  g_state.pitch_deg = att.pitch;
                 g_state.yaw_deg  = att.yaw;
+                g_state.imuValid = imuOk;
+                g_state.magValid = imu.isMagConnected();
+                g_state.ahrsFilterMode = g_ahrsFilterModeActive;
                 g_state.roll_ctrl_deg = rollCtrlDeg;
                 g_state.pitch_ctrl_deg = pitchCtrlDeg;
                 g_state.yaw_ctrl_deg = yawCtrlDeg;
@@ -1735,7 +1922,7 @@ static void taskSerial(void* /*pv*/)
                           "MOT %.2f %.2f %.2f %.2f | "
                           "BMP %.1fC %.1fhPa %.1fm | "
                           "GPS %s Sats=%d | "
-                          "Mag:%s mKp=%.2f\n",
+                          "Mag:%s Est:%s mKp=%.2f\n",
                           (unsigned long)tick, ms,
                           s.roll_deg, s.pitch_deg, s.yaw_deg,
                           s.roll_ctrl_deg, s.pitch_ctrl_deg, s.yaw_ctrl_deg,
@@ -1743,7 +1930,8 @@ static void taskSerial(void* /*pv*/)
                           s.motorFL, s.motorFR, s.motorRL, s.motorRR,
                           s.bmpTemp_c, s.bmpPressure_hpa, s.bmpAltitude_m,
                           s.gps.valid ? "FIX" : "---", s.gps.satellites,
-                          imu.hasMag() ? "9DOF" : "6DOF",
+                          imu.isMagConnected() ? "9DOF" : "6DOF",
+                          (s.ahrsFilterMode == 1) ? "Mahony" : ((s.ahrsFilterMode == 2) ? "Madgwick" : "EKF"),
                           imu.mahonyKp);
             Serial.printf("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
                           s.rc.raw[0], s.rc.raw[1], s.rc.raw[2], s.rc.raw[3], s.rc.raw[4],
@@ -1819,6 +2007,24 @@ static void taskCPU(void* /*pv*/)
 
 
 // ─────────────────────────────────────────────────────────────
+//  Wi-Fi spectrum provider — /spectrum endpoint
+// ─────────────────────────────────────────────────────────────
+static String provideSpectrumJson()
+{
+    TuningState t;
+    memset(&t, 0, sizeof(t));
+    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        t = g_tuning;
+        xSemaphoreGive(g_tuneMutex);
+    } else {
+        t.notch_enable  = TUNE_NOTCH_ENABLE;
+        t.notch_freq_hz = TUNE_NOTCH_FREQ_HZ;
+        t.notch_q       = TUNE_NOTCH_Q;
+    }
+    return spectrumAnalyzer.toJson(t.notch_freq_hz, t.notch_q, t.notch_enable);
+}
+
+// ─────────────────────────────────────────────────────────────
 //  OTA safety gate — Web firmware update is bench-only.
 //  OTA is allowed only when DISARMED, throttle low, and motors inactive.
 // ─────────────────────────────────────────────────────────────
@@ -1851,6 +2057,7 @@ static void taskWiFi(void* /*pv*/)
     telemetryWiFi.setTimingProvider(provideTimingJson);
     telemetryWiFi.setTimingCsvProvider(provideTimingCsv);
     telemetryWiFi.setTimingResetHandler(resetTimingStats);
+    telemetryWiFi.setSpectrumProvider(provideSpectrumJson);
 
 // High-speed flight log (chunked streaming — no giant String)
     telemetryWiFi.setFlightLogCountProvider(flightLogCount);
@@ -1911,6 +2118,10 @@ void setup()
     Serial.print(F("[BOOT] BMP280... "));
     bmp280.beginAuto(PIN_BMP_SDA, PIN_BMP_SCL, 100000)
         ? Serial.println(F("OK")) : Serial.println(F("not found."));
+
+    Serial.print(F("[BOOT] VL53L4CX ToF... "));
+    tofSensor.begin(PIN_BMP_SDA, PIN_BMP_SCL, 400000)
+        ? Serial.println(F("OK")) : Serial.println(F("disabled/not found."));
 
     Serial.print(F("[BOOT] CPU monitor... "));
     cpuUtilization.begin(1000)
