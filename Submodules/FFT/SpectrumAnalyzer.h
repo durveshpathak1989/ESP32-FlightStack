@@ -34,7 +34,14 @@ public:
     void push(float ax_g, float ay_g, float az_g,
               float gx_dps, float gy_dps, float gz_dps,
               bool motorsRunning);
-
+    // Finds dominant gyro vibration peak from the latest buffer.
+    // Safe to call from slow/Core-0 task, not from 400 Hz control loop.
+    bool findGyroPeak(float minHz,
+                    float maxHz,
+                    float minMag,
+                    float& peakHz,
+                    float& peakMag,
+                    uint32_t& seq) const;
     // JSON for GET /spectrum. Safe to call from Wi-Fi task.
     String toJson(float notchFreqHz, float notchQ, bool notchEnabled) const;
 

@@ -61,6 +61,89 @@ void SpectrumAnalyzer::_computeDft(const float* x, float* mag, float sampleMean)
     }
 }
 
+bool SpectrumAnalyzer::findGyroPeak(float minHz,
+                                    float maxHz,
+                                    float minScore,
+                                    float& peakHz,
+                                    float& peakScore,
+                                    uint32_t& seq) const
+{
+    float gyro[N];
+    uint16_t head = 0;
+    bool full = false;
+    float fs = 400.0f;
+
+    peakHz = 0.0f;
+    peakScore = 0.0f;
+    seq = 0;
+
+    // Snapshot buffer safely
+    portENTER_CRITICAL(&_mux);
+
+    head = _head;
+    full = _full;
+    fs   = _sampleHz;
+    seq  = _sampleSeq;
+
+    for (uint16_t i = 0; i < N; i++) {
+        uint16_t src = full ? ((head + i) % N) : i;
+        gyro[i] = _gyroVibe[src];
+    }
+
+    portEXIT_CRITICAL(&_mux);
+
+    // Not enough samples yet
+    if (!full) {
+        return false;
+    }
+
+    // Remove DC mean
+    float mean = 0.0f;
+    for (uint16_t i = 0; i < N; i++) {
+        mean += gyro[i];
+    }
+    mean /= (float)N;
+
+    float mag[BIN_COUNT];
+    _computeDft(gyro, mag, mean);
+
+    uint16_t minBin = (uint16_t)ceilf(minHz * (float)N / fs);
+    uint16_t maxBin = (uint16_t)floorf(maxHz * (float)N / fs);
+
+    if (minBin < 1) minBin = 1;
+    if (maxBin >= BIN_COUNT) maxBin = BIN_COUNT - 1;
+    if (maxBin <= minBin) return false;
+
+    float peak = 0.0f;
+    uint16_t peakBin = minBin;
+
+    float sum = 0.0f;
+    uint16_t count = 0;
+
+    for (uint16_t k = minBin; k <= maxBin; k++) {
+        float v = mag[k];
+        sum += v;
+        count++;
+
+        if (v > peak) {
+            peak = v;
+            peakBin = k;
+        }
+    }
+
+    if (count < 3) return false;
+
+    float noise = (sum - peak) / (float)(count - 1);
+    if (noise < 0.000001f) {
+        noise = 0.000001f;
+    }
+
+    peakHz = (float)peakBin * fs / (float)N;
+    peakScore = peak / noise;
+
+    return peakScore >= minScore;
+}
+
 String SpectrumAnalyzer::toJson(float notchFreqHz, float notchQ, bool notchEnabled) const
 {
     float gyro[N];

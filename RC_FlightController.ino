@@ -138,7 +138,18 @@ static constexpr bool  TUNE_NOTCH_ENABLE    = true;
 static constexpr float TUNE_NOTCH_FREQ_HZ   = 90.0f;   // start point; tune from motor log/FFT
 static constexpr float TUNE_NOTCH_Q         = 8.0f;    // higher = narrower notch
 static constexpr float NOTCH_SAMPLE_HZ      = 400.0f;  // control loop sample rate
-
+// ── Dynamic FFT-driven notch tracking ───────────────────────
+// Start conservative. The notch should track slowly, not chase noise.
+static constexpr bool     TUNE_DYNAMIC_NOTCH_ENABLE = true;
+static constexpr float    DYN_NOTCH_MIN_HZ          = 45.0f;
+static constexpr float    DYN_NOTCH_MAX_HZ          = 170.0f;  // below 0.45 * 400 Hz
+static constexpr uint32_t DYN_NOTCH_UPDATE_MS       = 250;     // 10 Hz update rate
+static constexpr float    DYN_NOTCH_ALPHA           = 0.08f;   // smoothing
+static constexpr float    DYN_NOTCH_MAX_STEP_HZ     = 2.0f;    // max movement per update
+static constexpr float    DYN_NOTCH_MIN_THROTTLE    = 0.15f;
+static constexpr float    DYN_NOTCH_MIN_SCORE       = 3.5f;    // adjust based on your FFT output
+//static constexpr float DYN_NOTCH_MIN_GYRO_MAG    = 0.30f;
+//static constexpr float DYN_NOTCH_SMOOTH_ALPHA    = 0.20f;
 // ── EKF tuning knobs ────────────────────────────────────────
 // These are runtime-tunable from /tune while DISARMED.
 // Higher R = trust that sensor less. Higher Q = allow faster EKF state motion.
@@ -213,6 +224,7 @@ struct FlightLogRow {
 //  Calibration timing
 // ─────────────────────────────────────────────────────────────
 #define SWC_THRESHOLD      1700
+#define ESC_CALIB_VRB_THRESHOLD 1900   // CH6 / VrB almost full-right = ESC calibration request
 #define GYRO_SETTLE_MS     3000
 #define GYRO_SAMPLE_MS     5000
 #define ACCEL_HOLD_MS      3000
@@ -336,6 +348,10 @@ AttitudeEKF attitudeEKF;
 MadgwickAHRS madgwickAHRS;
 NotchFilter notchAx, notchAy, notchAz;
 NotchFilter notchGx, notchGy, notchGz;
+static float    g_dynamicNotchHz = TUNE_NOTCH_FREQ_HZ;
+static bool     g_dynamicNotchTracking = false;
+static uint32_t g_lastDynamicNotchUpdateMs = 0;
+
 SpectrumAnalyzer spectrumAnalyzer(NOTCH_SAMPLE_HZ);
 
 #define FLIGHT_LOG_SIZE 100   // expanded debug row: 300 samples @ 100 Hz = 3 s
@@ -1228,6 +1244,7 @@ static void taskRC(void* /*pv*/)
     const TickType_t period = pdMS_TO_TICKS(5);
     TickType_t lastWake = xTaskGetTickCount();
     bool swdPrev = false;
+    bool vrbEscPrev = false;
 
 
     for (;;) {
@@ -1243,6 +1260,30 @@ static void taskRC(void* /*pv*/)
             }
         }
         swdPrev = cmd.swdHigh;
+        // CH6 / VrB rising edge requests ESC calibration.
+        // SWC still confirms the dangerous step inside CalibrationManager.
+        const bool vrbEscHigh = cmd.valid &&
+                                (cmd.raw[RC_CH_AUX5] >= ESC_CALIB_VRB_THRESHOLD);
+
+        if (vrbEscHigh && !vrbEscPrev) {
+            if (cmd.mode == FlightMode::DISARMED && cmd.throttle <= TUNE_THROTTLE_CUT) {
+                calManager.request(CalibrationMode::ESC, CalibrationSource::RC);
+                calLog("[RC] ESC calibration requested by VrB. Use SWC to confirm.");
+            } else {
+                calLog("[RC] ESC calibration rejected — disarm and set throttle low first.");
+            }
+        }
+
+        vrbEscPrev = vrbEscHigh;
+
+        // Optional safety cancel: lowering VrB cancels ESC calibration.
+        CalibrationStatus rcCalStatus = calManager.status();
+        if (rcCalStatus.active &&
+            rcCalStatus.mode == CalibrationMode::ESC &&
+            !vrbEscHigh) {
+            calManager.cancel();
+            calLog("[RC] ESC calibration cancelled — VrB lowered.");
+        }
         // ── Per-second iBUS health: good rate vs checksum failures ──
         static uint32_t lastReportMs = 0;
         static uint32_t lastCsumFail = 0;
@@ -1332,6 +1373,121 @@ static bool  g_gyroAngleInit = false;
 // motorOff() is intentionally NOT called every 400 Hz cycle because the
 // current MotorControl implementation appears to block for ~40 ms.
 static bool  g_motorOutputsActive = false;
+
+static void updateDynamicNotchFromFFT()
+{
+    if (!TUNE_DYNAMIC_NOTCH_ENABLE) return;
+
+    static uint32_t lastUpdateMs = 0;
+    uint32_t nowMs = millis();
+
+    if (nowMs - lastUpdateMs < DYN_NOTCH_UPDATE_MS) {
+        return;
+    }
+
+    lastUpdateMs = nowMs;
+
+    // Snapshot flight state inside this function.
+    // This avoids Arduino prototype issues with FlightState in the function argument.
+    FlightState s;
+    if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        s = g_state;
+        xSemaphoreGive(g_flightMutex);
+    } else {
+        return;
+    }
+
+    // Do not learn while disarmed, motors off, failsafe, or low throttle.
+    if (!s.armed ||
+        !g_motorOutputsActive ||
+        !s.rc.valid ||
+        s.rc.throttle < DYN_NOTCH_MIN_THROTTLE) {
+
+        static uint32_t lastGatePrintMs = 0;
+        if (nowMs - lastGatePrintMs >= 1000) {
+            lastGatePrintMs = nowMs;
+
+            Serial.printf("[DYN_NOTCH_GATE] blocked armed=%d motorOut=%d rcValid=%d throttle=%.3f minThrottle=%.3f\n",
+                          s.armed ? 1 : 0,
+                          g_motorOutputsActive ? 1 : 0,
+                          s.rc.valid ? 1 : 0,
+                          s.rc.throttle,
+                          DYN_NOTCH_MIN_THROTTLE);
+        }
+
+        return;
+    }
+
+    bool notchEnabled = false;
+    float currentHz = TUNE_NOTCH_FREQ_HZ;
+
+    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        notchEnabled = g_tuning.notch_enable;
+        currentHz = g_tuning.notch_freq_hz;
+        xSemaphoreGive(g_tuneMutex);
+    } else {
+        return;
+    }
+
+    if (!notchEnabled) {
+        return;
+    }
+
+    float peakHz = 0.0f;
+    float peakScore = 0.0f;
+    uint32_t seq = 0;
+
+    bool ok = spectrumAnalyzer.findGyroPeak(DYN_NOTCH_MIN_HZ,
+                                            DYN_NOTCH_MAX_HZ,
+                                            DYN_NOTCH_MIN_SCORE,
+                                            peakHz,
+                                            peakScore,
+                                            seq);
+
+    if (!ok) {
+        static uint32_t lastNoPeakPrintMs = 0;
+        if (nowMs - lastNoPeakPrintMs >= 1000) {
+            lastNoPeakPrintMs = nowMs;
+
+            Serial.printf("[DYN_NOTCH_NO_PEAK] current=%.1fHz min=%.1f max=%.1f minScore=%.2f seq=%lu\n",
+                          currentHz,
+                          DYN_NOTCH_MIN_HZ,
+                          DYN_NOTCH_MAX_HZ,
+                          DYN_NOTCH_MIN_SCORE,
+                          (unsigned long)seq);
+        }
+
+        return;
+    }
+
+    // Smooth toward the detected FFT peak.
+    float targetHz = currentHz + DYN_NOTCH_ALPHA * (peakHz - currentHz);
+
+    // Limit movement per update so the notch does not chase noise.
+    float stepHz = targetHz - currentHz;
+    stepHz = constrain(stepHz, -DYN_NOTCH_MAX_STEP_HZ, DYN_NOTCH_MAX_STEP_HZ);
+
+    float requestedHz = currentHz + stepHz;
+    requestedHz = constrain(requestedHz, DYN_NOTCH_MIN_HZ, DYN_NOTCH_MAX_HZ);
+
+    // Avoid tiny reconfigurations.
+    if (fabsf(requestedHz - currentHz) < 0.5f) {
+        return;
+    }
+
+    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        g_tuning.notch_freq_hz = requestedHz;
+        g_tuning.dirty = true;   // taskControl applies notch safely
+        xSemaphoreGive(g_tuneMutex);
+    }
+
+    Serial.printf("[DYN_NOTCH] peak=%.1fHz score=%.3f current=%.1fHz -> request=%.1fHz seq=%lu\n",
+                  peakHz,
+                  peakScore,
+                  currentHz,
+                  requestedHz,
+                  (unsigned long)seq);
+}
 
 // ═════════════════════════════════════════════════════════════
 //  HIGH-SPEED ON-BOARD FLIGHT LOG  (Test 7.1 / 7.3 / 7.4 capture)
@@ -1445,6 +1601,10 @@ static String flightLogRowCsv(uint16_t i)
     s += '\n';
     return s;
 }
+
+
+
+
 // ─────────────────────────────────────────────────────────────
 //  taskControl — Core 1, priority 5, 400 Hz  (2.5 ms period)
 // ─────────────────────────────────────────────────────────────
@@ -1536,7 +1696,7 @@ static void taskControl(void* /*pv*/)
 
         // ── Calibration active: keep motors off and skip flight control ──
         if (calManager.shouldBlockFlight()) {
-            if (g_motorOutputsActive) {
+            if (!calManager.ownsMotors() && g_motorOutputsActive) {
                 motorsOff();
                 g_motorOutputsActive = false;
             }
@@ -1585,6 +1745,45 @@ static void taskControl(void* /*pv*/)
                                   s.gx_dps, s.gy_dps, s.gz_dps,
                                   g_motorOutputsActive);
 
+            static uint32_t dynFftPushCount = 0;
+            static uint32_t lastDynFftInputPrintMs = 0;
+
+            dynFftPushCount++;
+
+            uint32_t nowFftInputMs = millis();
+            if (nowFftInputMs - lastDynFftInputPrintMs >= 1000) {
+                lastDynFftInputPrintMs = nowFftInputMs;
+
+                float gyroMag =
+                    sqrtf(s.gx_dps * s.gx_dps +
+                        s.gy_dps * s.gy_dps +
+                        s.gz_dps * s.gz_dps);
+
+                float accelVib =
+                    fabsf(sqrtf(s.ax_g * s.ax_g +
+                                s.ay_g * s.ay_g +
+                                s.az_g * s.az_g) - 1.0f);
+
+                Serial.printf("[DYN_FFT_INPUT] pushes=%lu motorOut=%d gyroMag=%.3f dps accelVib=%.4f g\n",
+                            (unsigned long)dynFftPushCount,
+                            g_motorOutputsActive ? 1 : 0,
+                            gyroMag,
+                            accelVib);
+            }
+            // TEMP DEBUG: prove dynamic notch / spectrum hook is running.
+            // Prints only once per second so it does not destroy 400 Hz timing.
+            static uint32_t lastDynNotchPrintMs = 0;
+            uint32_t nowDynNotchMs = millis();
+
+            if (nowDynNotchMs - lastDynNotchPrintMs >= 1000) {
+                lastDynNotchPrintMs = nowDynNotchMs;
+
+    Serial.printf("[DYN_NOTCH_HOOK] motorOut=%d notchEnable=%d notchHz=%.1f Q=%.1f\n",
+                  g_motorOutputsActive ? 1 : 0,
+                  g_tuning.notch_enable ? 1 : 0,
+                  g_tuning.notch_freq_hz,
+                  g_tuning.notch_q);
+}
             AHRSInput ekfIn;
             ekfIn.ax_g = sf.ax_g; ekfIn.ay_g = sf.ay_g; ekfIn.az_g = sf.az_g;
             ekfIn.gx_dps = sf.gx_dps; ekfIn.gy_dps = sf.gy_dps; ekfIn.gz_dps = sf.gz_dps;
@@ -1652,7 +1851,7 @@ static void taskControl(void* /*pv*/)
         phaseStartUs = micros();
         RCCommand cmd = rcReceiver.getCommand();
         g_execTiming.lastRcUs = micros() - phaseStartUs;
-
+ 
         float rollCtrlDeg = 0.0f, pitchCtrlDeg = 0.0f, yawCtrlDeg = 0.0f;
         if (imuOk) computeControlAttitude(att, rollCtrlDeg, pitchCtrlDeg, yawCtrlDeg);
 
@@ -2059,6 +2258,7 @@ static void taskControl(void* /*pv*/)
     }
 }
 
+
 // ─────────────────────────────────────────────────────────────
 //  taskSerial — Core 0, priority 1, 20 Hz
 //  1 Hz status line; optional ~4 Hz [PID] trace (Serial 'p' toggles).
@@ -2137,6 +2337,7 @@ static void taskSerial(void* /*pv*/)
         if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
             s = g_state; xSemaphoreGive(g_flightMutex);
         }
+        updateDynamicNotchFromFFT();
         const char* ms = "???";
         switch(s.rc.mode) {
             case FlightMode::DISARMED: ms="DISARMD"; break;
@@ -2365,6 +2566,7 @@ void setup()
     }
     Serial.println(F("OK"));
     calManager.begin(imu);
+    calManager.attachMotorOutputs(writeMotors, motorsOff);
     Serial.println(F("[BOOT] CalibrationManager ready."));
 
     if (imu.hasMag()) {
