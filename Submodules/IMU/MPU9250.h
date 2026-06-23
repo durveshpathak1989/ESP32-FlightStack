@@ -1,8 +1,9 @@
 /**
  * ============================================================
- *  MPU9250.h  —  Driver + Calibration  (v3.1)
+ *  MPU9250.h  —  Driver + Calibration  (v4.0)
  *  Adafruit HUZZAH32 Feather (ESP32-WROOM-32E)
  *  SPI (VSPI) — FreeRTOS compatible
+ *  Created By - Durvesh Pathak
  * ============================================================
  *
  *  v3.1 changes vs v3.0:
@@ -31,55 +32,68 @@
  */
 
 #pragma once
+
 #ifndef MPU9250_H
 #define MPU9250_H
 
 #include <Arduino.h>
 #include <SPI.h>
 #include <math.h>
-#include <Preferences.h>
 
 // ─────────────────────────────────────────────────────────────
-//  §1  Register Map — MPU-9250 / MPU-6500
+//  §1 Register Map — MPU-9250 / MPU-6500 accel + gyro core
 // ─────────────────────────────────────────────────────────────
-#define MPU_REG_SMPLRT_DIV      0x19
-#define MPU_REG_CONFIG          0x1A
-#define MPU_REG_GYRO_CONFIG     0x1B
-#define MPU_REG_ACCEL_CONFIG    0x1C
-#define MPU_REG_ACCEL_CONFIG2   0x1D
-#define MPU_REG_INT_PIN_CFG     0x37
-#define MPU_REG_INT_ENABLE      0x38
-#define MPU_REG_INT_STATUS      0x3A
-#define MPU_REG_ACCEL_XOUT_H    0x3B   // 14-byte burst start
-#define MPU_REG_USER_CTRL       0x6A
-#define MPU_REG_PWR_MGMT_1      0x6B
-#define MPU_REG_PWR_MGMT_2      0x6C
-#define MPU_REG_WHO_AM_I        0x75
-#define MPU_WHO_AM_I_VAL        0x71   // MPU-9250
-#define MPU6500_WHO_AM_I_VAL    0x70   // MPU-6500 (no mag)
+
+#define MPU_REG_SMPLRT_DIV      0x19  // Sample-rate divider: output rate = gyro rate / (1 + value)
+#define MPU_REG_CONFIG          0x1A  // Gyro DLPF config: sets digital low-pass filter bandwidth
+#define MPU_REG_GYRO_CONFIG     0x1B  // Gyro full-scale range config: ±250/500/1000/2000 dps
+#define MPU_REG_ACCEL_CONFIG    0x1C  // Accel full-scale range config: ±2/4/8/16 g
+#define MPU_REG_ACCEL_CONFIG2   0x1D  // Accel DLPF config: sets accelerometer low-pass bandwidth
+
+#define MPU_REG_INT_PIN_CFG     0x37  // Interrupt pin behavior: polarity, latch mode, clear-on-read
+#define MPU_REG_INT_ENABLE      0x38  // Interrupt enable: enables data-ready or other interrupt sources
+#define MPU_REG_INT_STATUS      0x3A  // Interrupt status: read to check if data-ready interrupt occurred
+
+#define MPU_REG_ACCEL_XOUT_H    0x3B  // Burst-read start: accel XYZ, temperature, gyro XYZ; 14 bytes total
+
+#define MPU_REG_USER_CTRL       0x6A  // User control: enables internal I2C master for AK8963 mag access
+#define MPU_REG_PWR_MGMT_1      0x6B  // Power management 1: reset, sleep/wake, clock source selection
+#define MPU_REG_PWR_MGMT_2      0x6C  // Power management 2: enable/disable accel and gyro axes
+
+#define MPU_REG_WHO_AM_I        0x75  // Device identity register: read to verify MPU is responding
+#define MPU9250_WHO_AM_I_VAL    0x71  // Expected WHO_AM_I value for MPU-9250
+#define MPU6500_WHO_AM_I_VAL    0x70  // Expected WHO_AM_I value for MPU-6500; no internal magnetometer
+
 
 // ─────────────────────────────────────────────────────────────
-//  §2  Register Map — AK8963 magnetometer (via I2C master)
+//  §2 Register Map — AK8963 magnetometer through MPU I2C master
 // ─────────────────────────────────────────────────────────────
-#define AK8963_ADDR             0x0C
-#define MPU_REG_I2C_MST_CTRL    0x24
-#define MPU_REG_I2C_SLV0_ADDR  0x25
-#define MPU_REG_I2C_SLV0_REG   0x26
-#define MPU_REG_I2C_SLV0_CTRL  0x27
-#define MPU_REG_I2C_SLV4_ADDR  0x31
-#define MPU_REG_I2C_SLV4_REG   0x32
-#define MPU_REG_I2C_SLV4_DO    0x33
-#define MPU_REG_I2C_SLV4_CTRL  0x34
-#define MPU_REG_I2C_MST_STATUS 0x36
-#define MPU_REG_EXT_SENS_DATA  0x49   // 8 mag bytes land here
-#define AK_REG_WIA              0x00
-#define AK_REG_ST1              0x02
-#define AK_REG_HXL              0x03
-#define AK_REG_ST2              0x09
-#define AK_REG_CNTL1            0x0A
-#define AK_REG_CNTL2            0x0B
-#define AK_REG_ASAX             0x10
-#define AK_WIA_VAL              0x48
+
+#define AK8963_ADDR             0x0C  // AK8963 I2C address used by MPU internal I2C master
+
+#define MPU_REG_I2C_MST_CTRL    0x24  // I2C master clock/control for MPU's internal I2C bus
+#define MPU_REG_I2C_SLV0_ADDR   0x25  // I2C slave 0 address: used for automatic AK8963 reads
+#define MPU_REG_I2C_SLV0_REG    0x26  // I2C slave 0 register: AK8963 register address to read from
+#define MPU_REG_I2C_SLV0_CTRL   0x27  // I2C slave 0 control: enable read and set number of bytes
+
+#define MPU_REG_I2C_SLV4_ADDR   0x31  // I2C slave 4 address: used for one-shot AK8963 writes
+#define MPU_REG_I2C_SLV4_REG    0x32  // I2C slave 4 register: AK8963 register address to write to
+#define MPU_REG_I2C_SLV4_DO     0x33  // I2C slave 4 data-out: byte value to write to AK8963
+#define MPU_REG_I2C_SLV4_CTRL   0x34  // I2C slave 4 control: starts one-shot write transaction
+
+#define MPU_REG_I2C_MST_STATUS  0x36  // I2C master status: checks SLV4 done, errors, arbitration lost
+#define MPU_REG_EXT_SENS_DATA   0x49  // External sensor data start: AK8963 mag bytes appear here
+
+#define AK_REG_WIA              0x00  // AK8963 identity register: read to verify magnetometer is present
+#define AK_REG_ST1              0x02  // AK8963 status 1: data-ready bit
+#define AK_REG_HXL              0x03  // AK8963 magnetic data start: HXL,HXH,HYL,HYH,HZL,HZH
+#define AK_REG_ST2              0x09  // AK8963 status 2: overflow bit; must be read to release data latch
+
+#define AK_REG_CNTL1            0x0A  // AK8963 control 1: mode select, power-down, fuse ROM, continuous mode
+#define AK_REG_CNTL2            0x0B  // AK8963 control 2: soft reset
+#define AK_REG_ASAX             0x10  // AK8963 fuse ROM sensitivity adjustment start: ASAX, ASAY, ASAZ
+#define AK_WIA_VAL              0x48  // Expected AK8963 WIA identity value
+
 
 // ─────────────────────────────────────────────────────────────
 //  §3  Scale constants
@@ -93,8 +107,9 @@
 // ─────────────────────────────────────────────────────────────
 //  §4  SPI speed constants
 // ─────────────────────────────────────────────────────────────
-#define MPU_SPI_SLOW    1000000UL   //  1 MHz — config writes
-#define MPU_SPI_FAST   20000000UL   // 20 MHz — data reads
+#define MPU_SPI_SLOW        1000000UL   //  1 MHz — config writes
+#define MPU_SPI_FAST        20000000UL  // 20 MHz — data reads
+#define MPU_MAG_PERIOD_MS   10          //mag to be read ever 100hz 10ms
 
 // ─────────────────────────────────────────────────────────────
 //  §5  Data structures
@@ -114,13 +129,7 @@ struct MPU_SensorData {
     float mx_uT, my_uT, mz_uT;
     float temp_c;
     uint32_t ts_ms;
-};
-
-struct MPU_Attitude {
-    float roll;
-    float pitch;
-    float yaw;
-    float q0, q1, q2, q3;
+    bool magOk;
 };
 
 struct MPU_CalData {
@@ -154,12 +163,6 @@ public:
     bool readRaw(MPU_RawData& out);
     bool readScaled(MPU_SensorData& out);
 
-    // ── AHRS ────────────────────────────────────────────────
-    void mahonyUpdate(const MPU_SensorData& s, float dt, MPU_Attitude& att);
-
-    float mahonyKp = 1.0f;
-    float mahonyKi = 0.005f;
-
     // ── Calibration ─────────────────────────────────────────
     MPU_CalData cal;
 
@@ -174,21 +177,22 @@ public:
     void printCalibration();
 
 private:
+    
     uint8_t   _cs;
     SPIClass& _spi;
 
-    // Set once in begin() — false means no AK8963 (MPU-6500 or broken I2C)
-    bool _hasMag  = false;
+    // true if AK8963 was detected at boot
+    bool _hasMag = false;
 
-    // Mahony AHRS state
-    float _q0 = 1.0f, _q1 = 0.0f, _q2 = 0.0f, _q3 = 0.0f;
-    float _ix = 0.0f, _iy = 0.0f, _iz = 0.0f;
-
-    float _last_mx = 0.0f, _last_my = 0.0f, _last_mz = 0.0f;
+    // Last valid magnetometer sample
+    float _last_mx = 0.0f;
+    float _last_my = 0.0f;
+    float _last_mz = 0.0f;
     bool  _magValid = false;
+    uint32_t _lastMagReadMs = 0;
 
     void    _writeReg(uint8_t reg, uint8_t val);
-    uint8_t _readReg (uint8_t reg);
+    uint8_t _readReg(uint8_t reg);
     void    _burstRead(uint8_t reg, uint8_t* buf, uint8_t len);
 
     void    _akWrite(uint8_t akReg, uint8_t val);
@@ -198,8 +202,6 @@ private:
 
     bool    _initMPU();
     void    _readMagASA();
-
-    static float _invSqrt(float x);
 };
 
 #endif // MPU9250_H
