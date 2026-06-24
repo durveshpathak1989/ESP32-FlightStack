@@ -1,330 +1,273 @@
 # ESP32 Quadcopter Flight Controller
 
-This repository contains a custom quadcopter flight controller built around the **Adafruit HUZZAH32 Feather / ESP32-WROOM-32E**.
+A custom quadcopter flight controller built around the **Adafruit HUZZAH32 / ESP32-WROOM-32E**, written in Arduino C++ on top of FreeRTOS. The project targets both stable flight and rigorous embedded-systems research: real-time scheduling, sensor fusion, Wi-Fi telemetry, onboard logging, runtime PID tuning, autonomous calibration, and over-the-air firmware updates, all on a $10 microcontroller.
 
-The project is more than a flying drone. It is also a practical systems-engineering test platform for learning how mechanical setup, sensor wiring, embedded software, real-time scheduling, control theory, Wi-Fi telemetry, GPS display, calibration, runtime tuning, offline maps, OTA firmware updates, and field workflow all interact on a low-cost microcontroller.
+**Firmware version:** v4.0.0  
+**Control loop:** 400 Hz, `esp_timer`-driven, pinned to Core 1  
+**AHRS default:** Attitude EKF (switchable at runtime to Mahony or Madgwick)
 
 ---
 
-## Ground Station Snapshots
+## Ground Station
 
-### Main GCS Flight Dashboard
-
-![Main GCS flight dashboard](docs/images/gcs-flight-dashboard.png)
-
-### GCS OTA Upload Page
-
-![GCS OTA upload page](docs/images/gcs-ota-upload.png)
-
-### Offline OSM GPS Map
-
-![Offline OSM GPS map](docs/images/gcs-offline-osm-map.png)
-
-### Test Screen OTA Panel
-
-![Test screen OTA panel](docs/images/testscreen-ota.png)
+| Dashboard | OTA upload | Offline OSM map |
+|---|---|---|
+| ![Main GCS flight dashboard](docs/images/gcs-flight-dashboard.png) | ![GCS OTA upload page](docs/images/gcs-ota-upload.png) | ![Offline OSM GPS map](docs/images/gcs-offline-osm-map.png) |
 
 ---
 
 ## What This Project Does
 
-At the core, the flight controller does this:
+Core loop:
 
-```text
-Read sensors → estimate attitude → read pilot command → run PID → mix motors
+```
+Read IMU → notch-filter → AHRS/EKF → read RC → cascaded PID → motor mixer → ESC PWM
 ```
 
-Around that, it also provides:
+Surrounding infrastructure:
 
-```text
-RC input
-sensor calibration
-barometer data
-GPS data
-Wi-Fi telemetry
-runtime tuning
-onboard logging
-offline GPS map
-OTA firmware upload
-timing/jitter testing
+```
+RC iBUS parsing           Autonomous sensor calibration
+BMP280 barometer          GPS position + velocity
+Wi-Fi AP + HTTP server    Browser-based ground station
+Runtime PID / AHRS tuning Onboard high-speed CSV flight log
+OTA firmware upload        Offline OSM map
+Timing jitter measurement  Dynamic FFT notch tracking
+CPU utilization monitor    ToF altitude sensor (optional)
 ```
 
-The intended development approach is:
+Development philosophy:
 
-```text
-First make the system safe.
-Then make the sensors trustworthy.
-Then make ACRO/rate mode stable.
-Then tune ANGLE/self-level mode.
-Then improve telemetry, logging, OTA, and test rigor.
+```
+1. Make the system safe.
+2. Make the sensors trustworthy.
+3. Make ACRO/rate mode stable.
+4. Tune ANGLE/self-level mode.
+5. Improve telemetry, logging, and test rigor.
 ```
 
 ---
 
-## Current Capability Summary
+## Capability Summary
 
 | Area | Current capability |
 |---|---|
 | MCU | Adafruit HUZZAH32 Feather / ESP32-WROOM-32E |
-| RTOS | Dual-core FreeRTOS task architecture |
-| IMU | MPU-9250 / MPU-6500 class IMU over SPI |
-| AHRS | Mahony quaternion filter with live Kp/Ki tuning |
-| RC | FlySky FS-i6X + FS-iA6B iBUS receiver |
-| Control | ANGLE mode and ACRO mode |
-| Motors | X-frame quad mixer with PWM ESC outputs |
-| Barometer | BMP280 over I²C |
-| GPS | u-blox NEO-6M / GY-GPS6MV2 over UART |
+| RTOS | Dual-core FreeRTOS, 7 tasks |
+| IMU | MPU-9250 / MPU-6500 over SPI at 400 Hz |
+| AHRS | Runtime-selectable: EKF (default), Mahony, Madgwick |
+| Vibration filter | Static notch + dynamic FFT-tracked notch (45–170 Hz) |
+| RC | FlySky FS-i6X + FS-iA6B iBUS, 200 Hz |
+| Flight modes | ANGLE (self-level), ACRO (rate), DISARMED, FAILSAFE |
+| Control | Cascaded angle+rate PID, yaw heading-hold |
+| Motors | X-frame mixer, PWM ESCs via ESP32 LEDC |
+| Barometer | BMP280 over I²C, 20 Hz, vertical speed estimate |
+| GPS | u-blox NEO-6M / GY-GPS6MV2, NMEA UART, 50 Hz drain |
 | Telemetry | ESP32 Wi-Fi AP + HTTP JSON endpoints |
-| GCS | Browser-based ground station |
-| Runtime tuning | Full tuning payload through `/tune`, rejected while armed |
-| Offline maps | Local `.osm` file displayed by the GCS without internet |
-| OTA | Browser `.bin` upload through `/update`, safety-gated |
-| Logging | Browser CSV logging and onboard high-speed log download |
+| Ground station | Single-file HTML GCS, no build step |
+| Runtime tuning | Full gain/filter payload via `/tune`, rejected while armed |
+| Onboard logging | 100 Hz ring-buffer CSV log, 100 rows (1 s), streamed via HTTP |
+| Timing log | Welford jitter stats + 800-sample ring buffer via `/timing` |
+| OTA | Browser `.bin` upload via `/update`, safety-gated |
+| Calibration | Autonomous gyro + 6-position accel + magnetometer + ESC via RC |
+| Offline maps | Local `.osm` file loaded in browser, no internet required |
+| CPU monitor | Per-core utilization estimate via idle hook |
+| ToF | VL53L4CX optional altitude sensor (I²C shared with BMP280) |
 
 ---
 
-## Hardware Used
+## Hardware
 
-| Subsystem | Part | Purpose |
+| Subsystem | Part | Notes |
 |---|---|---|
-| Flight controller | Adafruit HUZZAH32 Feather / ESP32-WROOM-32E | Main MCU, Wi-Fi, FreeRTOS |
-| IMU | MPU-9250 / MPU-6500 / GY-91 class board | Gyro and accelerometer; magnetometer if available |
-| Barometer | BMP280 | Pressure, temperature, altitude estimate |
-| GPS | GY-GPS6MV2 / u-blox NEO-6M | GPS fix, latitude, longitude, speed, satellites |
-| RC transmitter | FlySky FS-i6X | Pilot input |
-| RC receiver | FlySky FS-iA6B | iBUS serial receiver |
-| ESCs | Standard PWM ESCs | Motor drive |
-| Motors | 2212 class motors | Quadcopter propulsion |
-| Battery | 3S or 4S LiPo | Main power |
+| Flight controller | Adafruit HUZZAH32 / ESP32-WROOM-32E | Main MCU, dual-core, Wi-Fi |
+| IMU | MPU-9250 / MPU-6500 / GY-91 | Gyro + accel; onboard AK8963 mag if present |
+| Barometer | BMP280 | Pressure, temperature, altitude |
+| GPS | GY-GPS6MV2 / u-blox NEO-6M | Latitude, longitude, speed, satellites |
+| RC transmitter | FlySky FS-i6X | 10-channel |
+| RC receiver | FlySky FS-iA6B | iBUS serial protocol |
+| ESCs | Standard PWM ESCs | 50 Hz PWM, 1000–2000 µs pulse |
+| Motors | 2212-class, ~920 KV | Quadcopter propulsion |
+| Battery | 3S LiPo (11.1 V nominal) | Main power |
 | BEC | 5 V BEC | Powers controller and receiver |
+| ToF (optional) | VL53L4CX | Altitude, shared I²C bus |
 
 ---
 
-## Full ESP32 Pin Map
+## Pin Map
 
-This is the pin map used by the current firmware.
-
-| Function | ESP32 GPIO | HUZZAH32 Label | Direction | Notes |
+| Function | GPIO | HUZZAH32 label | Direction | Notes |
 |---|---:|---|---|---|
-| SPI SCK | GPIO 5 | SCK | ESP32 → IMU | MPU clock |
-| SPI MOSI | GPIO 18 | MO | ESP32 → IMU | MPU data in |
-| SPI MISO | GPIO 19 | MI | IMU → ESP32 | MPU data out |
-| MPU CS / NCS | GPIO 33 | 33 | ESP32 → IMU | IMU chip select |
-| MPU INT | GPIO 27 | 27 | IMU → ESP32 | Optional; currently not required |
-| BMP SDA | GPIO 21 | SDA | Bidirectional | I²C data |
-| BMP SCL | GPIO 22 | SCL | ESP32 → BMP | I²C clock |
-| GPS RX | GPIO 13 | 13 | GPS TX → ESP32 | UART1 RX |
-| GPS TX | GPIO 17 | 17 | ESP32 → GPS RX | Optional |
-| iBUS RX | GPIO 16 | 16 | Receiver → ESP32 | UART2 RX |
-| iBUS TX | GPIO 4 | 4 | ESP32 TX unused | Spare / not connected |
-| Motor FL | GPIO 25 | 25 | ESP32 → ESC | Front-left motor |
-| Motor FR | GPIO 15 | 15 | ESP32 → ESC | Front-right motor |
-| Motor RL | GPIO 14 | 14 | ESP32 → ESC | Rear-left motor |
-| Motor RR | GPIO 32 | 32 | ESP32 → ESC | Rear-right motor |
+| SPI SCK | 5 | SCK | ESP32 → IMU | MPU-9250 clock |
+| SPI MOSI | 18 | MO | ESP32 → IMU | MPU-9250 data in |
+| SPI MISO | 19 | MI | IMU → ESP32 | MPU-9250 data out |
+| MPU CS | 33 | 33 | ESP32 → IMU | Chip select |
+| MPU INT | 27 | 27 | IMU → ESP32 | Wired but not driven by firmware |
+| BMP280 SDA | 21 | SDA | Bidirectional | I²C data (shared with ToF) |
+| BMP280 SCL | 22 | SCL | ESP32 → sensor | I²C clock (shared with ToF) |
+| GPS RX | 13 | 13 | GPS TX → ESP32 | UART1 |
+| GPS TX | 17 | 17 | ESP32 → GPS | UART1, optional |
+| iBUS RX | 16 | 16 | Receiver → ESP32 | UART2 |
+| iBUS TX | 4 | 4 | — | Spare, not connected |
+| Motor FL | 25 | 25 | ESP32 → ESC | Front-left, CCW |
+| Motor FR | 15 | 15 | ESP32 → ESC | Front-right, CW |
+| Motor RL | 14 | 14 | ESP32 → ESC | Rear-left, CW |
+| Motor RR | 32 | 32 | ESP32 → ESC | Rear-right, CCW |
 
-Important design choices:
-
-- The **MPU uses SPI** because it needs high-speed deterministic sampling.
-- The **BMP280 uses I²C** because pressure data is slow and does not need SPI speed.
-- The **GPS uses UART1**.
-- The **RC receiver uses UART2**.
-- Motors use the **ESP32 LEDC PWM peripheral**.
+Free GPIO: 23 (cleanest), 26 (ADC2/Wi-Fi caveat), 34/36/39 (input-only).
 
 ---
 
 ## Wiring Guide
 
-### MPU-9250 / GY-91 IMU Wiring
+### MPU-9250 / GY-91
 
-| IMU Pin | ESP32 / HUZZAH32 Pin | Notes |
+| IMU pin | ESP32 pin | Notes |
 |---|---|---|
-| VCC | 3.3 V | Use 3.3 V unless your breakout explicitly supports VIN |
+| VCC | 3.3 V | Use 3.3 V only |
 | GND | GND | Common ground |
-| SCL / SCLK | GPIO 5 / SCK | SPI clock |
-| SDA / MOSI | GPIO 18 / MO | SPI MOSI |
-| AD0 / MISO | GPIO 19 / MI | SPI MISO |
-| NCS / CS | GPIO 33 | Chip select |
-| INT | GPIO 27 | Optional |
+| SCL / SCLK | GPIO 5 | SPI clock |
+| SDA / MOSI | GPIO 18 | SPI MOSI |
+| AD0 / MISO | GPIO 19 | SPI MISO |
+| NCS / CS | GPIO 33 | Chip select — pull-up to 3.3 V if unused |
+| INT | GPIO 27 | Wired to GPIO 27; firmware does not use it |
 
-Expected WHO_AM_I values:
+Expected `WHO_AM_I`:
 
-```text
-0x71 → MPU-9250
-0x70 → MPU-6500 / MPU-9250 gyro-accel die
+```
+0x71  MPU-9250
+0x70  MPU-6500 / MPU-9250 gyro-accel die
 ```
 
-If the magnetometer is not available, roll and pitch still work. Yaw will drift more because there is no magnetic heading correction.
+If the AK8963 magnetometer is absent or unresponsive, roll and pitch remain accurate. Yaw will drift without magnetic heading correction.
 
 ---
 
-### BMP280 Wiring
+### BMP280
 
-| BMP280 Pin | ESP32 Pin | Notes |
-|---|---:|---|
-| VCC | 3.3 V | Do not use 5 V unless the board has regulation/level shifting |
-| GND | GND | Common ground |
+| BMP280 pin | ESP32 pin | Notes |
+|---|---|---|
+| VCC | 3.3 V | |
+| GND | GND | |
 | SDA / SDI | GPIO 21 | I²C data |
 | SCL / SCK | GPIO 22 | I²C clock |
 | CSB | 3.3 V | Pull high to force I²C mode |
-| SDO | GND or 3.3 V | GND = `0x76`, 3.3 V = `0x77` |
+| SDO | GND or 3.3 V | GND → address `0x76`, 3.3 V → `0x77` |
 
-The firmware attempts to detect the BMP280 at both common addresses.
-
-If the serial log says no BMP was found, check:
-
-```text
-VCC = 3.3 V
-GND common
-SDA = GPIO 21
-SCL = GPIO 22
-CSB pulled high
-SDO set for expected address
-```
+The firmware scans both addresses automatically. If nothing is found, verify CSB is pulled high and SDO is tied to a rail.
 
 ---
 
-### GPS Wiring
+### GPS (GY-GPS6MV2 / NEO-6M)
 
-| GPS Pin | ESP32 Pin | Notes |
-|---|---:|---|
-| VCC | 3.3 V or module VIN | Many NEO-6M boards accept 3.3–5 V through onboard regulator |
-| GND | GND | Common ground |
-| TXD | GPIO 13 | GPS transmits NMEA to ESP32 |
-| RXD | GPIO 17 | Optional; not required for read-only operation |
+| GPS pin | ESP32 pin | Notes |
+|---|---|---|
+| VCC | 3.3 V or module VIN | Many NEO-6M boards have an onboard regulator |
+| GND | GND | |
+| TXD | GPIO 13 | GPS → ESP32 (UART1 RX) |
+| RXD | GPIO 17 | ESP32 → GPS (optional) |
 
-GPS settings:
-
-```text
-UART: UART1
-Baud: 9600
+```
+UART:     UART1
+Baud:     9600
 Protocol: NMEA 0183
-Parsed sentences: GPRMC and GPGGA
+Parsed:   GPRMC, GPGGA
 ```
 
-Expected GPS behavior:
-
-```text
-Cold fix outdoors: 30–90 seconds
-Indoor fix: often poor or no fix
-Blue LED blinking: usually means GPS fix
-```
+Cold fix outdoors: 30–90 seconds. Indoor fix is unreliable. A blinking blue LED on the module typically indicates a live fix.
 
 ---
 
-### FlySky FS-iA6B iBUS Receiver Wiring
+### FlySky FS-iA6B iBUS
 
-| Receiver Pin | ESP32 Pin | Notes |
-|---|---:|---|
-| iBUS output | GPIO 16 | UART2 RX |
-| VCC | 5 V from BEC | Receiver accepts approximately 4.0–6.5 V |
-| GND | GND | Common ground |
+| Receiver pin | ESP32 pin | Notes |
+|---|---|---|
+| iBUS port | GPIO 16 | UART2 RX — use the dedicated iBUS/S.BUS port |
+| VCC | 5 V from BEC | Receiver accepts 4.0–6.5 V |
+| GND | GND | |
 
-Use the small **S.BUS/iBUS port** on the FS-iA6B receiver. Do not use the individual CH1–CH6 servo outputs for this firmware.
-
-iBUS settings:
-
-```text
-UART: UART2
-Baud: 115200
+```
+UART:         UART2
+Baud:         115200
 Frame length: 32 bytes
-Typical frame period: about 7 ms
-Typical receiver rate: about 142 Hz
+Frame period: ~7 ms
+Rate:         ~142 Hz from receiver, polled at 200 Hz by firmware
 ```
+
+Use the **iBUS port** on the receiver, not the individual CH1–CH6 servo outputs.
 
 ---
 
-### ESC / Motor Wiring
+### ESC and Motor
 
-| Motor | GPIO | Position | Rotation | Signal Notes |
+| Motor | GPIO | Position | Spin | Notes |
 |---|---:|---|---|---|
-| FL | GPIO 25 | Front-left | CCW | 33 Ω series resistor recommended |
-| FR | GPIO 15 | Front-right | CW | 33 Ω series resistor recommended |
-| RL | GPIO 14 | Rear-left | CW | 33 Ω series resistor recommended |
-| RR | GPIO 32 | Rear-right | CCW | 33 Ω series resistor recommended |
+| FL | 25 | Front-left | CCW | 33 Ω series resistor recommended |
+| FR | 15 | Front-right | CW | 33 Ω series resistor recommended |
+| RL | 14 | Rear-left | CW | 33 Ω series resistor recommended |
+| RR | 32 | Rear-right | CCW | 33 Ω series resistor recommended |
 
-ESC signal wiring:
-
-```text
-ESC signal wire → ESP32 motor GPIO
-ESC ground      → common ground
-ESC power       → PDB / battery system
-BEC 5 V         → controller 5 V input / receiver power
-```
-
-The ESC ground and ESP32 ground must be connected together. Without common ground, motor signals can behave unpredictably.
+ESC ground and ESP32 ground must share a common reference. Without this, motor signals behave unpredictably.
 
 ---
 
 ## Motor Layout and Mixer
 
-The firmware assumes an **X-frame** quadcopter.
+X-frame, viewed from above:
 
-```text
-          Front
+```
+            Front
 
-      FL CCW       FR CW
-       GPIO25     GPIO15
+    FL  CCW          FR  CW
+    GPIO 25          GPIO 15
 
-          \       /
-           \     /
-            \   /
-             X
-            /   \
-           /     \
-          /       \
+         \           /
+          \         /
+           \       /
+            ---X---
+           /       \
+          /         \
+         /           \
 
-      RL CW        RR CCW
-      GPIO14      GPIO32
+    RL  CW           RR  CCW
+    GPIO 14          GPIO 32
 
-          Rear
+            Rear
 ```
 
-Current conceptual mixer:
+Mixer equations:
 
-```text
-FL = throttle + roll - pitch - yaw
-FR = throttle - roll - pitch + yaw
-RL = throttle + roll + pitch + yaw
-RR = throttle - roll + pitch - yaw
+```
+FL = throttle + rollOut - pitchOut - yawOut
+FR = throttle - rollOut - pitchOut + yawOut
+RL = throttle + rollOut + pitchOut + yawOut
+RR = throttle - rollOut + pitchOut - yawOut
 ```
 
-Before first flight, verify the mixer by hand:
+Before first flight, verify signs by hand with props removed:
 
-- Tilt right → correction should push the right side back up.
-- Tilt left → correction should push the left side back up.
-- Tilt nose down → correction should push the nose back up.
-- Tilt nose up → correction should push the nose back down.
-- If a correction makes the motion worse, stop and fix motor order, IMU sign, or mixer sign.
-
-Do not try to fix a sign error with PID tuning.
+- Tilt right → correction must push right side up.
+- Tilt left → correction must push left side up.
+- Tilt nose down → correction must push nose up.
+- Tilt nose up → correction must push nose down.
+- Any reversal means a motor order, IMU axis sign, or mixer sign error. Fix it in code, not with PID tuning.
 
 ---
 
 ## RC Channel Mapping
 
-The firmware expects this FlySky layout:
-
-| Channel | Transmitter Control | Function |
+| Channel | Transmitter control | Firmware function |
 |---|---|---|
-| CH1 | Right stick left/right | Roll |
-| CH2 | Right stick up/down | Pitch |
-| CH3 | Left stick up/down | Throttle |
-| CH4 | Left stick left/right | Yaw |
-| CH5 | VrA knob | Spare / tuning |
-| CH6 | VrB knob | Spare / tuning |
+| CH1 | Right stick L/R | Roll |
+| CH2 | Right stick U/D | Pitch |
+| CH3 | Left stick U/D | Throttle |
+| CH4 | Left stick L/R | Yaw |
+| CH5 | VrA knob | Spare |
+| CH6 | VrB knob | ESC calibration trigger (full-right = request) |
 | CH7 | SWA | Arm / disarm |
 | CH8 | SWB | ANGLE / ACRO mode |
-| CH9 | SWC | Accel calibration confirmation |
-| CH10 | SWD | Calibration trigger |
-
-Typical behavior:
-
-```text
-SWA low  → disarmed
-SWA high → armed, if RC signal is valid
-SWB      → selects ANGLE or ACRO
-SWD up while disarmed → starts calibration
-```
+| CH9 | SWC | Accelerometer calibration confirmation |
+| CH10 | SWD | Calibration trigger (rising edge, disarmed only) |
 
 ---
 
@@ -332,512 +275,611 @@ SWD up while disarmed → starts calibration
 
 ### DISARMED
 
-Motors are off. Use this state for:
+Motors are off. Permitted actions:
 
-- calibration
-- runtime tuning
-- OTA upload
-- bench testing
-- checking sensor values
+- Sensor calibration
+- Runtime tuning via `/tune`
+- OTA upload via `/update`
+- Bench sensor checks
+- Level-zero capture (SWB high while disarmed)
 
-### ANGLE Mode
+### ANGLE mode
 
-ANGLE mode is self-leveling.
+Self-leveling. The stick commands a target lean angle. When the stick centres, the target returns to zero and the quad levels itself.
 
-The stick commands a target lean angle:
-
-```text
-roll stick  → target roll angle
-pitch stick → target pitch angle
+```
+RC stick → target angle → angle PID → target rate → rate PID → motor mixer
 ```
 
-When the stick returns to center, the target angle returns to zero, so the quad tries to level itself.
+Tune ACRO mode first. Then add ANGLE mode.
 
-Control path:
+### ACRO mode
 
-```text
-RC stick
-→ target angle
-→ angle PID
-→ target rate
-→ rate PID
-→ motor mixer
+Rate mode. The stick commands angular velocity. Releasing the stick stops rotation but does not self-level.
+
+```
+RC stick → target rate → rate PID → motor mixer
 ```
 
-Use ANGLE mode for early hover testing only after ACRO/rate mode is stable.
+### Yaw heading hold
 
-### ACRO Mode
-
-ACRO mode is rate mode.
-
-The stick commands angular velocity:
-
-```text
-roll stick  → target roll rate in deg/s
-pitch stick → target pitch rate in deg/s
-yaw stick   → target yaw rate in deg/s
-```
-
-When the stick returns to center, the quad stops rotating but does **not** automatically level.
-
-Control path:
-
-```text
-RC stick
-→ target rate
-→ rate PID
-→ motor mixer
-```
-
-Tune ACRO/rate mode first. Then tune ANGLE mode.
+When the yaw stick is within `yaw_deadband` of centre, the firmware holds the last commanded heading using a yaw angle PID. Moving the stick beyond the deadband switches to rate mode for yaw.
 
 ### FAILSAFE
 
-If iBUS frames stop arriving for the failsafe timeout, the receiver driver marks the signal invalid and the flight controller cuts motor outputs.
+If iBUS frames stop arriving, the receiver driver marks the signal invalid and motor outputs are cut immediately.
 
 ---
 
 ## FreeRTOS Task Architecture
 
-The firmware separates flight-critical work from communication and slower sensors.
+| Task | Core | Priority | Stack (words) | Rate | Purpose |
+|---|---:|---:|---:|---:|---|
+| `taskControl` | 1 | 5 | 10240 | 400 Hz (esp_timer) | IMU, AHRS, PID, motor output |
+| `taskRC` | 0 | 3 | 6144 | 200 Hz | iBUS parsing, arm/cal triggers |
+| `taskGPS` | 0 | 1 | 4096 | 50 Hz | GPS NMEA drain and parse |
+| `taskSerial` | 0 | 1 | 4096 | 20 Hz | Serial status and PID trace |
+| `taskBMP` | 0 | 1 | 3072 | 20 Hz | BMP280 read, vertical speed |
+| `taskCPU` | 0 | 1 | 3072 | 2 Hz | CPU utilization estimate |
+| `taskWiFi` | 0 | 1 | 12288 | Event-driven | HTTP server, telemetry, OTA |
 
-| Task | Core | Rate | Purpose |
-|---|---:|---:|---|
-| `taskControl` | Core 1 | 400 Hz target / 2500 µs | IMU update, AHRS, PID, motor output |
-| `taskRC` | Core 0 | 200 Hz | iBUS parsing and RC state |
-| `taskGPS` | Core 0 | 50 Hz UART drain | GPS parser |
-| `taskBMP` | Core 0 | 20 Hz | Barometer update |
-| `taskCPU` | Core 0 | slow monitor | CPU utilization estimate |
-| `taskWiFi` | Core 0 | event-driven | HTTP server and telemetry |
-| `taskSerial` | Core 0 | periodic | Serial print/log output |
+Core 1 is entirely dedicated to the control loop. All communication and slower sensors run on Core 0.
 
-Design idea:
-
-```text
-Core 1 → flight-critical control loop
-Core 0 → communication, RC, GPS, BMP, Wi-Fi, logging
-```
-
-Wi-Fi can still affect timing, so the project includes timing and jitter measurements.
+The control loop is released by an `esp_timer` ISR calling `xTaskNotifyGive()` every 2500 µs. `vTaskDelay()` is not used in `taskControl` because the FreeRTOS tick resolution on this build can be coarser than 2.5 ms.
 
 ---
 
-## Runtime Tuning Levers
+## AHRS / Attitude Estimation
 
-The GCS sends tuning values to `/tune`.
+The firmware supports three attitude estimators, switchable at runtime via `/tune` without rebooting:
 
-Tuning is rejected while armed.
+| Mode | `ahrs_filter_mode` | Description |
+|---|---:|---|
+| EKF (default) | 0 | 6-DOF or 9-DOF extended Kalman filter with gyro bias estimation |
+| Mahony | 1 | Complementary filter, fast, low CPU cost |
+| Madgwick | 2 | Gradient-descent complementary filter |
 
-### Pilot command limits
+Switching estimator resets both EKF and Madgwick state to avoid attitude transients from stale quaternions.
 
-| Key | Meaning |
-|---|---|
-| `max_angle_deg` | Maximum lean angle in ANGLE mode |
-| `max_rate_dps` | Maximum roll rate in ACRO |
-| `max_pitch_rate_dps` | Maximum pitch rate in ACRO |
-| `yaw_max_rate_dps` | Maximum yaw rate |
-| `yaw_deadband` | Stick region where yaw heading hold is active |
+**Pipeline order:** raw IMU → static notch filter → dynamic notch filter → AHRS → PID.
+
+---
+
+## Signal Filtering
+
+### Static notch filter
+
+A biquad notch filter is applied to all 6 IMU axes (3 accel + 3 gyro) before the AHRS. Default centre frequency: 90 Hz, Q: 8. Both are tunable at runtime.
+
+### Dynamic FFT notch tracking
+
+The `SpectrumAnalyzer` collects IMU data and runs an FFT. Every 250 ms (10 Hz), `updateDynamicNotchFromFFT()` finds the dominant gyro peak in the 45–170 Hz range and updates the notch centre frequency toward it using an exponential smoothing step capped at 2 Hz per update. The notch will not track while disarmed or below 15% throttle.
+
+---
+
+## Runtime Tuning
+
+POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The request is rejected while armed.
+
+### Pilot limits
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `max_angle_deg` | 25.0 | Maximum lean in ANGLE mode (degrees) |
+| `max_rate_dps` | 150.0 | Maximum roll rate in ACRO (deg/s) |
+| `max_pitch_rate_dps` | 150.0 | Maximum pitch rate in ACRO (deg/s) |
+| `yaw_max_rate_dps` | 90.0 | Maximum yaw rate (deg/s) |
+| `yaw_deadband` | 0.05 | Stick fraction below which heading hold activates |
 
 ### PID authority limits
 
-| Key | Meaning |
-|---|---|
-| `roll_output_limit` | Max roll correction before mixing |
-| `pitch_output_limit` | Max pitch correction before mixing |
-| `yaw_output_limit` | Max yaw correction before mixing |
+| Key | Default | Meaning |
+|---|---:|---|
+| `roll_output_limit` | 0.500 | Max roll correction before mixing |
+| `pitch_output_limit` | 0.500 | Max pitch correction before mixing |
+| `yaw_output_limit` | 0.200 | Max yaw correction before mixing |
 
 ### Throttle shaping
 
-| Key | Meaning |
-|---|---|
-| `throttle_expo` | Softens throttle response |
-| `throttle_up_rate_per_sec` | Max throttle increase rate |
-| `throttle_down_rate_per_sec` | Max throttle decrease rate |
-| `motor_idle` | Minimum motor output when active |
-| `motor_max` | Maximum motor output cap |
-| `throttle_cut` | Below this throttle, motors are cut |
-| `idle_ramp_end` | End of smooth idle blending region |
+| Key | Default | Meaning |
+|---|---:|---|
+| `throttle_expo` | 0.60 | Softens low-throttle response |
+| `throttle_up_rate_per_sec` | 0.70 | Max throttle increase rate per second |
+| `throttle_down_rate_per_sec` | 1.00 | Max throttle decrease rate per second |
+| `motor_idle` | 0.08 | Minimum motor output when armed and throttle above cut |
+| `motor_max` | 0.80 | Maximum motor output cap |
+| `throttle_cut` | 0.03 | Below this throttle, motors are cut |
+| `idle_ramp_end` | 0.15 | Throttle fraction where idle blending ends |
 
-### Rate PID
+### Rate PID (inner loop)
 
-```text
-pid_roll_kp
-pid_roll_ki
-pid_roll_kd
-pid_pitch_kp
-pid_pitch_ki
-pid_pitch_kd
-pid_yaw_kp
-pid_yaw_ki
-pid_yaw_kd
-```
+| Key | Default |
+|---|---:|
+| `pid_roll_kp` | 0.00015 |
+| `pid_roll_ki` | 0.00000 |
+| `pid_roll_kd` | 0.00001 |
+| `pid_pitch_kp` | 0.00015 |
+| `pid_pitch_ki` | 0.00000 |
+| `pid_pitch_kd` | 0.00001 |
+| `pid_yaw_kp` | 0.00015 |
+| `pid_yaw_ki` | 0.00000 |
+| `pid_yaw_kd` | 0.00001 |
+| `pid_ilimit` | 50.0 |
 
-### Angle PID
+### Angle PID (outer loop)
 
-```text
-pid_angle_roll_kp
-pid_angle_roll_ki
-pid_angle_roll_kd
-pid_angle_pitch_kp
-pid_angle_pitch_ki
-pid_angle_pitch_kd
-pid_angle_yaw_kp
-```
+| Key | Default |
+|---|---:|
+| `pid_angle_roll_kp` | 8.00 |
+| `pid_angle_roll_ki` | 0.00 |
+| `pid_angle_roll_kd` | 0.010 |
+| `pid_angle_pitch_kp` | 8.00 |
+| `pid_angle_pitch_ki` | 0.00 |
+| `pid_angle_pitch_kd` | 0.010 |
+| `pid_angle_yaw_kp` | 6.00 |
 
-### AHRS tuning
+### Notch filter
 
-```text
-mahony_kp
-mahony_ki
-```
+| Key | Default | Meaning |
+|---|---:|---|
+| `notch_enable` | true | Enable static notch |
+| `notch_freq_hz` | 90.0 | Centre frequency (Hz) |
+| `notch_q` | 8.0 | Q factor — higher = narrower |
 
-Recommended tuning order:
+### AHRS
 
-1. Props off: verify sensor signs and motor correction direction.
-2. Use small props for early powered tests.
-3. Tune ACRO/rate loop first.
-4. Keep ANGLE `I` at zero initially.
-5. Add ANGLE `P` slowly.
-6. Keep max angle conservative, around 10–15 degrees during early tests.
-7. Increase authority only after hover behavior is predictable.
+| Key | Default | Meaning |
+|---|---:|---|
+| `ahrs_filter_mode` | 0.0 | 0 = EKF, 1 = Mahony, 2 = Madgwick |
+| `mahony_kp` | (from object) | Mahony proportional gain |
+| `mahony_ki` | (from object) | Mahony integral gain |
+| `madgwick_beta` | 0.080 | Madgwick beta |
+
+### Attitude EKF
+
+| Key | Default | Meaning |
+|---|---:|---|
+| `ekf_angle_q` | 0.0008 | Process noise — angle states |
+| `ekf_bias_q` | 0.000001 | Process noise — gyro bias states |
+| `ekf_accel_r` | 0.060 | Accel measurement noise (higher = trust less) |
+| `ekf_mag_r` | 0.200 | Magnetometer measurement noise |
+| `ekf_mag_declination_deg` | 0.0 | Local magnetic declination |
+| `ekf_mag_yaw_offset_deg` | 0.0 | Yaw alignment offset |
+| `ekf_mag_yaw_sign` | 1.0 | +1 or -1 to correct mag axis sign |
 
 ---
 
-## Wi-Fi Ground Station
+## Serial Commands
 
-The ESP32 creates this access point:
+| Command | Effect |
+|---|---|
+| `p` | Toggle ~4 Hz `[PID]` tuning trace on/off (off at boot) |
 
-```text
+---
+
+## HTTP Endpoints
+
+The ESP32 creates a Wi-Fi access point:
+
+```
 SSID:     ESP32-DRONE
 Password: 12345678
 IP:       192.168.4.1
 ```
 
-The GCS talks to the ESP32 using HTTP endpoints.
-
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/` | GET | Basic route / help page |
-| `/telemetry` | GET | Live JSON state |
-| `/tune` | POST | Runtime tuning update |
-| `/log?since=N` | GET | System / calibration log |
-| `/timing` | GET | Timing stats |
-| `/timing/reset` | POST | Reset timing stats |
-| `/timing/csv` | GET | Timing CSV download |
-| `/flightlog/csv` | GET | Onboard high-speed log download |
-| `/flightlog/reset` | POST | Reset onboard flight log |
+| `/telemetry` | GET | Full flight state JSON |
+| `/tune` | POST | Apply PID / AHRS / filter gains (disarmed only) |
+| `/log?since=N` | GET | Calibration and system log lines since index N |
+| `/timing` | GET | Jitter stats JSON (Welford mean, std, max, violations) |
+| `/timing/reset` | POST | Reset jitter accumulator |
+| `/timing/csv` | GET | Raw 800-sample period ring buffer as CSV |
+| `/flightlog/csv` | GET | Freeze and download 100-row onboard flight log CSV |
+| `/flightlog/reset` | POST | Clear onboard log and resume writing |
 | `/update` | GET | OTA upload page |
-| `/update` | POST | OTA firmware upload |
+| `/update` | POST | OTA firmware upload (disarmed, throttle low, motors off) |
 
 ---
 
-## Offline OSM Map Workflow
+## Onboard Flight Log
 
-When your laptop is connected to `ESP32-DRONE`, it may not have internet. That means online map tiles may not load.
+The firmware maintains a 100-row ring buffer sampled at 100 Hz (every 4th control cycle). Each row is approximately 320 bytes and captures:
 
-The offline OSM workflow solves this by loading a local `.osm` file from the laptop.
+```
+Timestamps and loop count       RC stick inputs (all 10 channels)
+IMU timing phases               Throttle (raw, shaped, smoothed)
+Period and jitter               AHRS attitude (roll, pitch, yaw)
+Raw and filtered IMU data       Control attitude (after level-zero offset)
+Magnetometer                    PID targets, errors, and outputs
+EKF gyro bias estimates         Motor commands and estimated RPM
+Notch filter state              BMP280 altitude and vertical speed
+AHRS mode and mag-accept flag   CPU utilization (Core 0 and Core 1)
+```
 
-Recommended folder:
+Workflow:
 
-```text
+```
+POST /flightlog/reset  → clears buffer and re-enables writing
+ARM + fly
+DISARM
+GET  /flightlog/csv    → freezes buffer and streams CSV
+```
+
+To extend the log beyond 1 second, increase `FLIGHT_LOG_SIZE` (currently 100). At 320 bytes per row and ~300 KB free heap in a typical flight build, 300 rows (~3 seconds) is a safe upper bound.
+
+---
+
+## Autonomous Calibration
+
+Calibration runs inside `taskControl` on Core 1 and is triggered by RC or HTTP. While calibration is active, the flight loop is blocked and motor outputs are inhibited.
+
+### IMU calibration (guided, via SWD + SWC)
+
+1. **Disarm** the craft (SWA low).
+2. Flip **SWD** up to request calibration.
+3. **Gyro phase** (automatic): place the drone flat and still. The firmware waits 3 seconds for settling, then samples 5 seconds of gyro data.
+4. **Accel phase** (6 positions): flip **SWC** up to confirm each orientation. The firmware prompts each pose over the serial log.
+5. **Magnetometer phase** (if present): rotate the drone slowly in all axes for 30 seconds.
+6. Calibration saves to NVS (non-volatile storage) and loads automatically on every subsequent boot.
+
+### ESC calibration (via VrB + SWC)
+
+1. **Disarm** and set throttle to minimum.
+2. Raise **VrB** (CH6) to full right.
+3. Confirm with **SWC** when prompted.
+4. Lower VrB to cancel at any time.
+
+Calibration is rejected if the craft is armed or throttle is above `throttle_cut`.
+
+---
+
+## Software Level-Zero Trim
+
+While **disarmed** with **SWB** held high (ACRO position), the firmware averages 1.2 seconds of AHRS attitude output and saves it as a roll/pitch/yaw offset. All subsequent control attitude values are computed relative to this zero. This corrects for frame twist or a non-level mounting surface without touching IMU calibration or the AHRS quaternion.
+
+---
+
+## Wi-Fi Ground Station
+
+The browser-based GCS (`DroneGroundStation.html`) connects directly to `http://192.168.4.1`. No build step or internet connection is required once the file is open.
+
+Features:
+
+- Live attitude display (roll, pitch, yaw)
+- Motor output gauges
+- PID output traces
+- Barometer altitude and vertical speed
+- GPS position and satellite count
+- Timing jitter chart
+- Full PID, AHRS, and filter tuning panel
+- Calibration log stream
+- OTA firmware upload panel
+
+---
+
+## Offline OSM Map
+
+When connected to `ESP32-DRONE`, the laptop has no internet. Tile-based maps will not load. The offline OSM workflow serves a local map extract from the laptop instead.
+
+Recommended folder layout:
+
+```
 DroneGCS/
-├── DroneGCS_Apple_OSM_offline.html
-└── ColumbusMap.osm
+├── DroneGroundStation.html
+└── YourArea.osm
 ```
 
 Run a local server:
 
 ```bash
 cd path/to/DroneGCS
-python -m http.server 8080
+python3 -m http.server 8080
 ```
 
-Open:
+Open in the browser:
 
-```text
-http://localhost:8080/DroneGCS_Apple_OSM_offline.html
+```
+http://localhost:8080/DroneGroundStation.html
 ```
 
-Then connect to ESP32 Wi-Fi and use:
+The GCS fetches telemetry from `http://192.168.4.1` while the OSM file is loaded locally. Use only a small OSM extract around your test field — large files slow the browser significantly.
 
-```text
-GCS page       → localhost
-OSM file       → localhost
-Telemetry      → http://192.168.4.1/telemetry
-Tune endpoint  → http://192.168.4.1/tune
-OTA endpoint   → http://192.168.4.1/update
-```
+Good sources for OSM extracts:
 
-Use only a small OSM extract around your test field. Large files can make the browser slow.
-
-Good sources for OSM data:
-
-- OpenStreetMap export for a small bounding box
+- OpenStreetMap.org export (small bounding box)
 - BBBike extract service
-- Geofabrik extract cropped with Osmium or QGIS
+- Geofabrik extract, cropped with Osmium or QGIS
 
-The offline map is for situational awareness only. It is not autonomous navigation.
+The map is for situational awareness only — it is not autonomous navigation.
 
 ---
 
 ## OTA Firmware Update
 
-OTA lets you update the ESP32 firmware over Wi-Fi after flashing OTA-capable firmware once by USB.
+### Arduino IDE partition scheme
 
-### Arduino partition scheme
+Select before the first USB flash:
 
-Use:
-
-```text
-Tools → Partition Scheme → Minimal SPIFFS with 1.9MB APP with OTA
+```
+Tools → Partition Scheme → Minimal SPIFFS (1.9MB APP with OTA and 190KB SPIFFS)
 ```
 
-Why this option?
+This provides two app slots for OTA while giving the application maximum flash space. The GCS is served from the laptop, so a large SPIFFS partition is not needed.
 
-- OTA needs two app slots.
-- The firmware is growing.
-- Minimal SPIFFS gives more room to the application.
-- The main GCS is served from the laptop, so a large SPIFFS partition is not needed.
+Do **not** use `No OTA` or `Huge APP without OTA`.
 
-Do not use:
+### Exporting the binary
 
-```text
-No OTA
-Huge APP without OTA
+1. Select the correct board and partition scheme.
+2. Flash once by USB.
+3. Click **Sketch → Export Compiled Binary**.
+4. Click **Sketch → Show Sketch Folder** and find the build output.
+5. Upload the correct file through OTA:
+
+```
+RC_FlightController.ino.bin          ← upload this
 ```
 
-### What is SPIFFS?
+Do not upload:
 
-SPIFFS means SPI Flash File System. It is a small filesystem inside ESP32 flash. It can store web files, config, or logs. This project currently keeps the main GCS on the laptop, so SPIFFS can be minimal.
-
-### Getting the `.bin` file from Arduino IDE
-
-1. Select the board.
-2. Select the OTA-capable partition scheme.
-3. Compile or upload once by USB.
-4. Click **Sketch → Export Compiled Binary**.
-5. Click **Sketch → Show Sketch Folder**.
-6. Find the generated build output.
-7. Upload this file through OTA:
-
-```text
-RC_FlightController.ino.bin
 ```
-
-Do not upload these through OTA:
-
-```text
 boot_app0.bin
 RC_FlightController.ino.bootloader.bin
 RC_FlightController.ino.partitions.bin
 RC_FlightController.ino.merged.bin
 RC_FlightController.ino.elf
-RC_FlightController.ino.map
 ```
 
-### OTA safety rule
+### OTA safety gate
 
-The firmware should allow OTA only when:
+The firmware permits OTA only when all three conditions hold:
 
-```text
+```
 armed == false
 throttle <= throttle_cut
 all motor outputs <= 0.001
 ```
 
-OTA is a bench feature. Remove propellers before OTA.
+Remove propellers before every OTA session.
 
 ---
 
 ## First-Time Setup
 
-### Step 1: Bench safety
+### Step 1 — Bench safety
 
-Before doing anything:
-
-```text
+```
 REMOVE PROPELLERS
 ```
 
-### Step 2: Flash firmware by USB
+### Step 2 — Flash firmware
 
-Use Arduino IDE:
-
-```text
-Board: Adafruit ESP32 Feather
-Upload speed: 921600
-Partition: Minimal SPIFFS with 1.9MB APP with OTA
+```
+Board:          Adafruit ESP32 Feather
+Upload speed:   921600
+Partition:      Minimal SPIFFS (1.9MB APP with OTA)
 ```
 
-### Step 3: Check serial boot log
+### Step 3 — Read the boot log
 
-Open Serial Monitor at 115200 baud.
+Open Serial Monitor at **115200 baud**. Expected output:
 
-Look for:
-
-```text
-IMU OK
-BMP280 OK or not found
-GPS waiting for NMEA
-iBUS ready
-Wi-Fi: ESP32-DRONE / 12345678
-All tasks running
+```
+[BOOT] IMU... OK
+[BOOT] AK8963 magnetometer: DETECTED  (or NOT FOUND)
+[BOOT] BMP280... OK  (or not found)
+[BOOT] GPS (GY-GPS6MV2)...
+[BOOT] NVS calibration... loaded  (or none)
+[BOOT] iBUS ready.
+[BOOT] All tasks running.
+[BOOT] Ground station: http://192.168.4.1
+[BOOT] Free heap: XXXXXX bytes
 ```
 
-### Step 4: Check RC receiver
+If the IMU fails, halt is immediate — check SPI wiring and 3.3 V power.
 
-Turn on transmitter and confirm:
+### Step 4 — Check RC
 
-```text
-iBUS frame rate is stable
-sticks move correctly
-SWA arms/disarms
-SWB changes mode
-SWD triggers calibration only while disarmed
+Turn on the transmitter and confirm:
+
+```
+[iBUS] ~142 Hz good | 0 bad/s | 0 bad total   (should appear every second)
 ```
 
-### Step 5: Calibrate sensors
+Confirm sticks, SWA arm/disarm, SWB mode change, SWD calibration trigger.
+
+### Step 5 — Calibrate sensors
 
 With props removed:
 
 1. Keep SWA disarmed.
-2. Flip SWD up.
-3. Let gyro calibrate while the drone is still.
-4. Follow accelerometer orientation prompts.
-5. Rotate drone for magnetometer calibration if magnetometer is available.
-6. Calibration saves to NVS.
+2. Flip SWD up (rising edge triggers calibration).
+3. Follow prompts in the serial log.
+4. Calibration saves to NVS and reloads on every boot.
 
-### Step 6: Verify motor order
+### Step 6 — Verify motor order and mixer
 
 With props still removed:
 
-- Confirm FL / FR / RL / RR outputs match the physical motors.
-- Confirm motor rotation directions.
-- Confirm mixer corrections oppose hand tilts.
+- Arm the craft.
+- Raise throttle slightly.
+- Confirm FL/FR/RL/RR match physical position.
+- Tilt the frame by hand and confirm PID corrections oppose the tilt.
+- Disarm before anything else.
 
-### Step 7: First powered hover test
+### Step 7 — First powered hover
 
-Use:
-
-```text
-small props
-low max angle
-low motor max
-ANGLE I = 0
-conservative throttle
-short throttle bumps
+```
+Small props
+max_angle_deg = 10
+motor_max = 0.60
+angle I gains = 0
+Conservative throttle
+Short hover bursts
 ```
 
-Do not try to hover until motor order, sensor signs, and correction directions are confirmed.
+Do not attempt to hover until Step 6 is confirmed.
+
+---
+
+## Tuning Order
+
+1. Props off: verify sensor sign and motor correction direction (Step 6).
+2. ACRO mode first: tune `pid_roll_kp`, `pid_pitch_kp` for stable rate response with no oscillation.
+3. Add `kd` carefully — unfiltered derivative amplifies gyro noise at 400 Hz.
+4. ANGLE mode second: tune `pid_angle_roll_kp`, `pid_angle_pitch_kp`.
+5. Keep angle I gains at zero until P and D are settled.
+6. Tune yaw separately — yaw authority is intentionally limited to `yaw_output_limit = 0.2`.
+7. Use `/flightlog/csv` and the timing monitor to verify loop timing stays within budget during tuning.
+
+---
+
+## Timing Diagnostics
+
+`GET /timing` returns a JSON object with:
+
+```json
+{
+  "count": 12000,
+  "target_us": 2500,
+  "period_mean_us": 2501.3,
+  "period_std_us": 18.4,
+  "jitter_max_us": 142,
+  "jitter_mean_us": 12.1,
+  "jitter_violations": 3,
+  "violation_thresh_us": 100,
+  "p50_us": 2500,
+  "p95_us": 2528,
+  "p99_us": 2571
+}
+```
+
+`GET /timing/csv` streams the last 800 raw period samples for offline analysis.
+
+`POST /timing/reset` clears all accumulators for a clean measurement window.
+
+The `[TIME]` serial line prints once per second:
+
+```
+[TIME] period=2501us jitter=+1us ctrl=XXXus full=XXXus headroom=+XXXus ...
+```
+
+A negative `headroom` value means a control overrun — the current cycle took longer than the 2500 µs budget.
 
 ---
 
 ## Troubleshooting
 
-### Serial monitor shows garbage
+### Serial garbage
 
-Check baud rate:
-
-```text
-115200 baud
-```
+Baud rate must be **115200**. Confirm in the IDE Serial Monitor and any terminal emulator.
 
 ### IMU not found
 
-Check:
-
-```text
-3.3 V power
-SPI wiring
-CS = GPIO 33
-SCK = GPIO 5
-MOSI = GPIO 18
-MISO = GPIO 19
+```
+3.3 V power to MPU
+SPI wiring: SCK=5, MOSI=18, MISO=19, CS=33
+No other SPI device sharing the bus without its own CS
 ```
 
 ### BMP280 not found
 
-Check:
-
-```text
-SDA = GPIO 21
-SCL = GPIO 22
-CSB pulled high
-SDO address selection
+```
+SDA=21, SCL=22
+CSB pulled high to 3.3 V
+SDO set for expected I²C address (0x76 or 0x77)
 3.3 V power
 ```
 
 ### GPS no fix
 
-Check:
-
-```text
+```
+Move outdoors with clear sky
+Wait 30–90 seconds for cold fix
 GPS TXD → GPIO 13
-GPS outdoors
-clear sky
-wait 30–90 seconds
-antenna orientation
+Antenna facing up
 ```
 
-### RC failsafe or no RC input
+### No RC input / failsafe
 
-Check:
-
-```text
-iBUS port, not servo channel pins
-iBUS signal → GPIO 16
-receiver powered from 5 V BEC
-transmitter bound
+```
+iBUS port on receiver, not servo pins
+GPIO 16 connected to iBUS signal wire
+Receiver powered from 5 V BEC
+Transmitter bound and powered
 ```
 
-### Drone tips to one side on throttle
+### Drone tips on throttle
 
-Check in this order:
+Diagnose in this order:
 
-1. Motor order.
-2. Prop direction.
+1. Motor order (FL/FR/RL/RR positions).
+2. Prop direction (CW/CCW per motor position).
 3. ESC signal wiring.
 4. IMU axis signs.
 5. Mixer signs.
-6. Center of gravity.
+6. Centre of gravity.
 7. Frame twist.
-8. PID gains.
+8. PID gains (only after all above are confirmed correct).
 
-Do not solve a sign or motor issue with PID tuning.
+**Never use PID tuning to compensate for a motor order or sign error.**
 
 ### GPS map blank
 
-If using online map tiles, the laptop may have no internet while connected to ESP32 Wi-Fi.
+When connected to `ESP32-DRONE`, the laptop has no internet. Use the offline OSM workflow, or connect both devices to a shared hotspot.
 
-Use the offline OSM workflow or connect both ESP32 and laptop to the same internet-providing hotspot.
+### OTA rejected
+
+OTA is gated on disarmed + throttle low + motors off. Confirm all three in the GCS or serial log before uploading.
+
+---
+
+## Known Firmware Issues (v4.0.0)
+
+The following issues are identified and tracked for the next release:
+
+| # | Issue | Impact |
+|---|---|---|
+| 1 | `[MOTOR_SAT]` Serial.printf fires unconditionally at 400 Hz | Guaranteed control overrun while armed |
+| 2 | Motor writes throttled to 200 Hz (`MOTOR_UPDATE_PERIOD_US = 5000`) | Up to 5 ms stale motor command per cycle |
+| 3 | `[DYN_NOTCH_HOOK]` and `[DYN_FFT_INPUT]` debug prints inside the 400 Hz IMU block | ~7 ms Serial cost on the cycle they fire |
+| 4 | `thrSmooth` static local not reset on disarm | Inherited throttle state after disarm/re-arm |
+| 5 | AHRS mode falls back to EKF (mode 0) on mutex miss | One-cycle estimator switch during flight |
+| 6 | `calLog()` called from Core 1 inside `applyTuningToObjects()` | Priority inversion risk against Wi-Fi task |
+| 7 | Unfiltered derivative term in PID | Gyro noise amplification at high Kd |
+| 8 | Single `pid_ilimit = 50` shared across rate (dps) and angle (deg) loops | Dimensionally inconsistent wind-up limit |
+| 9 | `FLIGHT_LOG_SIZE = 100` but comment says 300 | Log is 1 s, not 3 s |
+| 10 | `BATTERY_VOLTAGE = 11.1` hardcoded | RPM estimates degrade with battery sag |
 
 ---
 
 ## Safety Rules
 
-- Remove props for code upload, OTA, calibration, and bench tests.
+- **Remove propellers** before USB flashing, OTA, calibration, or bench tests.
 - Never arm on USB power alone.
-- Never OTA while armed.
-- Never tune while armed unless the firmware specifically allows and validates it.
+- Never attempt OTA while armed.
+- Never tune while armed (the firmware enforces this for `/tune`).
 - Keep first hover tests short and low.
-- Use smaller props during early tuning.
-- Keep a USB recovery path available.
-- Treat GPS and map display as telemetry only, not navigation authority.
+- Use smaller props during early PID tuning.
+- Keep a USB recovery path available at all times.
+- GPS and map display are telemetry only — not navigation authority.
 
 ---
 
 ## Project Direction
 
-This project supports both flight testing and research:
+This project supports both flight testing and embedded-systems research:
 
-- ESP32 dual-core task partitioning
-- Real-time jitter measurement
-- Wi-Fi interference with control-loop timing
-- Runtime tuning safety
-- OTA update workflow
+- ESP32 dual-core task partitioning and priority assignment
+- `esp_timer` vs `vTaskDelay` for hard real-time control loops
+- Wi-Fi interference with control-loop timing (characterised via `/timing`)
+- Runtime filter tuning and AHRS mode switching without reboot
+- OTA update safety gating
+- Autonomous calibration usability over RC
 - Offline field-map workflow
-- RC failsafe validation
-- Calibration usability
-- Low-cost flight-controller architecture evaluation
+- Low-cost AHRS comparison (EKF vs Mahony vs Madgwick)
+- Onboard high-speed logging for post-flight analysis
+- LSTM-based fault prognosis using logged CSV data (companion research project)
 
-The goal is to make the quad fly, but also to learn from every subsystem interaction.
+The goal is a flying quadcopter that is also a rigorous test platform for every subsystem interaction.
