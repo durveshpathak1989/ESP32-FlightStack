@@ -1,0 +1,64 @@
+[submodule "Submodules/AHRS"]
+	path = Submodules/AHRS
+	url = https://github.com/durveshpathak1989/test-quad-ahrs.git
+	branch = master
+[submodule "Submodules/BMP280"]
+	path = Submodules/BMP280
+	url = https://github.com/durveshpathak1989/test-quad-bmp280.git
+	branch = master
+[submodule "Submodules/CalManager"]
+	path = Submodules/CalManager
+	url = https://github.com/durveshpathak1989/test-quad-calmanager.git
+	branch = master
+[submodule "Submodules/DebugConfig"]
+	path = Submodules/DebugConfig
+	url = https://github.com/durveshpathak1989/test-quad-debugconfig.git
+	branch = master
+[submodule "Submodules/EKF"]
+	path = Submodules/EKF
+	url = https://github.com/durveshpathak1989/test-quad-ekf.git
+	branch = master
+[submodule "Submodules/ESP32Core"]
+	path = Submodules/ESP32Core
+	url = https://github.com/durveshpathak1989/test-quad-esp32core.git
+	branch = master
+[submodule "Submodules/FFT"]
+	path = Submodules/FFT
+	url = https://github.com/durveshpathak1989/test-quad-fft.git
+	branch = master
+[submodule "Submodules/GPS"]
+	path = Submodules/GPS
+	url = https://github.com/durveshpathak1989/test-quad-gps.git
+	branch = master
+[submodule "Submodules/IMU"]
+	path = Submodules/IMU
+	url = https://github.com/durveshpathak1989/test-quad-imu.git
+	branch = master
+[submodule "Submodules/Madgwick"]
+	path = Submodules/Madgwick
+	url = https://github.com/durveshpathak1989/test-quad-madgwick.git
+	branch = master
+[submodule "Submodules/MahonyAHRS"]
+	path = Submodules/MahonyAHRS
+	url = https://github.com/durveshpathak1989/test-quad-mahonyahrs.git
+	branch = master
+[submodule "Submodules/MotorControl"]
+	path = Submodules/MotorControl
+	url = https://github.com/durveshpathak1989/test-quad-motorcontrol.git
+	branch = master
+[submodule "Submodules/NotchFilter"]
+	path = Submodules/NotchFilter
+	url = https://github.com/durveshpathak1989/test-quad-notchfilter.git
+	branch = master
+[submodule "Submodules/ToF"]
+	path = Submodules/ToF
+	url = https://github.com/durveshpathak1989/test-quad-tof.git
+	branch = master
+[submodule "Submodules/WiFiTelemetry"]
+	path = Submodules/WiFiTelemetry
+	url = https://github.com/durveshpathak1989/test-quad-wifitelemetry.git
+	branch = master
+[submodule "Submodules/iFly"]
+	path = Submodules/iFly
+	url = https://github.com/durveshpathak1989/test-quad-ifly.git
+	branch = master
