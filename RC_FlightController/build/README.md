@@ -24,19 +24,27 @@ RC_FlightController.ino.bin
 
 Normal build:
 
-```text
-Program storage used: 1,095,887 bytes out of 1,966,080 bytes (55%)
-Global variables used: 98,036 bytes out of 327,680 bytes (29%)
-Free RAM for local variables: 229,644 bytes
-```
+| Metric | Value |
+| --- | ---: |
+| Flash used | 1,095,887 bytes |
+| Flash maximum | 1,966,080 bytes |
+| Flash utilization | 55% |
+| RAM used by global variables | 98,036 bytes |
+| RAM maximum | 327,680 bytes |
+| RAM utilization | 29% |
+| Free RAM for local variables | 229,644 bytes |
 
 Quiet build check with `VERBOSE_ON=0`:
 
-```text
-Program storage used: 1,084,583 bytes out of 1,966,080 bytes (55%)
-Global variables used: 98,028 bytes out of 327,680 bytes (29%)
-Free RAM for local variables: 229,652 bytes
-```
+| Metric | Value |
+| --- | ---: |
+| Flash used | 1,084,583 bytes |
+| Flash maximum | 1,966,080 bytes |
+| Flash utilization | 55% |
+| RAM used by global variables | 98,028 bytes |
+| RAM maximum | 327,680 bytes |
+| RAM utilization | 29% |
+| Free RAM for local variables | 229,652 bytes |
 
 ## Build Command
 
