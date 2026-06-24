@@ -1,3 +1,10 @@
+/*
+ * Name: RC_FlightController.ino
+ * Use: Main Arduino sketch that starts sensors, tasks, telemetry, calibration, PID control, and motor output.
+ * Version: 4.0.0
+ * Created by: Durvesh Pathak dp676@cornell.edu
+ */
+
 /**
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║  RC_FlightController.ino  v4.0.0                                ║

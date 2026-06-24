@@ -2,6 +2,8 @@
 
 This folder contains the compiled firmware files for the stability branch.
 
+Last regenerated: 2026-06-23
+
 ## Main Firmware File
 
 Use this file for normal OTA upload:
@@ -45,6 +47,15 @@ Quiet build check with `VERBOSE_ON=0`:
 | RAM maximum | 327,680 bytes |
 | RAM utilization | 29% |
 | Free RAM for local variables | 229,652 bytes |
+
+Core 0 / Core 1 CPU utilization:
+
+| Metric | Build value |
+| --- | --- |
+| Core 0 utilization | Not available at build time |
+| Core 1 utilization | Not available at build time |
+
+Core utilization is measured only while the ESP32 is running. The firmware sends it through telemetry as `cpu_core0_pct`, `cpu_core1_pct`, and `cpu_valid`.
 
 ## Build Command
 
