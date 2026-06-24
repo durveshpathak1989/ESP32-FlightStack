@@ -105,7 +105,7 @@ static constexpr float TUNE_THROTTLE_EXPO              = 0.60f;
 static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
 static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
 static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
-static constexpr float TUNE_MOTOR_MAX                  = 0.90f;
+static constexpr float TUNE_MOTOR_MAX                  = 0.80f;
 static constexpr float TUNE_THROTTLE_CUT               = 0.03f;
 static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 
@@ -2112,6 +2112,13 @@ static void taskControl(void* /*pv*/)
             fl -= excess; fr -= excess; rl -= excess; rr -= excess;
         }
 
+            Serial.printf("[MOTOR_SAT] thr=%.3f rO=%.3f pO=%.3f yO=%.3f "
+                  "maxBefore=%.3f MOTOR_MAX=%.3f "
+                  "FL=%.3f FR=%.3f RL=%.3f RR=%.3f\n",
+                  thr, rO, pO, yO,
+                  maxMotor, MOTOR_MAX,
+                  fl, fr, rl, rr);
+
         float idleBlend = smoothStep01((thr - THROTTLE_CUT) / (IDLE_RAMP_END - THROTTLE_CUT));
         float motorMin = MOTOR_IDLE * idleBlend;
 
@@ -2124,11 +2131,55 @@ static void taskControl(void* /*pv*/)
             fl = fr = rl = rr = 0.0f;
         }
 
+        // phaseStartUs = micros();
+        // writeMotors(fl, fr, rl, rr);
+        // g_motorOutputsActive = true;
+        // g_execTiming.lastMotorUs = micros() - phaseStartUs;
+        // uint32_t controlDoneUs = micros();
+
+                // ── Motor PWM update rate limiter ───────────────────────────
+        // Control loop still runs at 400 Hz.
+        // ESC/motor PWM writes run at 200 Hz to avoid blocking every cycle.
+        static uint32_t lastMotorWriteUs = 0;
+        static uint32_t motorWriteCount = 0;
+        static uint32_t motorSkipCount = 0;
+        static uint32_t lastMotorRatePrintMs = 0;
+
+        constexpr uint32_t MOTOR_UPDATE_PERIOD_US = 5000; // 200 Hz
+
+        bool motorWriteDue =
+            (lastMotorWriteUs == 0) ||
+            ((uint32_t)(nowUs - lastMotorWriteUs) >= MOTOR_UPDATE_PERIOD_US);
+
         phaseStartUs = micros();
-        writeMotors(fl, fr, rl, rr);
-        g_motorOutputsActive = true;
+
+        if (motorWriteDue) {
+            writeMotors(fl, fr, rl, rr);
+            g_motorOutputsActive = true;
+            lastMotorWriteUs = nowUs;
+            motorWriteCount++;
+        } else {
+            motorSkipCount++;
+        }
+
         g_execTiming.lastMotorUs = micros() - phaseStartUs;
+
+        uint32_t motorRateNowMs = millis();
+        if (motorRateNowMs - lastMotorRatePrintMs >= 1000) {
+            lastMotorRatePrintMs = motorRateNowMs;
+
+            Serial.printf("[MOTOR_RATE] target=200Hz writes=%lu skips=%lu lastMotorUs=%lu\n",
+                        (unsigned long)motorWriteCount,
+                        (unsigned long)motorSkipCount,
+                        (unsigned long)g_execTiming.lastMotorUs);
+
+            motorWriteCount = 0;
+            motorSkipCount = 0;
+        }
+
         uint32_t controlDoneUs = micros();
+
+
         const float magNorm_uT = imuOk ? sqrtf(s.mx_uT*s.mx_uT + s.my_uT*s.my_uT + s.mz_uT*s.mz_uT) : 0.0f;
         const float rpmScaleLog = MOTOR_KV * BATTERY_VOLTAGE;
         const float cmdRpmFL = fl * rpmScaleLog;
