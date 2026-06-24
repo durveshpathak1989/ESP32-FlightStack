@@ -25,13 +25,15 @@ RC_FlightController/
     Submodules/
       CalManager/
       IMU/
+      Madgwick/
+      MahonyAHRS/
       MotorControl/
       ...
 ```
 
 Think of `RC_FlightController.ino` like the pilot, and `src/Submodules` like the toolbox beside the pilot. When Arduino builds the sketch, it automatically compiles the tools in `src/Submodules`, so you should not need to move the libraries by hand.
 
-Two folders live in `RC_FlightController/reference_submodules` instead of `src/Submodules`: `Madgwick` and `MahonyAHRS`. They are kept as separate reference libraries, but the flight sketch already uses the Mahony and Madgwick filters inside the `AHRS` module. If those duplicate reference modules are placed under `src`, Arduino compiles both copies and the build fails.
+`Madgwick` and `MahonyAHRS` are also under `src/Submodules`, so Arduino compiles them automatically with the rest of the flight code. The shared AHRS types live in `src/Submodules/AHRS`.
 
 After cloning with submodules, compile from the sketch folder:
 

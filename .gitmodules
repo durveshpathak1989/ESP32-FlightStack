@@ -35,11 +35,11 @@
 	url = https://github.com/durveshpathak1989/imu.git
 	branch = master
 [submodule "Submodules/Madgwick"]
-	path = RC_FlightController/reference_submodules/Madgwick
+	path = RC_FlightController/src/Submodules/Madgwick
 	url = https://github.com/durveshpathak1989/madgwick.git
 	branch = master
 [submodule "Submodules/MahonyAHRS"]
-	path = RC_FlightController/reference_submodules/MahonyAHRS
+	path = RC_FlightController/src/Submodules/MahonyAHRS
 	url = https://github.com/durveshpathak1989/mahonyahrs.git
 	branch = master
 [submodule "Submodules/MotorControl"]
