@@ -44,16 +44,28 @@ struct TelemetryPacket {
     float ax_g, ay_g, az_g;
     float gx_dps, gy_dps, gz_dps;
     float mx_uT, my_uT, mz_uT;
+    float raw_ax_g, raw_ay_g, raw_az_g;
+    float raw_gx_dps, raw_gy_dps, raw_gz_dps;
+    float filt_ax_g, filt_ay_g, filt_az_g;
+    float filt_gx_dps, filt_gy_dps, filt_gz_dps;
+    float mag_norm_uT;
 
     // Diagnostic attitude sources and PID corrections
     float accel_roll_deg, accel_pitch_deg;
     float gyro_roll_deg, gyro_pitch_deg, gyro_yaw_deg;
     float roll_angle_error_deg, pitch_angle_error_deg;
+    bool  ekf_mag_used;
+    float ekf_bgx_dps, ekf_bgy_dps, ekf_bgz_dps;
+    float target_roll_deg, target_pitch_deg, target_yaw_deg;
+    float target_roll_rate_dps, target_pitch_rate_dps, target_yaw_rate_dps;
+    float roll_rate_error_dps, pitch_rate_error_dps, yaw_rate_error_dps;
+    float yaw_error_deg;
     float pid_roll_out, pid_pitch_out, pid_yaw_out;
 
     float throttle, rc_roll, rc_pitch, rc_yaw, rc_hz;
 
     float motor_fl, motor_fr, motor_rl, motor_rr;
+    bool  motor_saturated;
     // Commanded/estimated RPM from motor output × KV × Vbat.
     float rpm_fl,   rpm_fr,   rpm_rl,   rpm_rr;
     float cmd_rpm_fl, cmd_rpm_fr, cmd_rpm_rl, cmd_rpm_rr;
@@ -63,6 +75,7 @@ struct TelemetryPacket {
     bool  rpm_actual_valid;
 
     float bmp_temp_c, bmp_pressure_hpa, bmp_altitude_m;
+    float bmp_vertical_speed_mps;
     bool  bmp_valid;
 
     float cpu_core0_pct, cpu_core1_pct;
@@ -107,7 +120,6 @@ struct TelemetryPacket {
 
     // AHRS / estimator selection
     float mahony_kp, mahony_ki;
-    float ahrs_filter_mode;
     float madgwick_beta;
 
     // Motor vibration notch filter

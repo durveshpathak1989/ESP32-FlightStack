@@ -18,7 +18,7 @@ void RollPitchEKF::reset()
 
     for (int r = 0; r < 4; r++) {
         for (int c = 0; c < 4; c++) {
-            _P[r][c] = 0.0f;
+            _covP[r][c] = 0.0f;
         }
     }
 
@@ -40,13 +40,13 @@ void RollPitchEKF::setInitialUncertainty(float angleP, float biasP)
 {
     for (int r = 0; r < 4; r++) {
         for (int c = 0; c < 4; c++) {
-            _P[r][c] = 0.0f;
+            _covP[r][c] = 0.0f;
         }
     }
-    _P[0][0] = angleP;
-    _P[1][1] = angleP;
-    _P[2][2] = biasP;
-    _P[3][3] = biasP;
+    _covP[0][0] = angleP;
+    _covP[1][1] = angleP;
+    _covP[2][2] = biasP;
+    _covP[3][3] = biasP;
 }
 
 void RollPitchEKF::_updateOneAxis(int angleIndex, int biasIndex, float measurementRad)
@@ -55,12 +55,12 @@ void RollPitchEKF::_updateOneAxis(int angleIndex, int biasIndex, float measureme
     // H = [1, 0] for the selected axis/bias pair.
     const float y = measurementRad - (angleIndex == 0 ? _roll : _pitch);
 
-    const float S = _P[angleIndex][angleIndex] + _accelAngleR;
+    const float S = _covP[angleIndex][angleIndex] + _accelAngleR;
     if (S <= 0.000001f) return;
 
     float K[4];
     for (int i = 0; i < 4; i++) {
-        K[i] = _P[i][angleIndex] / S;
+        K[i] = _covP[i][angleIndex] / S;
     }
 
     _roll  += K[0] * y;
@@ -71,12 +71,12 @@ void RollPitchEKF::_updateOneAxis(int angleIndex, int biasIndex, float measureme
     // P = (I - K H) P
     float oldRow[4];
     for (int j = 0; j < 4; j++) {
-        oldRow[j] = _P[angleIndex][j];
+        oldRow[j] = _covP[angleIndex][j];
     }
 
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            _P[i][j] -= K[i] * oldRow[j];
+            _covP[i][j] -= K[i] * oldRow[j];
         }
     }
 }
@@ -104,15 +104,15 @@ bool RollPitchEKF::update(const AHRSInput& in, float dt, AttitudeEstimate& out)
         const int a = axis;      // 0 roll, 1 pitch
         const int b = axis + 2;  // 2 gx bias, 3 gy bias
 
-        const float Paa = _P[a][a];
-        const float Pab = _P[a][b];
-        const float Pba = _P[b][a];
-        const float Pbb = _P[b][b];
+        const float Paa = _covP[a][a];
+        const float Pab = _covP[a][b];
+        const float Pba = _covP[b][a];
+        const float Pbb = _covP[b][b];
 
-        _P[a][a] = Paa - dt*Pba - dt*Pab + dt*dt*Pbb + _angleQ;
-        _P[a][b] = Pab - dt*Pbb;
-        _P[b][a] = Pba - dt*Pbb;
-        _P[b][b] = Pbb + _biasQ;
+        _covP[a][a] = Paa - dt*Pba - dt*Pab + dt*dt*Pbb + _angleQ;
+        _covP[a][b] = Pab - dt*Pbb;
+        _covP[b][a] = Pba - dt*Pbb;
+        _covP[b][b] = Pbb + _biasQ;
     }
 
     if (ahrsAccelValid(in.ax_g, in.ay_g, in.az_g)) {

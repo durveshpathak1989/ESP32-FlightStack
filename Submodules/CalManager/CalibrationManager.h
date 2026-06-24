@@ -113,6 +113,11 @@ public:
     void cancel();
     void confirmStep();
     void setSafety(bool safeToRun);
+    void attachMotorOutputs(void (*writeMotors)(float, float, float, float),
+                            void (*motorsOff)()) {
+        _writeMotors = writeMotors;
+        _motorsOff = motorsOff;
+    }
 
     void update();
 
@@ -126,11 +131,18 @@ public:
         return _status.active;
     }
 
+    bool ownsMotors() const {
+        return _ownsMotors;
+    }
+
 private:
     CalibrationStatus _status;
     uint32_t _nextRunId = 1;
 
     MPU9250* _imu = nullptr;
+    void (*_writeMotors)(float, float, float, float) = nullptr;
+    void (*_motorsOff)() = nullptr;
+    bool _ownsMotors = false;
 
     // ── Gyro calibration working data ────────────────────────
     uint32_t _gyroStartMs = 0;

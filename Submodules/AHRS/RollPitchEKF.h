@@ -45,7 +45,7 @@ private:
     float _bgx;
     float _bgy;
 
-    float _P[4][4];
+    float _covP[4][4];
 
     float _angleQ;
     float _biasQ;

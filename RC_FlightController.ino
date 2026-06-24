@@ -150,6 +150,14 @@ static constexpr float    DYN_NOTCH_MIN_THROTTLE    = 0.15f;
 static constexpr float    DYN_NOTCH_MIN_SCORE       = 3.5f;    // adjust based on your FFT output
 //static constexpr float DYN_NOTCH_MIN_GYRO_MAG    = 0.30f;
 //static constexpr float DYN_NOTCH_SMOOTH_ALPHA    = 0.20f;
+
+// ── Runtime diagnostics ────────────────────────────────────
+// Keep flight-critical paths quiet by default. Serial writes can block long
+// enough to add control-loop jitter on ESP32, especially while armed.
+static constexpr bool LOG_CONTROL_TIMING      = true;
+static constexpr bool LOG_MOTOR_SATURATION    = false;
+static constexpr bool LOG_MOTOR_WRITE_RATE    = false;
+static constexpr bool LOG_DYNAMIC_NOTCH_DEBUG = false;
 // ── EKF tuning knobs ────────────────────────────────────────
 // These are runtime-tunable from /tune while DISARMED.
 // Higher R = trust that sensor less. Higher Q = allow faster EKF state motion.
@@ -294,6 +302,8 @@ static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
     if (fullUs > targetUs) {
         g_execTiming.fullOverruns++;
     }
+
+    if (!LOG_CONTROL_TIMING) return;
 
     // Print only once per second so Serial does not dominate the control loop.
     static uint32_t lastPrintMs = 0;
@@ -1403,16 +1413,18 @@ static void updateDynamicNotchFromFFT()
         !s.rc.valid ||
         s.rc.throttle < DYN_NOTCH_MIN_THROTTLE) {
 
-        static uint32_t lastGatePrintMs = 0;
-        if (nowMs - lastGatePrintMs >= 1000) {
-            lastGatePrintMs = nowMs;
+        if (LOG_DYNAMIC_NOTCH_DEBUG) {
+            static uint32_t lastGatePrintMs = 0;
+            if (nowMs - lastGatePrintMs >= 1000) {
+                lastGatePrintMs = nowMs;
 
-            Serial.printf("[DYN_NOTCH_GATE] blocked armed=%d motorOut=%d rcValid=%d throttle=%.3f minThrottle=%.3f\n",
-                          s.armed ? 1 : 0,
-                          g_motorOutputsActive ? 1 : 0,
-                          s.rc.valid ? 1 : 0,
-                          s.rc.throttle,
-                          DYN_NOTCH_MIN_THROTTLE);
+                Serial.printf("[DYN_NOTCH_GATE] blocked armed=%d motorOut=%d rcValid=%d throttle=%.3f minThrottle=%.3f\n",
+                              s.armed ? 1 : 0,
+                              g_motorOutputsActive ? 1 : 0,
+                              s.rc.valid ? 1 : 0,
+                              s.rc.throttle,
+                              DYN_NOTCH_MIN_THROTTLE);
+            }
         }
 
         return;
@@ -1445,16 +1457,18 @@ static void updateDynamicNotchFromFFT()
                                             seq);
 
     if (!ok) {
-        static uint32_t lastNoPeakPrintMs = 0;
-        if (nowMs - lastNoPeakPrintMs >= 1000) {
-            lastNoPeakPrintMs = nowMs;
+        if (LOG_DYNAMIC_NOTCH_DEBUG) {
+            static uint32_t lastNoPeakPrintMs = 0;
+            if (nowMs - lastNoPeakPrintMs >= 1000) {
+                lastNoPeakPrintMs = nowMs;
 
-            Serial.printf("[DYN_NOTCH_NO_PEAK] current=%.1fHz min=%.1f max=%.1f minScore=%.2f seq=%lu\n",
-                          currentHz,
-                          DYN_NOTCH_MIN_HZ,
-                          DYN_NOTCH_MAX_HZ,
-                          DYN_NOTCH_MIN_SCORE,
-                          (unsigned long)seq);
+                Serial.printf("[DYN_NOTCH_NO_PEAK] current=%.1fHz min=%.1f max=%.1f minScore=%.2f seq=%lu\n",
+                              currentHz,
+                              DYN_NOTCH_MIN_HZ,
+                              DYN_NOTCH_MAX_HZ,
+                              DYN_NOTCH_MIN_SCORE,
+                              (unsigned long)seq);
+            }
         }
 
         return;
@@ -1481,12 +1495,14 @@ static void updateDynamicNotchFromFFT()
         xSemaphoreGive(g_tuneMutex);
     }
 
-    Serial.printf("[DYN_NOTCH] peak=%.1fHz score=%.3f current=%.1fHz -> request=%.1fHz seq=%lu\n",
-                  peakHz,
-                  peakScore,
-                  currentHz,
-                  requestedHz,
-                  (unsigned long)seq);
+    if (LOG_DYNAMIC_NOTCH_DEBUG) {
+        Serial.printf("[DYN_NOTCH] peak=%.1fHz score=%.3f current=%.1fHz -> request=%.1fHz seq=%lu\n",
+                      peakHz,
+                      peakScore,
+                      currentHz,
+                      requestedHz,
+                      (unsigned long)seq);
+    }
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -1745,45 +1761,38 @@ static void taskControl(void* /*pv*/)
                                   s.gx_dps, s.gy_dps, s.gz_dps,
                                   g_motorOutputsActive);
 
-            static uint32_t dynFftPushCount = 0;
-            static uint32_t lastDynFftInputPrintMs = 0;
+            if (LOG_DYNAMIC_NOTCH_DEBUG) {
+                static uint32_t dynFftPushCount = 0;
+                static uint32_t lastDynFftInputPrintMs = 0;
 
-            dynFftPushCount++;
+                dynFftPushCount++;
 
-            uint32_t nowFftInputMs = millis();
-            if (nowFftInputMs - lastDynFftInputPrintMs >= 1000) {
-                lastDynFftInputPrintMs = nowFftInputMs;
+                uint32_t nowFftInputMs = millis();
+                if (nowFftInputMs - lastDynFftInputPrintMs >= 1000) {
+                    lastDynFftInputPrintMs = nowFftInputMs;
 
-                float gyroMag =
-                    sqrtf(s.gx_dps * s.gx_dps +
-                        s.gy_dps * s.gy_dps +
-                        s.gz_dps * s.gz_dps);
+                    float gyroMag =
+                        sqrtf(s.gx_dps * s.gx_dps +
+                              s.gy_dps * s.gy_dps +
+                              s.gz_dps * s.gz_dps);
 
-                float accelVib =
-                    fabsf(sqrtf(s.ax_g * s.ax_g +
-                                s.ay_g * s.ay_g +
-                                s.az_g * s.az_g) - 1.0f);
+                    float accelVib =
+                        fabsf(sqrtf(s.ax_g * s.ax_g +
+                                    s.ay_g * s.ay_g +
+                                    s.az_g * s.az_g) - 1.0f);
 
-                Serial.printf("[DYN_FFT_INPUT] pushes=%lu motorOut=%d gyroMag=%.3f dps accelVib=%.4f g\n",
-                            (unsigned long)dynFftPushCount,
-                            g_motorOutputsActive ? 1 : 0,
-                            gyroMag,
-                            accelVib);
+                    Serial.printf("[DYN_FFT_INPUT] pushes=%lu motorOut=%d gyroMag=%.3f dps accelVib=%.4f g\n",
+                                  (unsigned long)dynFftPushCount,
+                                  g_motorOutputsActive ? 1 : 0,
+                                  gyroMag,
+                                  accelVib);
+                    Serial.printf("[DYN_NOTCH_HOOK] motorOut=%d notchEnable=%d notchHz=%.1f Q=%.1f\n",
+                                  g_motorOutputsActive ? 1 : 0,
+                                  g_tuning.notch_enable ? 1 : 0,
+                                  g_tuning.notch_freq_hz,
+                                  g_tuning.notch_q);
+                }
             }
-            // TEMP DEBUG: prove dynamic notch / spectrum hook is running.
-            // Prints only once per second so it does not destroy 400 Hz timing.
-            static uint32_t lastDynNotchPrintMs = 0;
-            uint32_t nowDynNotchMs = millis();
-
-            if (nowDynNotchMs - lastDynNotchPrintMs >= 1000) {
-                lastDynNotchPrintMs = nowDynNotchMs;
-
-    Serial.printf("[DYN_NOTCH_HOOK] motorOut=%d notchEnable=%d notchHz=%.1f Q=%.1f\n",
-                  g_motorOutputsActive ? 1 : 0,
-                  g_tuning.notch_enable ? 1 : 0,
-                  g_tuning.notch_freq_hz,
-                  g_tuning.notch_q);
-}
             AHRSInput ekfIn;
             ekfIn.ax_g = sf.ax_g; ekfIn.ay_g = sf.ay_g; ekfIn.az_g = sf.az_g;
             ekfIn.gx_dps = sf.gx_dps; ekfIn.gy_dps = sf.gy_dps; ekfIn.gz_dps = sf.gz_dps;
@@ -1806,7 +1815,7 @@ static void taskControl(void* /*pv*/)
             g_ahrsFilterModeActive = ahrsMode;
 
             if (ahrsMode == 1) {
-                mahony.update(sf, dt, att);
+                mahony.update(ekfIn, dt, att);
             } else if (ahrsMode == 2) {
                 AttitudeEstimate madOut;
                 madgwickAHRS.update(ekfIn, dt, madOut);
@@ -2112,12 +2121,19 @@ static void taskControl(void* /*pv*/)
             fl -= excess; fr -= excess; rl -= excess; rr -= excess;
         }
 
-            Serial.printf("[MOTOR_SAT] thr=%.3f rO=%.3f pO=%.3f yO=%.3f "
-                  "maxBefore=%.3f MOTOR_MAX=%.3f "
-                  "FL=%.3f FR=%.3f RL=%.3f RR=%.3f\n",
-                  thr, rO, pO, yO,
-                  maxMotor, MOTOR_MAX,
-                  fl, fr, rl, rr);
+        if (LOG_MOTOR_SATURATION && motorSaturated) {
+            static uint32_t lastMotorSatPrintMs = 0;
+            uint32_t motorSatNowMs = millis();
+            if (motorSatNowMs - lastMotorSatPrintMs >= 250) {
+                lastMotorSatPrintMs = motorSatNowMs;
+                Serial.printf("[MOTOR_SAT] thr=%.3f rO=%.3f pO=%.3f yO=%.3f "
+                              "maxBefore=%.3f MOTOR_MAX=%.3f "
+                              "FL=%.3f FR=%.3f RL=%.3f RR=%.3f\n",
+                              thr, rO, pO, yO,
+                              maxMotor, MOTOR_MAX,
+                              fl, fr, rl, rr);
+            }
+        }
 
         float idleBlend = smoothStep01((thr - THROTTLE_CUT) / (IDLE_RAMP_END - THROTTLE_CUT));
         float motorMin = MOTOR_IDLE * idleBlend;
@@ -2164,15 +2180,20 @@ static void taskControl(void* /*pv*/)
 
         g_execTiming.lastMotorUs = micros() - phaseStartUs;
 
-        uint32_t motorRateNowMs = millis();
-        if (motorRateNowMs - lastMotorRatePrintMs >= 1000) {
-            lastMotorRatePrintMs = motorRateNowMs;
+        if (LOG_MOTOR_WRITE_RATE) {
+            uint32_t motorRateNowMs = millis();
+            if (motorRateNowMs - lastMotorRatePrintMs >= 1000) {
+                lastMotorRatePrintMs = motorRateNowMs;
 
-            Serial.printf("[MOTOR_RATE] target=200Hz writes=%lu skips=%lu lastMotorUs=%lu\n",
-                        (unsigned long)motorWriteCount,
-                        (unsigned long)motorSkipCount,
-                        (unsigned long)g_execTiming.lastMotorUs);
+                Serial.printf("[MOTOR_RATE] target=200Hz writes=%lu skips=%lu lastMotorUs=%lu\n",
+                              (unsigned long)motorWriteCount,
+                              (unsigned long)motorSkipCount,
+                              (unsigned long)g_execTiming.lastMotorUs);
 
+                motorWriteCount = 0;
+                motorSkipCount = 0;
+            }
+        } else {
             motorWriteCount = 0;
             motorSkipCount = 0;
         }

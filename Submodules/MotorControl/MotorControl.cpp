@@ -68,36 +68,12 @@ static void _writeDuty(uint8_t ch, uint32_t duty) {
 #endif
 }
 
-// /** Write a specific pulse width to one motor channel. */
-// static void _writeUsIdx(uint8_t idx, uint16_t us, bool force = false) {
-//     if (idx >= 4) return;
-//     if (!force && s_lastUs[idx] == us) return;
-//     s_lastUs[idx] = us;
-//     _writeDuty(s_channels[idx], _usToDuty(us));
-// }
-
+/** Write a specific pulse width to one motor channel. */
 static void _writeUsIdx(uint8_t idx, uint16_t us, bool force = false) {
     if (idx >= 4) return;
-
     if (!force && s_lastUs[idx] == us) return;
-
-    uint32_t t0 = micros();
-
     s_lastUs[idx] = us;
     _writeDuty(s_channels[idx], _usToDuty(us));
-
-    uint32_t dt = micros() - t0;
-
-    // Temporary debug: print only when one channel write is suspiciously slow.
-    static uint32_t lastPrintMs = 0;
-    if (dt > 500 && millis() - lastPrintMs > 500) {
-        lastPrintMs = millis();
-        Serial.printf("[MOTOR_WRITE_SLOW] idx=%u ch=%u us=%u dt=%lu\n",
-                      idx,
-                      s_channels[idx],
-                      us,
-                      (unsigned long)dt);
-    }
 }
 
 static void _allUs(uint16_t us, bool force = false) {
