@@ -1,7 +1,7 @@
 /**
  * Build-time debug print control.
  *
- * Set VERNOSE_ON to 0 at build time to suppress Serial output while keeping
+ * Set VERBOSE_ON to 0 at build time to suppress Serial output while keeping
  * runtime telemetry endpoints and Wi-Fi calibration logs active.
  */
 #pragma once
@@ -10,11 +10,11 @@
 
 #include <Arduino.h>
 
-#ifndef VERNOSE_ON
-#define VERNOSE_ON 1
+#ifndef VERBOSE_ON
+#define VERBOSE_ON 1
 #endif
 
-#if VERNOSE_ON
+#if VERBOSE_ON
 #define DBG_PRINT(...)   Serial.print(__VA_ARGS__)
 #define DBG_PRINTLN(...) Serial.println(__VA_ARGS__)
 #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
