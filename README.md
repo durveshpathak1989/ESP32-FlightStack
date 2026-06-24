@@ -8,6 +8,40 @@ A custom quadcopter flight controller built around the **Adafruit HUZZAH32 / ESP
 
 ---
 
+## Open The Arduino Sketch
+
+Open this file in Arduino IDE:
+
+```text
+RC_FlightController/RC_FlightController.ino
+```
+
+The folder name and the `.ino` file name match on purpose. Arduino expects that shape:
+
+```text
+RC_FlightController/
+  RC_FlightController.ino
+  src/
+    Submodules/
+      CalManager/
+      IMU/
+      MotorControl/
+      ...
+```
+
+Think of `RC_FlightController.ino` like the pilot, and `src/Submodules` like the toolbox beside the pilot. When Arduino builds the sketch, it automatically compiles the tools in `src/Submodules`, so you should not need to move the libraries by hand.
+
+Two folders live in `RC_FlightController/reference_submodules` instead of `src/Submodules`: `Madgwick` and `MahonyAHRS`. They are kept as separate reference libraries, but the flight sketch already uses the Mahony and Madgwick filters inside the `AHRS` module. If those duplicate reference modules are placed under `src`, Arduino compiles both copies and the build fails.
+
+After cloning with submodules, compile from the sketch folder:
+
+```bash
+git submodule update --init --recursive
+arduino-cli compile --fqbn esp32:esp32:esp32 RC_FlightController
+```
+
+---
+
 ## Ground Station
 
 | Dashboard | OTA upload | Offline OSM map |
