@@ -2,15 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#000000">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Drone GCS">
-<meta name="mobile-web-app-capable" content="yes">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-192.svg">
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Drone GCS</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -106,6 +98,15 @@ canvas.stick{border:1px solid var(--sep);border-radius:6px;display:block;margin:
 .euler-item{text-align:center}
 .euler-lbl{font-size:10px;color:var(--t3);letter-spacing:1px}
 .euler-val{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--t1);margin-top:2px}
+.att-compare{width:100%;max-width:420px;margin-top:2px;display:grid;grid-template-columns:1fr;gap:6px;flex-shrink:0}
+.att-block{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px 10px}
+.att-block-title{font-size:10px;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px}
+.att-triplet{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.att-mini{text-align:center}
+.att-mini-lbl{font-size:9px;color:var(--t3);letter-spacing:1px}
+.att-mini-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--t1);margin-top:2px}
+.att-mini-val.ctrl{color:var(--cyan)}
+.att-mini-val.off{color:var(--orange)}
 
 /* ── Gauges ── */
 .gauge-wrap{display:flex;flex-direction:column;align-items:center;flex-shrink:0;gap:1px}
@@ -149,11 +150,38 @@ select{background:var(--bg3);color:var(--t2);border:1px solid var(--sep);border-
 /* ── MOTORS TAB ── */
 #tab-motors{display:none}
 #tab-motors.active{display:flex}
-.rpm-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px}
-.rpm-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-.rpm-lbl{font-size:11px;letter-spacing:1px}
-.rpm-item canvas{max-width:160px;width:100%}
-.rpm-item [id^="rpmVal"]{font-size:13px;font-weight:700;font-family:var(--mono)}
+#tab-spectrum{display:none}
+#tab-spectrum.active{display:flex;gap:10px}
+.spec-layout{display:grid;grid-template-columns:1fr 260px;gap:10px;width:100%;height:100%}
+.spec-canvas-wrap{flex:1;min-height:0;background:#000;border:1px solid var(--sep);border-radius:8px;position:relative;overflow:hidden}
+.spec-canvas-wrap canvas{position:absolute;inset:0;width:100%;height:100%}
+.health-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:6px}
+.health-badge{border:1px solid var(--sep);border-radius:7px;padding:6px 8px;background:rgba(255,255,255,.035);font-size:11px;color:var(--t3)}
+.health-badge.ok{color:var(--green);border-color:rgba(48,209,88,.45);background:rgba(48,209,88,.08)}
+.health-badge.bad{color:var(--red);border-color:rgba(255,69,58,.45);background:rgba(255,69,58,.08)}
+.motor-track-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px;min-height:0}
+.motor-track-card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;display:flex;flex-direction:column;justify-content:center;gap:9px;min-width:0}
+.motor-track-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.motor-track-title{font-size:12px;font-weight:700;letter-spacing:1.4px}
+.motor-track-status{font-size:10px;font-weight:700;letter-spacing:1px;border:1px solid var(--sep);border-radius:999px;padding:3px 8px;color:var(--t3);background:rgba(255,255,255,.04);white-space:nowrap}
+.motor-track-status.ok{color:var(--green);border-color:rgba(48,209,88,.45);background:rgba(48,209,88,.08)}
+.motor-track-status.warn{color:var(--orange);border-color:rgba(255,159,10,.45);background:rgba(255,159,10,.08)}
+.motor-track-status.bad{color:var(--red);border-color:rgba(255,69,58,.45);background:rgba(255,69,58,.08)}
+.motor-track-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.motor-metric{background:rgba(0,0,0,.20);border:1px solid rgba(255,255,255,.04);border-radius:8px;padding:7px 8px;min-width:0}
+.motor-metric .ml{font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase}
+.motor-metric .mv{font-family:var(--mono);font-weight:800;font-size:15px;color:var(--t1);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.motor-metric .mv.cmd{color:var(--cyan)}
+.motor-metric .mv.err.ok{color:var(--green)}
+.motor-metric .mv.err.warn{color:var(--orange)}
+.motor-metric .mv.err.bad{color:var(--red)}
+.motor-target-track{position:relative;height:34px;border-radius:9px;background:linear-gradient(90deg,rgba(48,209,88,.10),rgba(255,214,10,.10),rgba(255,69,58,.13));border:1px solid rgba(255,255,255,.08);overflow:hidden}
+.motor-target-track::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(25% - 1px),rgba(255,255,255,.08) calc(25% - 1px),rgba(255,255,255,.08) 25%)}
+.motor-actual-fill{position:absolute;left:0;top:7px;height:20px;border-radius:0 7px 7px 0;background:rgba(100,210,255,.28);border-right:2px solid var(--cyan);width:0%;transition:width .12s}
+.motor-command-marker{position:absolute;top:2px;bottom:2px;width:2px;background:var(--yellow);left:0%;box-shadow:0 0 8px var(--yellow);transition:left .12s}
+.motor-command-marker::after{content:'TARGET';position:absolute;top:-1px;left:5px;font-size:8px;color:var(--yellow);font-family:var(--mono);letter-spacing:.6px}
+.motor-track-scale{display:flex;justify-content:space-between;font-size:9px;color:var(--t3);font-family:var(--mono);margin-top:-4px}
+.motor-note{font-size:11px;color:var(--t3);line-height:1.45}
 
 /* ── GPS TAB ── */
 #tab-gps{display:none}
@@ -219,6 +247,24 @@ select{background:var(--bg3);color:var(--t2);border:1px solid var(--sep);border-
 canvas#ai{border-radius:50%;border:2px solid rgba(10,132,255,.4)}
 canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 
+
+/* ── OTA TAB ── */
+#tab-ota{display:none}
+#tab-ota.active{display:grid;grid-template-columns:1.15fr .85fr;gap:10px;overflow-y:auto}
+.ota-drop{border:1px dashed rgba(10,132,255,.55);border-radius:12px;background:rgba(10,132,255,.06);
+          padding:18px;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;
+          min-height:150px;text-align:center;transition:.15s}
+.ota-drop.drag{background:rgba(10,132,255,.16);border-color:var(--blue)}
+.ota-file{background:var(--bg3);border:1px solid var(--sep);border-radius:8px;color:var(--t1);
+          padding:9px;width:100%;font-family:var(--mono);font-size:12px}
+.ota-progress-track{height:10px;background:rgba(255,255,255,.07);border-radius:8px;overflow:hidden;margin-top:6px}
+.ota-progress-fill{height:100%;width:0%;background:var(--blue);border-radius:8px;transition:width .15s}
+.ota-status{font-size:12px;color:var(--t3);font-family:var(--mono);line-height:1.6;white-space:pre-wrap}
+.ota-warning{background:rgba(255,159,10,.08);border:1px solid rgba(255,159,10,.35);
+             color:var(--orange);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.55}
+.ota-ok{background:rgba(48,209,88,.08);border:1px solid rgba(48,209,88,.35);
+        color:var(--green);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.55}
+
 /* ── CONFIG TAB ── */
 #tab-config{display:none}
 #tab-config.active{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;overflow-y:auto}
@@ -262,237 +308,169 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 .badge-gcs{font-size:9px;padding:1px 5px;border-radius:4px;
            border:1px solid rgba(100,210,255,.5);color:var(--cyan);
            background:rgba(100,210,255,.08);margin-left:5px;vertical-align:middle;white-space:nowrap}
-
-
-/* ── MOBILE + INSTALLABLE APP SHELL ───────────────────────────── */
-.install-btn{display:none;padding:5px 11px;border-radius:7px;border:1px solid rgba(100,210,255,.5);background:rgba(100,210,255,.08);color:var(--cyan);cursor:pointer;font-size:11px;letter-spacing:1px;font-family:var(--ui);white-space:nowrap}
-.install-btn.show{display:inline-block}
-.mobile-toast{position:fixed;left:12px;right:12px;bottom:70px;z-index:10000;background:rgba(28,28,30,.96);border:1px solid var(--sep);border-radius:12px;padding:10px 12px;color:var(--t2);font-size:12px;line-height:1.45;box-shadow:0 8px 30px rgba(0,0,0,.45);display:none}
-.mobile-toast.show{display:block}
-
-@media (max-width: 900px){
-  html,body{height:100%;overflow:hidden;font-size:12px;-webkit-text-size-adjust:100%;touch-action:manipulation}
-  body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
-  #app{height:100dvh;grid-template-rows:auto 1fr}
-  #hdr{min-height:56px;padding:8px 10px;gap:8px;align-items:flex-start;position:sticky;top:0;z-index:20}
-  #brand{min-width:0;gap:8px}
-  #gs-title{font-size:12px;letter-spacing:2px}
-  #gs-sub{display:none}
-  #badge{font-size:10px;padding:3px 7px;letter-spacing:1px}
-  #connLbl{display:none}
-  #hcontrols{overflow-x:auto;overflow-y:hidden;max-width:62vw;padding-bottom:2px;gap:5px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  #hcontrols::-webkit-scrollbar{display:none}
-  .hbtn,.install-btn{padding:7px 9px;font-size:10px;min-height:32px}
-  #tabbar{position:fixed;left:0;right:0;bottom:0;height:58px;z-index:50;padding:4px 6px calc(4px + env(safe-area-inset-bottom));gap:2px;overflow-x:auto;overflow-y:hidden;border-top:1px solid var(--sep);border-bottom:none;background:rgba(28,28,30,.96);backdrop-filter:blur(20px);-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  #tabbar::-webkit-scrollbar{display:none}
-  .tab{height:46px;min-width:76px;padding:0 10px;font-size:10px;letter-spacing:.6px;border-radius:10px}
-  .tab.active{background:rgba(10,132,255,.13)}
-  .tab.active::after{display:none}
-  #content{overflow:hidden;padding-bottom:62px}
-  .tab-panel{height:100%;padding:10px;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch}
-  .panel{border-radius:14px;padding:12px;gap:8px;min-height:fit-content}
-  #tab-flight.active{display:grid;grid-template-columns:1fr;grid-auto-rows:auto;overflow-y:auto}
-  #p-att{order:-1;min-height:390px}
-  #p-rc,#p-mot{overflow:visible}
-  canvas#ai{width:min(68vw,230px);height:min(68vw,230px)}
-  canvas#cmp{width:min(74vw,250px);height:80px}
-  .sticks-row{grid-template-columns:1fr 1fr}
-  canvas.stick{width:110px;height:110px}
-  .euler-row{gap:6px}.euler-val{font-size:18px}
-  .motor-grid{grid-template-columns:1fr 1fr}
-  #tab-sensors.active,#tab-motors.active,#tab-system.active{display:flex;flex-direction:column;overflow-y:auto}
-  .sensor-cards{grid-template-columns:1fr 1fr}.scard{padding:9px}.sc-vals{font-size:12px}.sc-vals.big{font-size:18px}
-  .plot-wrap{min-height:260px}
-  #tab-motors .full-panel{min-height:720px}.rpm-grid{grid-template-columns:1fr;grid-template-rows:none}
-  #tab-gps.active{display:flex;flex-direction:column;overflow-y:auto}
-  #gpsMap{min-height:52vh}.gps-sidebar{width:auto;max-height:none;overflow:visible}
-  #tab-tune.active{display:grid;grid-template-columns:1fr;overflow-y:auto}
-  .tune-row{grid-template-columns:82px 1fr 54px;gap:8px;padding:7px 0}.tune-row span{font-size:12px}.tval{min-height:34px;font-size:13px}.tapply{min-height:32px}
-  .apply-all-btn{position:sticky;bottom:6px;min-height:44px;background:rgba(20,40,24,.96);backdrop-filter:blur(12px)}
-  #tab-config.active{display:grid;grid-template-columns:1fr;overflow-y:auto}
-  .cfg-row{grid-template-columns:1fr;align-items:stretch;gap:4px;padding:8px 0}.cfg-inp,.cfg-sel{height:36px;text-align:left}.cfg-actions{position:sticky;bottom:6px;background:var(--bg2)}
-  .system-layout{flex-direction:column}.full-panel{min-height:0}
-}
-
-@media (max-width: 430px){
-  #hdr{flex-direction:column;align-items:stretch}
-  #brand{justify-content:space-between}
-  #hcontrols{max-width:100%;width:100%}
-  #tabbar{height:60px}.tab{min-width:68px;font-size:9px}
-  .sensor-cards{grid-template-columns:1fr}
-  .motor-grid{grid-template-columns:1fr}
-  .sticks-row{grid-template-columns:1fr 1fr;gap:4px}
-  canvas.stick{width:92px;height:92px}
-  #p-att{min-height:350px}
-  #gpsMap{min-height:48vh}
-}
-
 </style>
 </head>
 <body>
 <div id="serialWarn"></div>
 <div id="app">
 
-<!-- ═══ HEADER ═══ -->
 <header id="hdr">
   <div id="brand">
     <div class="led" id="led"></div>
     <div>
       <div id="gs-title">DRONE GCS</div>
-      <div id="gs-sub">ESP32 · MPU-9250 · FreeRTOS · Mahony</div>
+      <div id="gs-sub">ESP32 QUADCOPTER · EKF / MAHONY · OTA</div>
     </div>
-    <div id="badge" style="border-color:#3a3a3c;color:#636366;background:transparent">UNKNOWN</div>
+    <div id="badge">UNKNOWN</div>
   </div>
   <div id="hcontrols">
     <span id="connLbl">OFFLINE</span>
-    <button class="install-btn" id="btnInstallApp" onclick="installApp()">INSTALL</button>
     <button class="hbtn" id="btnSerial" onclick="toggleSerial()">SERIAL</button>
     <button class="hbtn" id="btnWifi" onclick="toggleWifi()">WI-FI</button>
-    <button class="hbtn" id="btnStatSim" onclick="toggleStationarySim()">STAT SIM</button>
-    <button class="hbtn" id="btnFlySim" onclick="toggleFlySim()">FLY SIM</button>
+    <button class="hbtn" id="btnLog" onclick="toggleLog()">⏺ LOG</button>
+    <button class="hbtn" id="btnDL" onclick="downloadLog()" style="display:none">CSV</button>
+    <button class="hbtn" id="btnHsDL" onclick="downloadOnboardLog()">HS LOG</button>
     <button class="hbtn" id="btnAI" onclick="toggleAiLearning()">AI</button>
-    <button class="hbtn red" id="btnLog" onclick="toggleLog()">⏺ LOG</button>
-    <button class="hbtn" id="btnDL" onclick="downloadLog()" style="display:none">⬇ CSV</button>
-	<button class="hbtn" id="btnHsDL" onclick="downloadOnboardLog()">⬇ Download HighSpeed on board data</button>
+    <button class="hbtn" id="btnStatSim" onclick="toggleStationarySim()">SIM</button>
+    <button class="hbtn" id="btnFlySim" onclick="toggleFlySim()">FLY SIM</button>
   </div>
 </header>
 
-<!-- ═══ TAB BAR ═══ -->
 <nav id="tabbar">
   <button class="tab active" data-tab="flight" onclick="switchTab('flight')">FLIGHT</button>
   <button class="tab" data-tab="sensors" onclick="switchTab('sensors')">SENSORS</button>
   <button class="tab" data-tab="motors" onclick="switchTab('motors')">MOTORS</button>
-  <button class="tab" data-tab="gps" onclick="switchTab('gps')">GPS MAP</button>
-  <button class="tab" data-tab="tune" onclick="switchTab('tune')">PID TUNE</button>
+  <button class="tab" data-tab="spectrum" onclick="switchTab('spectrum')">SPECTRUM</button>
+  <button class="tab" data-tab="gps" onclick="switchTab('gps')">GPS</button>
+  <button class="tab" data-tab="tune" onclick="switchTab('tune')">SYSTEM TUNE</button>
   <button class="tab" data-tab="system" onclick="switchTab('system')">SYSTEM</button>
-  <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ CONFIG</button>
+  <button class="tab" data-tab="ota" onclick="switchTab('ota')">OTA</button>
+  <button class="tab" data-tab="config" onclick="switchTab('config')">CONFIG</button>
 </nav>
 
-<!-- ═══ CONTENT ═══ -->
 <main id="content">
 
 <!-- ① FLIGHT -->
 <section class="tab-panel active" id="tab-flight">
-  <!-- Left: RC + Barometer + CPU -->
   <div class="panel" id="p-rc">
     <div class="panel-title">RC INPUT</div>
+    <div class="data-row"><span class="dn">Throttle</span><span class="dv" id="vthr">—</span></div><div class="bar-track"><div class="bar-fill" id="bthr"></div></div>
+    <div class="data-row"><span class="dn">Roll</span><span class="dv" id="vrll">—</span></div><div class="bar-track"><div class="bar-fill" id="brll"></div></div>
+    <div class="data-row"><span class="dn">Pitch</span><span class="dv" id="vpch">—</span></div><div class="bar-track"><div class="bar-fill" id="bpch"></div></div>
+    <div class="data-row"><span class="dn">Yaw</span><span class="dv" id="vyaw">—</span></div><div class="bar-track"><div class="bar-fill" id="byaw"></div></div>
+
+    <div class="gauge-wrap">
+      <canvas id="rcGauge" width="160" height="92"></canvas>
+      <div id="gaugeVal">—</div>
+      <div id="gaugeLbl">RC FRAME RATE</div>
+    </div>
+
     <div class="sticks-row">
-      <div><div class="stick-lbl">THR / YAW</div><canvas class="stick" id="sL" width="88" height="88"></canvas></div>
-      <div><div class="stick-lbl">PITCH / ROLL</div><canvas class="stick" id="sR" width="88" height="88"></canvas></div>
+      <div><div class="stick-lbl">YAW / THR</div><canvas class="stick" id="sL" width="86" height="86"></canvas></div>
+      <div><div class="stick-lbl">ROLL / PITCH</div><canvas class="stick" id="sR" width="86" height="86"></canvas></div>
     </div>
-    <div class="gauge-wrap"><canvas id="rcGauge" width="160" height="92"></canvas>
-      <div id="gaugeVal">— Hz</div><div id="gaugeLbl">FRAME RATE</div></div>
-    <div class="data-row"><span class="dn">THROTTLE</span><span class="dv" id="vthr">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="bthr"></div></div>
-    <div class="data-row"><span class="dn">ROLL</span><span class="dv" id="vrll">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="brll"></div></div>
-    <div class="data-row"><span class="dn">PITCH</span><span class="dv" id="vpch">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="bpch"></div></div>
-    <div class="data-row"><span class="dn">YAW</span><span class="dv" id="vyaw">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="byaw"></div></div>
-    <div class="sec-title">BAROMETER</div>
-    <div class="data-row"><span class="dn">Temp</span><span class="dv" id="vbt">—</span></div>
-    <div class="data-row"><span class="dn">Pressure</span><span class="dv" id="vbp">—</span></div>
-    <div class="data-row"><span class="dn">Altitude</span><span class="dv" id="vba">—</span></div>
-    <div class="sec-title">CPU LOAD</div>
-    <div class="data-row"><span class="dn">Core 0</span><span class="dv" id="vcpu0">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="bcpu0"></div></div>
-    <div class="data-row"><span class="dn">Core 1</span><span class="dv" id="vcpu1">—</span></div>
-    <div class="bar-track"><div class="bar-fill" id="bcpu1"></div></div>
-  </div>
 
-  <!-- Center: Attitude -->
-  <div class="panel" id="p-att">
-    <div class="panel-title" style="align-self:flex-start">ATTITUDE</div>
-    <canvas id="ai" width="210" height="210"></canvas>
-    <canvas id="cmp" width="185" height="74"></canvas>
-    <div class="euler-row">
-      <div class="euler-item"><div class="euler-lbl">ROLL</div><div class="euler-val" id="eR">+0.0°</div></div>
-      <div class="euler-item"><div class="euler-lbl">PITCH</div><div class="euler-val" id="eP">+0.0°</div></div>
-      <div class="euler-item"><div class="euler-lbl">YAW</div><div class="euler-val" id="eY">0.0°</div></div>
-    </div>
-  </div>
-
-  <!-- Right: Motors + Health -->
-  <div class="panel" id="p-mot" style="overflow-y:auto">
-    <div class="panel-title">MOTORS</div>
-    <div class="motor-grid">
-      <div class="motor-item">
-        <div class="motor-lbl" style="color:#0a84ff">FL · CCW</div>
-        <div class="motor-val" id="mFL">0%</div>
-        <div class="bar-track"><div class="bar-fill" id="bmFL"></div></div>
-      </div>
-      <div class="motor-item">
-        <div class="motor-lbl" style="color:#30d158">FR · CW</div>
-        <div class="motor-val" id="mFR">0%</div>
-        <div class="bar-track"><div class="bar-fill" id="bmFR"></div></div>
-      </div>
-      <div class="motor-item">
-        <div class="motor-lbl" style="color:#ff9f0a">RL · CW</div>
-        <div class="motor-val" id="mRL">0%</div>
-        <div class="bar-track"><div class="bar-fill" id="bmRL"></div></div>
-      </div>
-      <div class="motor-item">
-        <div class="motor-lbl" style="color:#ff453a">RR · CCW</div>
-        <div class="motor-val" id="mRR">0%</div>
-        <div class="bar-track"><div class="bar-fill" id="bmRR"></div></div>
-      </div>
-    </div>
     <div class="sec-title">TELEMETRY</div>
-    <div class="data-row"><span class="dn">Parser</span><span class="dv" id="sParse">WAIT</span></div>
     <div class="data-row"><span class="dn">Tick</span><span class="dv" id="stk">—</span></div>
     <div class="data-row"><span class="dn">RC Hz</span><span class="dv" id="shz">—</span></div>
-    <div class="data-row"><span class="dn">Data age</span><span class="dv" id="sAge">—</span></div>
-    <div id="aiPanel"><span class="chip warn" id="aiState">AI OFFLINE</span><span class="chip" id="aiBias">bias: —</span></div>
-    <div style="margin-top:6px;font-size:11px;color:var(--t3)" id="logCount">0 rows logged</div>
-    <div id="tuneStatus" style="display:none"></div>
+    <div class="data-row"><span class="dn">Age</span><span class="dv" id="sAge">—</span></div>
+    <div class="data-row"><span class="dn">Parser</span><span class="dv" id="sParse">—</span></div>
+    <div class="data-row"><span class="dn">Logger</span><span class="dv" id="logCount">0 rows logged</span></div>
+  </div>
+
+  <div class="panel" id="p-att">
+    <div class="panel-title">EKF ATTITUDE · ALTITUDE</div>
+    <canvas id="ai" width="260" height="260"></canvas>
+    <div class="euler-row">
+      <div class="euler-item"><div class="euler-lbl">ROLL</div><div class="euler-val" id="eR">—</div></div>
+      <div class="euler-item"><div class="euler-lbl">PITCH</div><div class="euler-val" id="eP">—</div></div>
+      <div class="euler-item"><div class="euler-lbl">YAW</div><div class="euler-val" id="eY">—</div></div>
+    </div>
+    <canvas id="cmp" width="420" height="74"></canvas>
+
+    <div id="aiPanel">
+      <span class="chip">FILTER <b id="fltFilter">EKF</b></span>
+      <span class="chip">ALT <b id="attAlt">—</b></span>
+    </div>
+
+    <div class="att-compare">
+      <div class="att-block">
+        <div class="att-block-title">AHRS / EKF OUTPUT</div>
+        <div class="att-triplet">
+          <div class="att-mini"><div class="att-mini-lbl">R</div><div class="att-mini-val" id="ahrsR">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">P</div><div class="att-mini-val" id="ahrsP">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">Y</div><div class="att-mini-val" id="ahrsY">—</div></div>
+        </div>
+      </div>
+      <div class="att-block">
+        <div class="att-block-title">CONTROL ANGLE AFTER OFFSET</div>
+        <div class="att-triplet">
+          <div class="att-mini"><div class="att-mini-lbl">R</div><div class="att-mini-val ctrl" id="ctrlR">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">P</div><div class="att-mini-val ctrl" id="ctrlP">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">Y</div><div class="att-mini-val ctrl" id="ctrlY">—</div></div>
+        </div>
+      </div>
+      <div class="att-block">
+        <div class="att-block-title">ZERO OFFSET VALUES</div>
+        <div class="att-triplet">
+          <div class="att-mini"><div class="att-mini-lbl">R</div><div class="att-mini-val off" id="offR">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">P</div><div class="att-mini-val off" id="offP">—</div></div>
+          <div class="att-mini"><div class="att-mini-lbl">Y</div><div class="att-mini-val off" id="offY">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">MOTORS / SENSORS</div>
+    <div class="motor-grid">
+      <div class="motor-item"><div class="motor-lbl">FL</div><div class="motor-val" id="mFL">—</div><div class="bar-track"><div class="bar-fill" id="bmFL"></div></div></div>
+      <div class="motor-item"><div class="motor-lbl">FR</div><div class="motor-val" id="mFR">—</div><div class="bar-track"><div class="bar-fill" id="bmFR"></div></div></div>
+      <div class="motor-item"><div class="motor-lbl">RL</div><div class="motor-val" id="mRL">—</div><div class="bar-track"><div class="bar-fill" id="bmRL"></div></div></div>
+      <div class="motor-item"><div class="motor-lbl">RR</div><div class="motor-val" id="mRR">—</div><div class="bar-track"><div class="bar-fill" id="bmRR"></div></div></div>
+    </div>
+
+    <div class="sec-title">BARO / CPU</div>
+    <div class="data-row"><span class="dn">BMP Temp</span><span class="dv" id="vbt">—</span></div>
+    <div class="data-row"><span class="dn">Pressure</span><span class="dv" id="vbp">—</span></div>
+    <div class="data-row"><span class="dn">Altitude</span><span class="dv" id="vba">—</span></div>
+    <div class="data-row"><span class="dn">CPU0</span><span class="dv" id="vcpu0">—</span></div><div class="bar-track"><div class="bar-fill" id="bcpu0"></div></div>
+    <div class="data-row"><span class="dn">CPU1</span><span class="dv" id="vcpu1">—</span></div><div class="bar-track"><div class="bar-fill" id="bcpu1"></div></div>
+
+    <div class="sec-title">SENSOR STATUS</div>
+    <div class="health-grid">
+      <div class="health-badge" id="hImu">IMU —</div>
+      <div class="health-badge" id="hMag">MAG —</div>
+      <div class="health-badge" id="hBmp">BMP —</div>
+      <div class="health-badge" id="hCpu">CPU —</div>
+    </div>
   </div>
 </section>
 
 <!-- ② SENSORS -->
 <section class="tab-panel" id="tab-sensors">
   <div class="panel full-panel">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;gap:12px;flex-wrap:wrap">
-      <div class="panel-title" style="margin:0">IMU SIGNAL PLOTTER</div>
-      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <div class="legend">
-          <span><span class="ldot" style="background:#0a84ff"></span>Roll</span>
-          <span><span class="ldot" style="background:#30d158"></span>Pitch</span>
-          <span><span class="ldot" style="background:#bf5af2"></span>Yaw</span>
-          <span><span class="ldot" style="background:#ff9f0a"></span>Gx</span>
-          <span><span class="ldot" style="background:#ff453a"></span>Gy</span>
-          <span><span class="ldot" style="background:#64d2ff"></span>Gz</span>
-        </div>
-        <select id="imuAxis">
-          <option value="rpy">Fused R/P/Y (°)</option>
-          <option value="gyro">Gyro raw (°/s)</option>
-          <option value="accel">Accel (×90°)</option>
-          <option value="all">All overlaid</option>
-        </select>
-      </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div class="panel-title">SENSOR COMPARISON</div>
+      <select id="imuAxis" onchange="drawImuPlot()">
+        <option value="all">All</option>
+        <option value="rpy">RPY / EKF</option>
+        <option value="gyro">Gyro</option>
+        <option value="accel">Accel</option>
+      </select>
     </div>
     <div class="plot-wrap"><canvas id="imuPlot"></canvas></div>
     <div class="sensor-cards">
-      <div class="scard">
-        <div class="sc-title">GYROSCOPE (°/s)</div>
-        <div class="sc-vals"><span id="sc-gx">0.00</span><span id="sc-gy">0.00</span><span id="sc-gz">0.00</span></div>
-        <div class="sc-lbls"><span>GX</span><span>GY</span><span>GZ</span></div>
-      </div>
-      <div class="scard">
-        <div class="sc-title">ACCELEROMETER (g)</div>
-        <div class="sc-vals"><span id="sc-ax">0.000</span><span id="sc-ay">0.000</span><span id="sc-az">0.000</span></div>
-        <div class="sc-lbls"><span>AX</span><span>AY</span><span>AZ</span></div>
-      </div>
-      <div class="scard">
-        <div class="sc-title">MAGNETOMETER (µT)</div>
-        <div class="sc-vals"><span id="sc-mx">—</span><span id="sc-my">—</span><span id="sc-mz">—</span></div>
-        <div class="sc-lbls"><span>MX</span><span>MY</span><span>MZ</span></div>
-      </div>
-      <div class="scard">
-        <div class="sc-title">DIE TEMPERATURE</div>
-        <div class="sc-vals big"><span id="sc-temp">—</span></div>
-        <div class="sc-lbls"><span>°C</span></div>
-      </div>
+      <div class="scard"><div class="sc-title">GYRO °/s</div><div class="sc-vals"><span id="sc-gx">—</span><span id="sc-gy">—</span><span id="sc-gz">—</span></div><div class="sc-lbls"><span>GX</span><span>GY</span><span>GZ</span></div></div>
+      <div class="scard"><div class="sc-title">ACCEL g</div><div class="sc-vals"><span id="sc-ax">—</span><span id="sc-ay">—</span><span id="sc-az">—</span></div><div class="sc-lbls"><span>AX</span><span>AY</span><span>AZ</span></div></div>
+      <div class="scard"><div class="sc-title">MAG µT</div><div class="sc-vals"><span id="sc-mx">—</span><span id="sc-my">—</span><span id="sc-mz">—</span></div><div class="sc-lbls"><span>MX</span><span>MY</span><span>MZ</span></div></div>
+      <div class="scard"><div class="sc-title">TEMP</div><div class="sc-vals big"><span id="sc-temp">—</span></div><div class="sc-lbls"><span>°C</span></div></div>
+    </div>
+    <div class="sensor-cards">
+      <div class="scard"><div class="sc-title">EKF OUTPUT</div><div class="sc-vals"><span id="sensEkfR">—</span><span id="sensEkfP">—</span><span id="sensEkfY">—</span></div><div class="sc-lbls"><span>R</span><span>P</span><span>Y</span></div></div>
+      <div class="scard"><div class="sc-title">CONTROL AFTER OFFSET</div><div class="sc-vals"><span id="sensCtrlR">—</span><span id="sensCtrlP">—</span><span id="sensCtrlY">—</span></div><div class="sc-lbls"><span>R</span><span>P</span><span>Y</span></div></div>
+      <div class="scard"><div class="sc-title">OFFSET VALUES</div><div class="sc-vals"><span id="sensOffR">—</span><span id="sensOffP">—</span><span id="sensOffY">—</span></div><div class="sc-lbls"><span>R</span><span>P</span><span>Y</span></div></div>
+      <div class="scard"><div class="sc-title">NOTE</div><div style="font-size:12px;color:var(--t3);line-height:1.5">EKF/AHRS is raw fused attitude. Control angle is the value after zero-offset compensation.</div></div>
     </div>
   </div>
 </section>
@@ -500,17 +478,88 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 <!-- ③ MOTORS -->
 <section class="tab-panel" id="tab-motors">
   <div class="panel full-panel">
-    <div class="panel-title">RPM GAUGES — estimated (throttle × KV × Vbat)</div>
-    <div class="rpm-grid">
-      <div class="rpm-item"><div class="rpm-lbl" style="color:#0a84ff">FL · CCW</div><canvas id="rpmGaugeFL"></canvas><div id="rpmValFL" style="color:#0a84ff">0 rpm</div></div>
-      <div class="rpm-item"><div class="rpm-lbl" style="color:#30d158">FR · CW</div><canvas id="rpmGaugeFR"></canvas><div id="rpmValFR" style="color:#30d158">0 rpm</div></div>
-      <div class="rpm-item"><div class="rpm-lbl" style="color:#ff9f0a">RL · CW</div><canvas id="rpmGaugeRL"></canvas><div id="rpmValRL" style="color:#ff9f0a">0 rpm</div></div>
-      <div class="rpm-item"><div class="rpm-lbl" style="color:#ff453a">RR · CCW</div><canvas id="rpmGaugeRR"></canvas><div id="rpmValRR" style="color:#ff453a">0 rpm</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div>
+        <div class="panel-title">MOTOR TARGET TRACKING</div>
+        <div class="motor-note">Yellow marker = commanded RPM target. Blue bar = actual RPM feedback. Without ESC RPM telemetry, the actual bar is hidden and the card shows command-only mode.</div>
+      </div>
+      <div class="chip" id="rpmTelemStatus">RPM TELEMETRY: —</div>
+    </div>
+    <div class="motor-track-grid">
+      <div class="motor-track-card" data-motor="FL">
+        <div class="motor-track-head"><div class="motor-track-title" style="color:#0a84ff">FL · CCW</div><div class="motor-track-status" id="trkStatusFL">—</div></div>
+        <div class="motor-track-values">
+          <div class="motor-metric"><div class="ml">Target</div><div class="mv cmd" id="rpmCmdFL">—</div></div>
+          <div class="motor-metric"><div class="ml">Actual</div><div class="mv" id="rpmActFL">—</div></div>
+          <div class="motor-metric"><div class="ml">Error</div><div class="mv err" id="rpmErrFL">—</div></div>
+        </div>
+        <div class="motor-target-track"><div class="motor-actual-fill" id="rpmFillFL"></div><div class="motor-command-marker" id="rpmTargetFL"></div></div>
+        <div class="motor-track-scale"><span>0</span><span id="rpmScaleFL">max</span></div>
+      </div>
+      <div class="motor-track-card" data-motor="FR">
+        <div class="motor-track-head"><div class="motor-track-title" style="color:#30d158">FR · CW</div><div class="motor-track-status" id="trkStatusFR">—</div></div>
+        <div class="motor-track-values">
+          <div class="motor-metric"><div class="ml">Target</div><div class="mv cmd" id="rpmCmdFR">—</div></div>
+          <div class="motor-metric"><div class="ml">Actual</div><div class="mv" id="rpmActFR">—</div></div>
+          <div class="motor-metric"><div class="ml">Error</div><div class="mv err" id="rpmErrFR">—</div></div>
+        </div>
+        <div class="motor-target-track"><div class="motor-actual-fill" id="rpmFillFR"></div><div class="motor-command-marker" id="rpmTargetFR"></div></div>
+        <div class="motor-track-scale"><span>0</span><span id="rpmScaleFR">max</span></div>
+      </div>
+      <div class="motor-track-card" data-motor="RL">
+        <div class="motor-track-head"><div class="motor-track-title" style="color:#ff9f0a">RL · CW</div><div class="motor-track-status" id="trkStatusRL">—</div></div>
+        <div class="motor-track-values">
+          <div class="motor-metric"><div class="ml">Target</div><div class="mv cmd" id="rpmCmdRL">—</div></div>
+          <div class="motor-metric"><div class="ml">Actual</div><div class="mv" id="rpmActRL">—</div></div>
+          <div class="motor-metric"><div class="ml">Error</div><div class="mv err" id="rpmErrRL">—</div></div>
+        </div>
+        <div class="motor-target-track"><div class="motor-actual-fill" id="rpmFillRL"></div><div class="motor-command-marker" id="rpmTargetRL"></div></div>
+        <div class="motor-track-scale"><span>0</span><span id="rpmScaleRL">max</span></div>
+      </div>
+      <div class="motor-track-card" data-motor="RR">
+        <div class="motor-track-head"><div class="motor-track-title" style="color:#ff453a">RR · CCW</div><div class="motor-track-status" id="trkStatusRR">—</div></div>
+        <div class="motor-track-values">
+          <div class="motor-metric"><div class="ml">Target</div><div class="mv cmd" id="rpmCmdRR">—</div></div>
+          <div class="motor-metric"><div class="ml">Actual</div><div class="mv" id="rpmActRR">—</div></div>
+          <div class="motor-metric"><div class="ml">Error</div><div class="mv err" id="rpmErrRR">—</div></div>
+        </div>
+        <div class="motor-target-track"><div class="motor-actual-fill" id="rpmFillRR"></div><div class="motor-command-marker" id="rpmTargetRR"></div></div>
+        <div class="motor-track-scale"><span>0</span><span id="rpmScaleRR">max</span></div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ④ GPS MAP -->
+
+<!-- ④ SPECTRUM -->
+<section class="tab-panel" id="tab-spectrum">
+  <div class="spec-layout">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="panel-title">MOTOR VIBRATION FREQUENCY SPECTRUM</div>
+        <div class="legend"><span><span class="ldot" style="background:#ff9f0a"></span>Gyro vibration</span><span><span class="ldot" style="background:#64d2ff"></span>Accel vibration</span></div>
+      </div>
+      <div class="spec-canvas-wrap"><canvas id="spectrumPlot"></canvas></div>
+    </div>
+    <div class="panel" style="overflow-y:auto">
+      <div class="panel-title">SPECTRUM STATUS</div>
+      <div class="data-row"><span class="dn">Ready</span><span class="dv" id="spReady">—</span></div>
+      <div class="data-row"><span class="dn">Samples</span><span class="dv" id="spSamples">—</span></div>
+      <div class="data-row"><span class="dn">Sample Hz</span><span class="dv" id="spHz">—</span></div>
+      <div class="data-row"><span class="dn">Bin Width</span><span class="dv" id="spBin">—</span></div>
+      <div class="data-row"><span class="dn">Peak Gyro</span><span class="dv" id="spPeak">—</span></div>
+      <div class="data-row"><span class="dn">Motors</span><span class="dv" id="spMotors">—</span></div>
+      <div class="sec-title">NOTCH</div>
+      <div class="data-row"><span class="dn">Enabled</span><span class="dv" id="spNotchOn">—</span></div>
+      <div class="data-row"><span class="dn">Freq</span><span class="dv" id="spNotchHz">—</span></div>
+      <div class="data-row"><span class="dn">Q</span><span class="dv" id="spNotchQ">—</span></div>
+      <button class="apply-all-btn" onclick="copySpectrumPeakToNotch()">COPY PEAK → NOTCH FREQ</button>
+      <div style="font-size:11px;color:var(--t3);line-height:1.5;margin-top:8px">Use this with props removed first. Run motors at the throttle where vibration appears, then copy the dominant peak to the notch frequency and retest.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ⑤ GPS MAP -->
 <section class="tab-panel" id="tab-gps">
   <div class="panel gps-map-wrap">
     <div id="gpsMap"></div>
@@ -534,7 +583,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
   </div>
 </section>
 
-<!-- ⑤ PID TUNE -->
+<!-- ⑥ SYSTEM TUNE -->
 <section class="tab-panel" id="tab-tune">
   <div class="panel">
     <div class="sec-title">PILOT COMMAND LIMITS</div>
@@ -571,6 +620,18 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Kp</span><input class="tval" id="yKp" value="0.00015"><button class="tapply" onclick="sendSingle('pid_yaw_kp','yKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="yKi" value="0.0000000"><button class="tapply" onclick="sendSingle('pid_yaw_ki','yKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="yKd" value="0.00001"><button class="tapply" onclick="sendSingle('pid_yaw_kd','yKd')">SET</button></div>
+    <div class="sec-title" style="margin-top:12px">ATTITUDE FILTER · MAHONY / EKF</div>
+    <div class="tune-row"><span>Filter</span><select class="tval" id="ahrsFilterMode"><option value="0">EKF</option><option value="1">Mahony</option><option value="2">Madgwick</option></select><button class="tapply" onclick="sendFilterMode()">SET</button></div>
+    <div class="tune-row"><span>mKp</span><input class="tval" id="mKp" value="1.0000"><button class="tapply" onclick="sendSingle('mahony_kp','mKp')">SET</button></div>
+    <div class="tune-row"><span>mKi</span><input class="tval" id="mKi" value="0.00500"><button class="tapply" onclick="sendSingle('mahony_ki','mKi')">SET</button></div>
+    <div class="tune-row"><span>Madgwick β</span><input class="tval" id="madgwickBeta" value="0.050"><button class="tapply" onclick="sendSingle('madgwick_beta','madgwickBeta')">SET</button></div>
+    <div class="tune-row"><span>EKF AngQ</span><input class="tval" id="ekfAngleQ" value="0.000800"><button class="tapply" onclick="sendSingle('ekf_angle_q','ekfAngleQ')">SET</button></div>
+    <div class="tune-row"><span>EKF BiasQ</span><input class="tval" id="ekfBiasQ" value="0.000001"><button class="tapply" onclick="sendSingle('ekf_bias_q','ekfBiasQ')">SET</button></div>
+    <div class="tune-row"><span>Accel R</span><input class="tval" id="ekfAccelR" value="0.060"><button class="tapply" onclick="sendSingle('ekf_accel_r','ekfAccelR')">SET</button></div>
+    <div class="tune-row"><span>Mag R</span><input class="tval" id="ekfMagR" value="0.200"><button class="tapply" onclick="sendSingle('ekf_mag_r','ekfMagR')">SET</button></div>
+    <div class="tune-row"><span>Mag Off</span><input class="tval" id="ekfMagYawOffset" value="0.0"><button class="tapply" onclick="sendSingle('ekf_mag_yaw_offset_deg','ekfMagYawOffset')">SET</button></div>
+    <div class="tune-row"><span>Mag Sign</span><input class="tval" id="ekfMagYawSign" value="1"><button class="tapply" onclick="sendSingle('ekf_mag_yaw_sign','ekfMagYawSign')">SET</button></div>
+
   </div>
 
   <div class="panel" style="display:flex;flex-direction:column">
@@ -585,14 +646,18 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="sec-title">YAW HEADING HOLD</div>
     <div class="tune-row"><span>Kp</span><input class="tval" id="ayKp" value="6.000"><button class="tapply" onclick="sendSingle('pid_angle_yaw_kp','ayKp')">SET</button></div>
 
-    <div class="sec-title" style="margin-top:12px">MAHONY AHRS</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="mKp" value="2.0000"><button class="tapply" onclick="sendSingle('mahony_kp','mKp')">SET</button></div>
-    <div class="tune-row"><span>Ki</span><input class="tval" id="mKi" value="0.00500"><button class="tapply" onclick="sendSingle('mahony_ki','mKi')">SET</button></div>
+
+    <div class="sec-title" style="margin-top:12px">MOTOR VIBRATION NOTCH</div>
+    <div class="tune-row"><span>Enable</span><input class="tval" id="notchEnable" value="1"><button class="tapply" onclick="sendSingle('notch_enable','notchEnable')">SET</button></div>
+    <div class="tune-row"><span>Freq Hz</span><input class="tval" id="notchFreqHz" value="90.0"><button class="tapply" onclick="sendSingle('notch_freq_hz','notchFreqHz')">SET</button></div>
+    <div class="tune-row"><span>Q</span><input class="tval" id="notchQ" value="8.0"><button class="tapply" onclick="sendSingle('notch_q','notchQ')">SET</button></div>
 
     <div class="sec-title" style="margin-top:12px">LIVE VALUES</div>
     <div class="data-row"><span class="dn">mKp</span><span class="dv" id="smKp">—</span></div>
     <div class="data-row"><span class="dn">mKi</span><span class="dv" id="smKi">—</span></div>
     <div class="data-row"><span class="dn">rKp</span><span class="dv" id="srKp">—</span></div>
+    <div class="data-row"><span class="dn">Notch</span><span class="dv" id="sNotch">—</span></div>
+    <div class="data-row"><span class="dn">EKF R</span><span class="dv" id="sEkfR">—</span></div>
     <div id="tuneStatusTune" style="margin-top:8px;font-size:11px;color:var(--t3)">Wi-Fi only · DISARM first</div>
     <button class="apply-all-btn" onclick="sendAllGains()">⬆ APPLY ALL TUNING LEVERS</button>
   </div>
@@ -616,7 +681,62 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
   </div>
 </section>
 
-<!-- ⑦ CONFIG -->
+
+<!-- ⑦ OTA UPDATE -->
+<section class="tab-panel" id="tab-ota">
+  <div class="panel">
+    <div class="panel-title">OTA FIRMWARE UPDATE</div>
+    <div class="ota-warning">
+      Safety rule: remove propellers for bench updates. Firmware upload should be accepted only when the drone is DISARMED, throttle is low, and motors are stopped.
+    </div>
+
+    <div class="sec-title">1 · Select firmware .bin</div>
+    <div class="ota-drop" id="otaDrop">
+      <div style="font-size:28px;color:var(--blue)">⬆</div>
+      <div style="color:var(--t1);font-weight:700;letter-spacing:1px">Drop ESP32 firmware .bin here</div>
+      <div style="color:var(--t3);font-size:12px">or choose the exported Arduino binary</div>
+      <input class="ota-file" id="otaFile" type="file" accept=".bin,application/octet-stream">
+      <div class="data-row" style="width:100%"><span class="dn">Selected file</span><span class="dv" id="otaFileName">—</span></div>
+      <div class="data-row" style="width:100%"><span class="dn">Size</span><span class="dv" id="otaFileSize">—</span></div>
+    </div>
+
+    <div class="sec-title">2 · Upload to ESP32</div>
+    <div class="data-row"><span class="dn">Target</span><span class="dv" id="otaTarget">http://192.168.4.1/update</span></div>
+    <div class="ota-progress-track"><div class="ota-progress-fill" id="otaProgress"></div></div>
+    <div class="data-row"><span class="dn">Progress</span><span class="dv" id="otaProgressText">0%</span></div>
+    <button class="cfg-btn-push" id="otaUploadBtn" onclick="uploadFirmwareBin()">⬆ UPLOAD FIRMWARE .BIN</button>
+    <button class="cfg-btn-reset" onclick="openOtaPage()">OPEN ESP32 /update PAGE</button>
+    <div class="ota-status" id="otaStatus">Waiting for .bin file.</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">HOW TO GET THE .BIN FROM ARDUINO</div>
+    <div class="ota-ok">
+      Use the app firmware binary for OTA, usually named like:
+      <br><b>RC_FlightController_OTA.ino.bin</b>
+      <br><br>
+      Do not upload the bootloader, partitions, or merged factory image through OTA.
+    </div>
+    <div class="sec-title">Arduino IDE steps</div>
+    <div class="ota-status">1. Select the correct ESP32 board.
+2. Select an OTA-capable partition scheme, for example “Default 4MB with OTA”.
+3. Build once with USB and flash the OTA-capable firmware.
+4. For future updates: Sketch → Export Compiled Binary.
+5. Sketch → Show Sketch Folder.
+6. Pick the generated application .bin file.
+7. Connect laptop to ESP32-DRONE Wi-Fi.
+8. Upload the .bin from this tab.</div>
+
+    <div class="sec-title">Checklist before upload</div>
+    <div class="data-row"><span class="dn">Props removed</span><span class="dv warn">Required</span></div>
+    <div class="data-row"><span class="dn">Drone state</span><span class="dv" id="otaArmedState">—</span></div>
+    <div class="data-row"><span class="dn">Throttle</span><span class="dv" id="otaThrState">—</span></div>
+    <div class="data-row"><span class="dn">Motors</span><span class="dv" id="otaMotorState">—</span></div>
+    <div class="data-row"><span class="dn">Wi-Fi IP</span><span class="dv" id="otaIpState">192.168.4.1</span></div>
+  </div>
+</section>
+
+<!-- ⑧ CONFIG -->
 <section class="tab-panel" id="tab-config">
 
   <!-- Column 1: Motor & Power + Propeller -->
@@ -706,6 +826,22 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     </div>
 
     <div class="panel">
+      <div class="sec-title">FILTERS · NOTCH + EKF <span class="badge-esp">ESP32</span></div>
+      <div class="cfg-section">
+        <div class="cfg-row"><span class="cfg-lbl">Notch Enable<small>1 = on, 0 = bypass</small></span><input class="cfg-inp" id="cfg-notchen" value="1" type="number" min="0" max="1" step="1"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Notch Frequency<small>Hz — sweep 60–140 during motor test</small></span><input class="cfg-inp" id="cfg-notchhz" value="90.0" type="number" min="1" max="180" step="1"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Notch Q<small>higher = narrower; start 6–10</small></span><input class="cfg-inp" id="cfg-notchq" value="8.0" type="number" min="0.5" max="50" step="0.5"></div>
+        <div class="cfg-row"><span class="cfg-lbl">EKF Angle Q<small>process noise; higher follows gyro faster</small></span><input class="cfg-inp" id="cfg-ekfangq" value="0.0008" type="number" min="0.000001" max="0.05" step="0.0001"></div>
+        <div class="cfg-row"><span class="cfg-lbl">EKF Bias Q<small>gyro bias wander; keep small</small></span><input class="cfg-inp" id="cfg-ekfbiasq" value="0.000001" type="number" min="0.000000001" max="0.001" step="0.000001"></div>
+        <div class="cfg-row"><span class="cfg-lbl">EKF Accel R<small>higher = trust accel less under vibration</small></span><input class="cfg-inp" id="cfg-ekfaccr" value="0.060" type="number" min="0.001" max="2" step="0.005"></div>
+        <div class="cfg-row"><span class="cfg-lbl">EKF Mag R<small>higher = trust mag less near motors/wires</small></span><input class="cfg-inp" id="cfg-ekfmagr" value="0.200" type="number" min="0.001" max="5" step="0.01"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Mag Declination<small>degrees; optional true-north correction</small></span><input class="cfg-inp" id="cfg-ekfdecl" value="0.0" type="number" min="-30" max="30" step="0.1"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Mag Yaw Offset<small>degrees; bench heading trim</small></span><input class="cfg-inp" id="cfg-ekfmagoff" value="0.0" type="number" min="-180" max="180" step="1"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Mag Yaw Sign<small>use -1 if yaw correction is reversed</small></span><input class="cfg-inp" id="cfg-ekfmagsign" value="1" type="number" min="-1" max="1" step="2"></div>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="sec-title">DSHOT PROTOCOL <span class="badge-esp">ESP32</span></div>
       <div class="cfg-section">
         <div class="cfg-row"><span class="cfg-lbl">Protocol</span>
@@ -769,6 +905,9 @@ const CFG_DEFAULTS = {
   yawDeadband:0.05,
   deadband:30, armThr:1700, calThr:1700, failsafe:500, thrMin:1000, thrMax:2000,
   mahonyKp:2.0, mahonyKi:0.005, frate:500,
+  notchEnable:1, notchFreqHz:90.0, notchQ:8.0,
+  ekfAngleQ:0.0008, ekfBiasQ:0.000001, ekfAccelR:0.060, ekfMagR:0.200,
+  ekfMagDeclinationDeg:0.0, ekfMagYawOffsetDeg:0.0, ekfMagYawSign:1,
   dshot:300, dshotMin:48, dshotMax:2047, bidir:0,
   wifiIp:'192.168.4.1', pollMs:100, plotBuf:300, gpsTrack:3000
 };
@@ -791,6 +930,9 @@ function applyCfgToInputs(){
     'cfg-deadband':'deadband','cfg-armthr':'armThr','cfg-calthr':'calThr',
     'cfg-failsafe':'failsafe','cfg-thrmin':'thrMin','cfg-thrmax':'thrMax',
     'cfg-mkp':'mahonyKp','cfg-mki':'mahonyKi','cfg-frate':'frate',
+    'cfg-notchen':'notchEnable','cfg-notchhz':'notchFreqHz','cfg-notchq':'notchQ',
+    'cfg-ekfangq':'ekfAngleQ','cfg-ekfbiasq':'ekfBiasQ','cfg-ekfaccr':'ekfAccelR','cfg-ekfmagr':'ekfMagR',
+    'cfg-ekfdecl':'ekfMagDeclinationDeg','cfg-ekfmagoff':'ekfMagYawOffsetDeg','cfg-ekfmagsign':'ekfMagYawSign',
     'cfg-dshot':'dshot','cfg-dshotmin':'dshotMin','cfg-dshotmax':'dshotMax','cfg-bidir':'bidir',
     'cfg-ip':'wifiIp','cfg-poll':'pollMs','cfg-plotbuf':'plotBuf','cfg-gpstrk':'gpsTrack'
   };
@@ -820,6 +962,16 @@ function readCfgFromInputs(){
   CFG.mahonyKp = +document.getElementById('cfg-mkp').value||2.0;
   CFG.mahonyKi = +document.getElementById('cfg-mki').value||0.005;
   CFG.frate    = +document.getElementById('cfg-frate').value||500;
+  CFG.notchEnable = +document.getElementById('cfg-notchen').value||0;
+  CFG.notchFreqHz = +document.getElementById('cfg-notchhz').value||90.0;
+  CFG.notchQ      = +document.getElementById('cfg-notchq').value||8.0;
+  CFG.ekfAngleQ   = +document.getElementById('cfg-ekfangq').value||0.0008;
+  CFG.ekfBiasQ    = +document.getElementById('cfg-ekfbiasq').value||0.000001;
+  CFG.ekfAccelR   = +document.getElementById('cfg-ekfaccr').value||0.060;
+  CFG.ekfMagR     = +document.getElementById('cfg-ekfmagr').value||0.200;
+  CFG.ekfMagDeclinationDeg = +document.getElementById('cfg-ekfdecl').value||0.0;
+  CFG.ekfMagYawOffsetDeg   = +document.getElementById('cfg-ekfmagoff').value||0.0;
+  CFG.ekfMagYawSign        = +document.getElementById('cfg-ekfmagsign').value||1;
   CFG.dshot    = +document.getElementById('cfg-dshot').value||300;
   CFG.dshotMin = +document.getElementById('cfg-dshotmin').value||48;
   CFG.dshotMax = +document.getElementById('cfg-dshotmax').value||2047;
@@ -899,7 +1051,17 @@ async function pushConfigToDrone(){
     motor_max:        CFG.motorMax,
     throttle_cut:     CFG.throttleCut,
     idle_ramp_end:    CFG.idleRampEnd,
-    yaw_deadband:     CFG.yawDeadband
+    yaw_deadband:     CFG.yawDeadband,
+    notch_enable:     !!CFG.notchEnable,
+    notch_freq_hz:    CFG.notchFreqHz,
+    notch_q:          CFG.notchQ,
+    ekf_angle_q:      CFG.ekfAngleQ,
+    ekf_bias_q:       CFG.ekfBiasQ,
+    ekf_accel_r:      CFG.ekfAccelR,
+    ekf_mag_r:        CFG.ekfMagR,
+    ekf_mag_declination_deg: CFG.ekfMagDeclinationDeg,
+    ekf_mag_yaw_offset_deg:  CFG.ekfMagYawOffsetDeg,
+    ekf_mag_yaw_sign:        CFG.ekfMagYawSign
   };
   await postTune(payload);
   el.textContent='✓ Pushed to drone';el.style.color='var(--green)';
@@ -920,8 +1082,8 @@ let tuneUrl2='http://192.168.4.1/tune';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const S={
-  roll:0,pitch:0,yaw:0,ax:0,ay:0,az:0,gx:0,gy:0,gz:0,
-  mx:0,my:0,mz:0,
+  roll:0,pitch:0,yaw:0,rollCtrl:0,pitchCtrl:0,yawCtrl:0,rollOffset:0,pitchOffset:0,yawOffset:0,ax:0,ay:0,az:0,gx:0,gy:0,gz:0,
+  mx:0,my:0,mz:0,imuValid:false,magValid:false,ahrsFilter:'EKF',ahrsFilterMode:0,rpmActualValid:false,cmdRpmFL:0,cmdRpmFR:0,cmdRpmRL:0,cmdRpmRR:0,actualRpmFL:0,actualRpmFR:0,actualRpmRL:0,actualRpmRR:0,
   thr:0,rcRoll:0,rcPitch:0,rcYaw:0,rcHz:0,
   motFL:0,motFR:0,motRL:0,motRR:0,rpmFL:0,rpmFR:0,rpmRL:0,rpmRR:0,
   mode:'UNKNOWN',armed:false,tick:0,
@@ -962,8 +1124,10 @@ function switchTab(name){
     setTimeout(()=>{if(gpsMap)gpsMap.invalidateSize();},150);
   }
   if(name==='config') updateCalc();
+  if(name==='ota') updateOtaUi();
   if(name==='sensors') drawImuPlot();
   if(name==='motors') drawRpmGauges();
+  if(name==='spectrum') { pollSpectrum(); drawSpectrumPlot(); }
 }
 
 // ─── GPS / Leaflet ────────────────────────────────────────────────────────────
@@ -1024,7 +1188,7 @@ function renderGps(){
 
 // ─── CSV Logger ───────────────────────────────────────────────────────────────
 let logging=false,logRows=[];
-const LOG_HEADER='ts_ms,mode,armed,roll,pitch,yaw,gx,gy,gz,ax,ay,az,thr,rcRoll,rcPitch,rcYaw,rcHz,motFL,motFR,motRL,motRR,rpmFL,rpmFR,rpmRL,rpmRR,bmpTemp,bmpPress,bmpAlt,cpu0,cpu1,gpsValid,gpsLat,gpsLon,gpsAlt,gpsSpd,gpsSats,gpsHdop';
+const LOG_HEADER='ts_ms,mode,armed,roll,pitch,yaw,rollCtrl,pitchCtrl,yawCtrl,rollOffset,pitchOffset,yawOffset,gx,gy,gz,ax,ay,az,thr,rcRoll,rcPitch,rcYaw,rcHz,motFL,motFR,motRL,motRR,rpmFL,rpmFR,rpmRL,rpmRR,bmpTemp,bmpPress,bmpAlt,cpu0,cpu1,gpsValid,gpsLat,gpsLon,gpsAlt,gpsSpd,gpsSats,gpsHdop';
 function toggleLog(){
   logging=!logging;
   const btn=document.getElementById('btnLog'),dlBtn=document.getElementById('btnDL');
@@ -1035,6 +1199,8 @@ function toggleLog(){
 function appendLogRow(){
   if(!logging)return;
   const r=[Date.now(),S.mode,S.armed?1:0,S.roll.toFixed(3),S.pitch.toFixed(3),S.yaw.toFixed(3),
+    S.rollCtrl.toFixed(3),S.pitchCtrl.toFixed(3),S.yawCtrl.toFixed(3),
+    S.rollOffset.toFixed(3),S.pitchOffset.toFixed(3),S.yawOffset.toFixed(3),
     S.gx.toFixed(4),S.gy.toFixed(4),S.gz.toFixed(4),S.ax.toFixed(5),S.ay.toFixed(5),S.az.toFixed(5),
     S.thr.toFixed(4),S.rcRoll.toFixed(4),S.rcPitch.toFixed(4),S.rcYaw.toFixed(4),S.rcHz.toFixed(1),
     S.motFL.toFixed(4),S.motFR.toFixed(4),S.motRL.toFixed(4),S.motRR.toFixed(4),
@@ -1109,6 +1275,8 @@ async function postTelemetryToAiLearner(force=false){
     gx_dps:Number(S.gx)||0,gy_dps:Number(S.gy)||0,gz_dps:Number(S.gz)||0,
     ax_g:Number(S.ax)||0,ay_g:Number(S.ay)||0,az_g:Number(S.az)||0,
     roll_deg:Number(S.roll)||0,pitch_deg:Number(S.pitch)||0,yaw_deg:Number(S.yaw)||0,
+    roll_ctrl_deg:Number(S.rollCtrl)||0,pitch_ctrl_deg:Number(S.pitchCtrl)||0,yaw_ctrl_deg:Number(S.yawCtrl)||0,
+    roll_offset_deg:Number(S.rollOffset)||0,pitch_offset_deg:Number(S.pitchOffset)||0,yaw_offset_deg:Number(S.yawOffset)||0,
     throttle:Number(S.thr)||0,motFL:Number(S.motFL)||0,motFR:Number(S.motFR)||0,
     motRL:Number(S.motRL)||0,motRR:Number(S.motRR)||0,bmpTemp_C:isFinite(S.bmpTemp)?Number(S.bmpTemp):0};
   try{
@@ -1174,7 +1342,7 @@ async function pollWifi(){
 async function pollWifiLog(){
   if(!wifiOn)return;
   try{
-    const r=await fetch('http://'+(CFG.wifiIp||'192.168.4.1')+'/log?since='+wifiLogSeq,{cache:'no-store'});
+    const r=await fetch('http://192.168.4.1/log?since='+wifiLogSeq,{cache:'no-store'});
     const j=await r.json();if(!j.ok)return;wifiLogSeq=j.nextSeq;
     if(j.lines&&j.lines.length){j.lines.forEach(entry=>{
       const line=entry.text;
@@ -1194,13 +1362,21 @@ function setConn(on,type=''){
 }
 function applyJson(j){
   S.roll=+j.roll||0;S.pitch=+j.pitch||0;S.yaw=+j.yaw||0;
+  S.rollCtrl=(j.rollCtrl!=null)?+j.rollCtrl:S.roll;
+  S.pitchCtrl=(j.pitchCtrl!=null)?+j.pitchCtrl:S.pitch;
+  S.yawCtrl=(j.yawCtrl!=null)?+j.yawCtrl:S.yaw;
+  S.rollOffset=+j.rollOffset||0;S.pitchOffset=+j.pitchOffset||0;S.yawOffset=+j.yawOffset||0;
   S.ax=+j.ax||0;S.ay=+j.ay||0;S.az=+j.az||0;
   S.gx=+j.gx||0;S.gy=+j.gy||0;S.gz=+j.gz||0;
+  S.mx=+j.mx||0;S.my=+j.my||0;S.mz=+j.mz||0;
+  S.imuValid=!!j.imuValid;S.magValid=!!j.magValid;S.ahrsFilter=j.ahrsFilter||'EKF';S.ahrsFilterMode=+j.ahrsFilterMode||0;
   S.thr=+j.thr||0;S.rcRoll=+j.rcRoll||0;S.rcPitch=+j.rcPitch||0;S.rcYaw=+j.rcYaw||0;
   S.rcHz=+j.rcHz||0;S.tick=+j.tick||0;
   S.mode=(j.mode||'UNKNOWN').toUpperCase();S.armed=!!j.armed;
   S.motFL=+j.motFL||0;S.motFR=+j.motFR||0;S.motRL=+j.motRL||0;S.motRR=+j.motRR||0;
   S.rpmFL=+j.rpmFL||0;S.rpmFR=+j.rpmFR||0;S.rpmRL=+j.rpmRL||0;S.rpmRR=+j.rpmRR||0;
+  S.cmdRpmFL=+j.cmdRpmFL||S.rpmFL;S.cmdRpmFR=+j.cmdRpmFR||S.rpmFR;S.cmdRpmRL=+j.cmdRpmRL||S.rpmRL;S.cmdRpmRR=+j.cmdRpmRR||S.rpmRR;
+  S.actualRpmFL=+j.actualRpmFL||0;S.actualRpmFR=+j.actualRpmFR||0;S.actualRpmRL=+j.actualRpmRL||0;S.actualRpmRR=+j.actualRpmRR||0;S.rpmActualValid=!!j.rpmActualValid;
   S.bmpTemp=+j.bmpTempC;S.bmpPressure=+j.bmpPressureHpa;S.bmpAlt=+j.bmpAltitudeM;
   S.bmpValid=!!j.bmpValid;S.cpu0=+j.cpuCore0;S.cpu1=+j.cpuCore1;
   S.gpsValid=!!j.gpsValid;S.gpsLat=+j.gpsLat||0;S.gpsLon=+j.gpsLon||0;
@@ -1219,6 +1395,12 @@ function applyJson(j){
   syncI('motorIdle',j.motorIdle,3);syncI('motorMax',j.motorMax,3);syncI('thrCut',j.throttleCut,3);syncI('idleRampEnd',j.idleRampEnd,3);
   if(j.mahonyKp!=null){syncI('mKp',j.mahonyKp,4);setText('smKp',fmtGain(j.mahonyKp,4));}
   if(j.mahonyKi!=null){syncI('mKi',j.mahonyKi,5);setText('smKi',fmtGain(j.mahonyKi,5));}
+  syncI('ahrsFilterMode',j.ahrsFilterMode,0);syncI('madgwickBeta',j.madgwickBeta,3);
+  syncI('notchEnable',j.notchEnable?1:0,0);syncI('notchFreqHz',j.notchFreqHz,2);syncI('notchQ',j.notchQ,2);
+  syncI('ekfAngleQ',j.ekfAngleQ,6);syncI('ekfBiasQ',j.ekfBiasQ,6);syncI('ekfAccelR',j.ekfAccelR,3);syncI('ekfMagR',j.ekfMagR,3);
+  syncI('ekfMagYawOffset',j.ekfMagYawOffsetDeg,2);syncI('ekfMagYawSign',j.ekfMagYawSign,0);
+  if(j.notchFreqHz!=null)setText('sNotch',(j.notchEnable?'ON ':'OFF ')+Number(j.notchFreqHz).toFixed(0)+'Hz Q'+Number(j.notchQ||0).toFixed(1));
+  if(j.ekfAccelR!=null)setText('sEkfR','A '+Number(j.ekfAccelR).toFixed(3)+' M '+Number(j.ekfMagR||0).toFixed(3));
   if(j.pidRollKp!=null)setText('srKp',fmtGain(j.pidRollKp,4));
   lastTelemMs=Date.now();appendLogRow();pushHist();postTelemetryToAiLearner();render();
 }
@@ -1250,6 +1432,10 @@ function processLine(raw){
   const m=line.match(re);
   if(m){
     S.tick=+m[1];S.mode=nMode(m[2]);S.roll=+m[3];S.pitch=+m[4];S.yaw=+m[5];
+    const ctrlMatch=line.match(/CTRL\s+R=\s*([+\-]?\d[\d.]*)\s+P=\s*([+\-]?\d[\d.]*)\s+Y=\s*([+\-]?\d[\d.]*)/);
+    const offMatch=line.match(/OFF\s+R=\s*([+\-]?\d[\d.]*)\s+P=\s*([+\-]?\d[\d.]*)\s+Y=\s*([+\-]?\d[\d.]*)/);
+    if(ctrlMatch){S.rollCtrl=+ctrlMatch[1];S.pitchCtrl=+ctrlMatch[2];S.yawCtrl=+ctrlMatch[3];}else{S.rollCtrl=S.roll;S.pitchCtrl=S.pitch;S.yawCtrl=S.yaw;}
+    if(offMatch){S.rollOffset=+offMatch[1];S.pitchOffset=+offMatch[2];S.yawOffset=+offMatch[3];}
     S.thr=+m[6];S.rcRoll=+m[7];S.rcPitch=+m[8];S.rcYaw=+m[9];
     S.motFL=+m[10];S.motFR=+m[11];S.motRL=+m[12];S.motRR=+m[13];S.rcHz=+m[14];
     const gm2=line.match(/GX=([+\-]?[\d.]+)\s+GY=([+\-]?[\d.]+)\s+GZ=([+\-]?[\d.]+)/);if(gm2){S.gx=+gm2[1];S.gy=+gm2[2];S.gz=+gm2[3];}
@@ -1289,7 +1475,7 @@ function toggleStationarySim(){
   const gb={x:.42,y:-.28,z:.16},ab={x:.018,y:-.012,z:.035};
   simTimer=setInterval(()=>{
     simT+=.1;
-    S.roll=.25*Math.sin(simT*.12);S.pitch=.20*Math.cos(simT*.10);S.yaw=8+.03*simT;
+    S.roll=.25*Math.sin(simT*.12);S.pitch=.20*Math.cos(simT*.10);S.yaw=8+.03*simT;S.rollOffset=0;S.pitchOffset=0;S.yawOffset=0;S.rollCtrl=S.roll;S.pitchCtrl=S.pitch;S.yawCtrl=S.yaw;
     S.gx=gb.x+.030*Math.sin(simT*.07)+randn(.01);S.gy=gb.y+.025*Math.cos(simT*.05)+randn(.01);S.gz=gb.z+.018*Math.sin(simT*.04)+randn(.008);
     S.ax=ab.x+.002*Math.sin(simT*.10)+randn(.0015);S.ay=ab.y+.002*Math.cos(simT*.12)+randn(.0015);S.az=1+ab.z+.002*Math.sin(simT*.08)+randn(.0015);
     S.thr=0;S.rcRoll=0;S.rcPitch=0;S.rcYaw=0;S.rcHz=142+1.5*Math.sin(simT*.15);
@@ -1310,7 +1496,7 @@ function toggleFlySim(){
   const HL=39.9612,HO=-82.9988;let gpsT=0;simT=0;
   simTimer=setInterval(()=>{
     simT+=.1;gpsT+=.1;
-    S.roll=28*Math.sin(simT*.9);S.pitch=14*Math.cos(simT*.72);S.yaw=(simT*22)%360;
+    S.roll=28*Math.sin(simT*.9);S.pitch=14*Math.cos(simT*.72);S.yaw=(simT*22)%360;S.rollOffset=0;S.pitchOffset=0;S.yawOffset=0;S.rollCtrl=S.roll;S.pitchCtrl=S.pitch;S.yawCtrl=S.yaw;
     S.gx=20*Math.sin(simT*1.4)+randn(.15);S.gy=12*Math.cos(simT*.9)+randn(.15);S.gz=7*Math.sin(simT*.55)+randn(.10);
     S.ax=.06*Math.sin(simT*1.1)+randn(.006);S.ay=.05*Math.cos(simT*.85)+randn(.006);S.az=1+.02*Math.sin(simT)+randn(.006);
     S.thr=.45+.22*Math.sin(simT*.4);S.rcRoll=.35*Math.sin(simT*.6);S.rcPitch=.25*Math.cos(simT*.7);S.rcYaw=.12*Math.sin(simT);S.rcHz=138+9*Math.sin(simT*.3);
@@ -1331,6 +1517,8 @@ function toggleFlySim(){
 
 // ─── Gain tuning ──────────────────────────────────────────────────────────────
 async function sendSingle(key,inputId){const val=parseFloat(document.getElementById(inputId).value);if(isNaN(val))return;await postTune({[key]:val});}
+async function sendSingleBool01(key,inputId){const val=parseFloat(document.getElementById(inputId).value);await postTune({[key]:!!val});}
+async function sendFilterMode(){const v=parseInt(document.getElementById('ahrsFilterMode').value,10);await postTune({ahrs_filter_mode:v});}
 async function sendAllGains(){
   const map={
     max_angle_deg:'limMaxAngle',max_rate_dps:'limMaxRate',yaw_max_rate_dps:'yawMaxRate',yaw_deadband:'yawDeadband',
@@ -1343,13 +1531,21 @@ async function sendAllGains(){
     pid_angle_roll_kp:'arKp',pid_angle_roll_ki:'arKi',pid_angle_roll_kd:'arKd',
     pid_angle_pitch_kp:'apKp',pid_angle_pitch_ki:'apKi',pid_angle_pitch_kd:'apKd',
     pid_angle_yaw_kp:'ayKp',
-    mahony_kp:'mKp',mahony_ki:'mKi'
+    ahrs_filter_mode:'ahrsFilterMode', mahony_kp:'mKp', mahony_ki:'mKi', madgwick_beta:'madgwickBeta',
+    notch_enable:'notchEnable', notch_freq_hz:'notchFreqHz', notch_q:'notchQ',
+    ekf_angle_q:'ekfAngleQ', ekf_bias_q:'ekfBiasQ', ekf_accel_r:'ekfAccelR', ekf_mag_r:'ekfMagR',
+    ekf_mag_yaw_offset_deg:'ekfMagYawOffset', ekf_mag_yaw_sign:'ekfMagYawSign',
+    notch_enable:'notchEnable',notch_freq_hz:'notchFreqHz',notch_q:'notchQ',
+    ekf_angle_q:'ekfAngleQ',ekf_bias_q:'ekfBiasQ',ekf_accel_r:'ekfAccelR',ekf_mag_r:'ekfMagR',
+    ekf_mag_yaw_offset_deg:'ekfMagYawOffset',ekf_mag_yaw_sign:'ekfMagYawSign'
   };
   const payload={};
   Object.entries(map).forEach(([k,id])=>{const el=document.getElementById(id);if(!el)return;const v=parseFloat(el.value);if(!isNaN(v))payload[k]=v;});
+  if('notch_enable' in payload) payload.notch_enable=!!payload.notch_enable;
   await postTune(payload);
 }
 async function postTune(payload){
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   const s=document.getElementById('tuneStatusTune');s.textContent='Sending...';s.style.color='var(--orange)';
   try{const r=await fetch(tuneUrl2,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();
     if(j.ok){s.textContent='✓ Applied';s.style.color='var(--green)';addCalLog('[TUNE] Gains applied: '+JSON.stringify(payload),'lTUNE');}
@@ -1358,9 +1554,127 @@ async function postTune(payload){
   setTimeout(()=>{s.textContent='Ready';s.style.color='var(--t3)';},3000);
 }
 
+
+// ─── OTA firmware upload ─────────────────────────────────────────────────────
+function otaBaseUrl(){
+  const ipEl=document.getElementById('cfg-ip');
+  const ip=(ipEl&&ipEl.value?ipEl.value:(CFG.wifiIp||'192.168.4.1')).trim();
+  return 'http://'+ip;
+}
+function otaUpdateUrl(){ return otaBaseUrl() + '/update'; }
+function formatBytes(n){
+  if(!Number.isFinite(n))return '—';
+  if(n<1024)return n+' B';
+  if(n<1024*1024)return (n/1024).toFixed(1)+' KB';
+  return (n/(1024*1024)).toFixed(2)+' MB';
+}
+function selectedOtaFile(){
+  const el=document.getElementById('otaFile');
+  return el&&el.files&&el.files.length?el.files[0]:null;
+}
+function updateOtaUi(){
+  const file=selectedOtaFile();
+  setText('otaTarget',otaUpdateUrl());
+  setText('otaIpState',(document.getElementById('cfg-ip')?.value||CFG.wifiIp||'192.168.4.1'));
+  setText('otaFileName',file?file.name:'—');
+  setText('otaFileSize',file?formatBytes(file.size):'—');
+  setText('otaArmedState',S.armed?'ARMED — locked':'DISARMED');
+  const ar=document.getElementById('otaArmedState'); if(ar)ar.style.color=S.armed?'var(--red)':'var(--green)';
+  setText('otaThrState',Math.round((S.thr||0)*100)+'%');
+  const motors=Math.max(S.motFL||0,S.motFR||0,S.motRL||0,S.motRR||0);
+  setText('otaMotorState',Math.round(motors*100)+'% max output');
+  const mr=document.getElementById('otaMotorState'); if(mr)mr.style.color=motors>0.01?'var(--red)':'var(--green)';
+}
+function setOtaProgress(pct){
+  pct=clamp(pct,0,100);
+  const bar=document.getElementById('otaProgress'); if(bar)bar.style.width=pct.toFixed(0)+'%';
+  setText('otaProgressText',pct.toFixed(0)+'%');
+}
+function openOtaPage(){
+  window.open(otaUpdateUrl(),'_blank');
+}
+async function uploadFirmwareBin(){
+  readCfgFromInputs();
+  updateOtaUi();
+  const status=document.getElementById('otaStatus');
+  const btn=document.getElementById('otaUploadBtn');
+  const file=selectedOtaFile();
+
+  if(!file){ status.textContent='Select a .bin file first.'; status.style.color='var(--red)'; return; }
+  if(!file.name.toLowerCase().endsWith('.bin')){
+    status.textContent='Refusing upload: selected file is not a .bin file.';
+    status.style.color='var(--red)';
+    return;
+  }
+  if(S.armed){
+    status.textContent='Refusing upload from GCS: telemetry says drone is ARMED. Disarm first.';
+    status.style.color='var(--red)';
+    return;
+  }
+  if(Math.max(S.motFL||0,S.motFR||0,S.motRL||0,S.motRR||0)>0.01){
+    status.textContent='Refusing upload from GCS: motor outputs are not zero.';
+    status.style.color='var(--red)';
+    return;
+  }
+
+  const form=new FormData();
+  // ESP32 WebServer OTA examples commonly name this field "update".
+  form.append('update',file,file.name);
+
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST',otaUpdateUrl(),true);
+  xhr.timeout=180000;
+
+  btn.disabled=true;
+  setOtaProgress(0);
+  status.textContent='Uploading '+file.name+' to '+otaUpdateUrl()+' ...';
+  status.style.color='var(--orange)';
+  addCalLog('[OTA] Upload started: '+file.name+' ('+formatBytes(file.size)+')','lTUNE');
+
+  xhr.upload.onprogress=(e)=>{
+    if(e.lengthComputable)setOtaProgress((e.loaded/e.total)*100);
+  };
+  xhr.onload=()=>{
+    btn.disabled=false;
+    setOtaProgress(100);
+    const ok=xhr.status>=200&&xhr.status<300;
+    status.textContent=ok
+      ? 'OTA upload complete. ESP32 should reboot into the new firmware. Reconnect Wi-Fi after reboot.'
+      : 'OTA upload failed. HTTP '+xhr.status+': '+xhr.responseText;
+    status.style.color=ok?'var(--green)':'var(--red)';
+    addCalLog(ok?'[OTA] Upload complete — reboot expected':'[OTA] Upload failed HTTP '+xhr.status, ok?'lBOOT':'lWARN');
+  };
+  xhr.onerror=()=>{
+    btn.disabled=false;
+    status.textContent='OTA upload network error. Check that your laptop is on ESP32-DRONE Wi-Fi and IP is correct.';
+    status.style.color='var(--red)';
+    addCalLog('[OTA] Network error during upload','lWARN');
+  };
+  xhr.ontimeout=()=>{
+    btn.disabled=false;
+    status.textContent='OTA upload timed out.';
+    status.style.color='var(--red)';
+    addCalLog('[OTA] Upload timed out','lWARN');
+  };
+  xhr.send(form);
+}
+function setupOtaDrop(){
+  const input=document.getElementById('otaFile');
+  const drop=document.getElementById('otaDrop');
+  if(input)input.addEventListener('change',updateOtaUi);
+  if(!drop)return;
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
+  drop.addEventListener('drop',e=>{
+    const files=e.dataTransfer&&e.dataTransfer.files;
+    if(files&&files.length&&input){input.files=files;updateOtaUi();}
+  });
+}
+
 // ─── Canvas Renders ───────────────────────────────────────────────────────────
 function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
 function setText(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
+function setHealth(id,name,ok){const el=document.getElementById(id);if(!el)return;el.textContent=name+' '+(ok?'OK':'BAD');el.className='health-badge '+(ok?'ok':'bad');}
 function setBar(id,pct,col){const el=document.getElementById(id);if(!el)return;el.style.width=clamp(pct,0,100)+'%';if(col)el.style.background=col;}
 function fmt(v,dp){return(v>=0?'+':'')+Number(v).toFixed(dp);}
 
@@ -1429,21 +1743,87 @@ function drawImuPlot(){
   if(mode==='accel'||mode==='all'){plotLine(hist.ax,'#0a84ff',[5,3],mode==='all'?.4:1);plotLine(hist.ay,'#30d158',[5,3],mode==='all'?.4:1);plotLine(hist.az,'#bf5af2',[5,3],mode==='all'?.4:1);}
 }
 
-const MAX_RPM=()=>Math.round(CFG.kv*CFG.cells*CFG.cellV*1.05);
-function drawRpmGauge(canvasId,valId,rpm,color){
-  const c=document.getElementById(canvasId);if(!c)return;
+const MAX_RPM=()=>Math.max(1000,Math.round(CFG.kv*CFG.cells*CFG.cellV*1.05));
+function fmtRpm(rpm){return Number.isFinite(rpm)?Math.round(rpm).toLocaleString()+' rpm':'—';}
+function setTrackStatus(id,text,cls){const el=document.getElementById('trkStatus'+id);if(!el)return;el.textContent=text;el.className='motor-track-status '+(cls||'');}
+function setErrClass(id,cls){const el=document.getElementById('rpmErr'+id);if(!el)return;el.className='mv err '+(cls||'');}
+function drawMotorTrack(id,cmd,act){
   const maxRpm=MAX_RPM();
-  const disp=c.parentElement?c.parentElement.clientWidth:140;const SZ=Math.max(60,Math.min(160,disp*.8));
-  c.width=SZ;c.height=Math.round(SZ*.6);
-  const ctx=c.getContext('2d'),W=c.width,H=c.height,cx=W/2,cy=H-5,R=Math.min(cx-5,H-7);ctx.clearRect(0,0,W,H);
-  const frac=clamp(rpm/maxRpm,0,1);const col=frac>.8?'#ff453a':frac>.55?'#ff9f0a':color;
-  ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,0,false);ctx.lineWidth=8;ctx.strokeStyle='rgba(255,255,255,.08)';ctx.stroke();
-  if(frac>0){ctx.beginPath();ctx.arc(cx,cy,R,Math.PI,Math.PI*(1+frac),false);ctx.lineWidth=8;ctx.strokeStyle=col;ctx.stroke();}
-  [0,.25,.5,.75,1].forEach(t=>{const ang=Math.PI*(1-t);const x1=cx+R*Math.cos(ang),y1=cy-R*Math.sin(ang);const x2=cx+(R-9)*Math.cos(ang),y2=cy-(R-9)*Math.sin(ang);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.lineWidth=1.5;ctx.strokeStyle='rgba(255,255,255,.15)';ctx.stroke();if(t===0||t===.5||t===1){const lx=cx+(R-17)*Math.cos(ang),ly=cy-(R-17)*Math.sin(ang);ctx.fillStyle='rgba(235,235,245,.4)';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText(Math.round(t*maxRpm/1000)+'k',lx,ly+3);}});
-  const nAng=Math.PI*(1-frac);ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+(R-4)*Math.cos(nAng),cy-(R-4)*Math.sin(nAng));ctx.lineWidth=2;ctx.strokeStyle='#ffd60a';ctx.stroke();ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fillStyle='#ffd60a';ctx.fill();
-  const el=document.getElementById(valId);if(el){el.textContent=rpm>10?Math.round(rpm)+' rpm':'0 rpm';el.style.color=col;}
+  const cmdPct=clamp((cmd||0)/maxRpm*100,0,100);
+  const actValid=!!S.rpmActualValid && Number.isFinite(act);
+  const actPct=actValid?clamp((act||0)/maxRpm*100,0,100):0;
+  const marker=document.getElementById('rpmTarget'+id); if(marker)marker.style.left=cmdPct+'%';
+  const fill=document.getElementById('rpmFill'+id); if(fill){fill.style.width=actValid?actPct+'%':'0%';fill.style.opacity=actValid?'1':'0.18';}
+  setText('rpmCmd'+id,fmtRpm(cmd));
+  setText('rpmAct'+id,actValid?fmtRpm(act):'no telem');
+  setText('rpmScale'+id,Math.round(maxRpm/1000)+'k rpm');
+  if(!actValid){
+    setText('rpmErr'+id,'—');setErrClass(id,'warn');setTrackStatus(id,'COMMAND ONLY','warn');
+    return;
+  }
+  const err=(act||0)-(cmd||0);
+  const errPct=(Math.abs(cmd)>250)?(err/cmd*100):0;
+  const absPct=Math.abs(errPct);
+  const cls=absPct<=5?'ok':absPct<=15?'warn':'bad';
+  const sign=err>=0?'+':'';
+  setText('rpmErr'+id,sign+Math.round(err).toLocaleString()+' / '+sign+errPct.toFixed(1)+'%');
+  setErrClass(id,cls);
+  setTrackStatus(id,cls==='ok'?'TRACKING':(err<0?'LOW':'HIGH'),cls);
 }
-function drawRpmGauges(){drawRpmGauge('rpmGaugeFL','rpmValFL',S.rpmFL,'#0a84ff');drawRpmGauge('rpmGaugeFR','rpmValFR',S.rpmFR,'#30d158');drawRpmGauge('rpmGaugeRL','rpmValRL',S.rpmRL,'#ff9f0a');drawRpmGauge('rpmGaugeRR','rpmValRR',S.rpmRR,'#ff453a');}
+function drawRpmGauges(){
+  const telem=document.getElementById('rpmTelemStatus');
+  if(telem){telem.textContent=S.rpmActualValid?'RPM TELEMETRY: ACTIVE':'RPM TELEMETRY: NOT AVAILABLE';telem.className='chip '+(S.rpmActualValid?'ok':'warn');}
+  [['FL',S.cmdRpmFL,S.actualRpmFL],['FR',S.cmdRpmFR,S.actualRpmFR],['RL',S.cmdRpmRL,S.actualRpmRL],['RR',S.cmdRpmRR,S.actualRpmRR]].forEach(([id,cmd,act])=>drawMotorTrack(id,cmd,act));
+}
+
+
+// ─── Frequency Spectrum ─────────────────────────────────────────────────────
+let spectrumData=null, spectrumTimer=null;
+async function pollSpectrum(){
+  if(activeTab!=='spectrum')return;
+  try{
+    const ip=(CFG.wifiIp||'192.168.4.1');
+    const r=await fetch('http://'+ip+'/spectrum',{cache:'no-store'});
+    const j=await r.json();
+    spectrumData=j;
+    renderSpectrumStatus(j);drawSpectrumPlot();
+  }catch(e){setText('spReady','NO LINK');}
+}
+function renderSpectrumStatus(j){
+  if(!j){return;}
+  setText('spReady',j.ok?'YES':('NO '+(j.samples||0)+'/'+(j.needed||128)));
+  setText('spSamples',(j.samples||0).toString());
+  setText('spHz',j.sampleHz?Number(j.sampleHz).toFixed(1)+' Hz':'—');
+  setText('spBin',j.binHz?Number(j.binHz).toFixed(2)+' Hz/bin':'—');
+  setText('spPeak',j.peakGyroHz?Number(j.peakGyroHz).toFixed(1)+' Hz':'—');
+  setText('spMotors',j.motorsRunning?'RUNNING':'OFF');
+  setText('spNotchOn',j.notchEnable?'ON':'OFF');
+  setText('spNotchHz',j.notchFreqHz?Number(j.notchFreqHz).toFixed(1)+' Hz':'—');
+  setText('spNotchQ',j.notchQ?Number(j.notchQ).toFixed(1):'—');
+}
+function drawSpectrumPlot(){
+  const c=document.getElementById('spectrumPlot'); if(!c||!c.parentElement)return;
+  const w=c.parentElement.clientWidth,h=c.parentElement.clientHeight;if(!w||!h)return;
+  c.width=w;c.height=h;const ctx=c.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
+  const j=spectrumData;if(!j||!j.ok||!j.bins){ctx.fillStyle='rgba(235,235,245,.45)';ctx.font='13px monospace';ctx.fillText('Waiting for 128 samples from /spectrum...',20,28);return;}
+  const bins=j.bins,ML=42,MB=22,MT=12,pw=w-ML-10,ph=h-MB-MT;
+  const maxF=200;let maxMag=0;bins.forEach(b=>{maxMag=Math.max(maxMag,Number(b.gyro)||0,Number(b.accel)||0);});maxMag=maxMag||1;
+  const x=f=>ML+Math.min(maxF,Math.max(0,f))/maxF*pw;const y=m=>MT+ph*(1-m/maxMag);
+  ctx.strokeStyle='rgba(255,255,255,.08)';ctx.fillStyle='rgba(235,235,245,.35)';ctx.font='9px monospace';ctx.textAlign='right';
+  for(let i=0;i<=5;i++){const yy=MT+ph*i/5;ctx.beginPath();ctx.moveTo(ML,yy);ctx.lineTo(ML+pw,yy);ctx.stroke();}
+  ctx.textAlign='center';for(let f=0;f<=200;f+=25){const xx=x(f);ctx.beginPath();ctx.moveTo(xx,MT);ctx.lineTo(xx,MT+ph);ctx.stroke();ctx.fillText(f+'Hz',xx,MT+ph+14);}
+  function line(key,color){ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();bins.forEach((b,i)=>{const xx=x(Number(b.f)||0),yy=y(Number(b[key])||0);i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy);});ctx.stroke();}
+  line('gyro','#ff9f0a');line('accel','#64d2ff');
+  if(j.notchFreqHz){const xx=x(Number(j.notchFreqHz));ctx.strokeStyle='#ff453a';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(xx,MT);ctx.lineTo(xx,MT+ph);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#ff453a';ctx.textAlign='left';ctx.fillText('notch '+Number(j.notchFreqHz).toFixed(0)+'Hz',xx+4,MT+12);}
+  if(j.peakGyroHz){const xx=x(Number(j.peakGyroHz));ctx.fillStyle='#ffd60a';ctx.textAlign='left';ctx.fillText('peak '+Number(j.peakGyroHz).toFixed(1)+'Hz',xx+4,MT+26);}
+}
+function copySpectrumPeakToNotch(){
+  if(!spectrumData||!spectrumData.peakGyroHz)return;
+  const hz=Number(spectrumData.peakGyroHz);
+  const el=document.getElementById('notchFreqHz');if(el)el.value=hz.toFixed(1);
+  postTune({notch_enable:true,notch_freq_hz:hz,notch_q:parseFloat(document.getElementById('notchQ')?.value||'8')});
+}
+setInterval(()=>{if(activeTab==='spectrum')pollSpectrum();},500);
 
 // ─── Main Render ──────────────────────────────────────────────────────────────
 const modeStyle={
@@ -1468,6 +1848,8 @@ function render(){
   setText('vbt',isFinite(S.bmpTemp)?S.bmpTemp.toFixed(1)+' °C':'—');
   setText('vbp',isFinite(S.bmpPressure)?S.bmpPressure.toFixed(2)+' hPa':'—');
   setText('vba',isFinite(S.bmpAlt)?S.bmpAlt.toFixed(1)+' m':'—');
+  setText('attAlt',isFinite(S.bmpAlt)?S.bmpAlt.toFixed(2)+' m':'—');
+  setText('fltFilter',S.ahrsFilter||'EKF');
   if(isFinite(S.cpu0)){
     setText('vcpu0',S.cpu0.toFixed(0)+' %');setText('vcpu1',S.cpu1.toFixed(0)+' %');
     const c0=S.cpu0>80?'#ff453a':S.cpu0>55?'#ff9f0a':'#30d158';const c1=S.cpu1>80?'#ff453a':S.cpu1>55?'#ff9f0a':'#30d158';
@@ -1476,58 +1858,49 @@ function render(){
   setText('eR',(S.roll>=0?'+':'')+S.roll.toFixed(1)+'°');
   setText('eP',(S.pitch>=0?'+':'')+S.pitch.toFixed(1)+'°');
   setText('eY',S.yaw.toFixed(1)+'°');
+  setText('ahrsR',(S.roll>=0?'+':'')+S.roll.toFixed(2)+'°');
+  setText('ahrsP',(S.pitch>=0?'+':'')+S.pitch.toFixed(2)+'°');
+  setText('ahrsY',S.yaw.toFixed(2)+'°');
+  setText('ctrlR',(S.rollCtrl>=0?'+':'')+S.rollCtrl.toFixed(2)+'°');
+  setText('ctrlP',(S.pitchCtrl>=0?'+':'')+S.pitchCtrl.toFixed(2)+'°');
+  setText('ctrlY',S.yawCtrl.toFixed(2)+'°');
+  setText('offR',(S.rollOffset>=0?'+':'')+S.rollOffset.toFixed(2)+'°');
+  setText('offP',(S.pitchOffset>=0?'+':'')+S.pitchOffset.toFixed(2)+'°');
+  setText('offY',S.yawOffset.toFixed(2)+'°');
   drawAI(S.roll,S.pitch);drawCompass(S.yaw);
   drawStick('sL',S.rcYaw,S.thr*2-1);drawStick('sR',S.rcRoll,S.rcPitch);
   setText('stk',S.tick);setText('shz',S.rcHz.toFixed(0)+' Hz');
+  setHealth('hImu','IMU',S.imuValid);setHealth('hMag','MAG',S.magValid);setHealth('hBmp','BMP',S.bmpValid);setHealth('hCpu','CPU',isFinite(S.cpu0)&&isFinite(S.cpu1)&&S.cpu0<95&&S.cpu1<95);
   // Sensor cards
   setText('sc-gx',fmt(S.gx,2));setText('sc-gy',fmt(S.gy,2));setText('sc-gz',fmt(S.gz,2));
   setText('sc-ax',fmt(S.ax,3));setText('sc-ay',fmt(S.ay,3));setText('sc-az',fmt(S.az,3));
-  if(S.mx!==0){setText('sc-mx',fmt(S.mx,1));setText('sc-my',fmt(S.my,1));setText('sc-mz',fmt(S.mz,1));}
+  setText('sc-mx',S.magValid?fmt(S.mx,1):'BAD');setText('sc-my',S.magValid?fmt(S.my,1):'BAD');setText('sc-mz',S.magValid?fmt(S.mz,1):'BAD');
+  setText('sensEkfR',S.roll.toFixed(2));setText('sensEkfP',S.pitch.toFixed(2));setText('sensEkfY',S.yaw.toFixed(2));
+  setText('sensCtrlR',S.rollCtrl.toFixed(2));setText('sensCtrlP',S.pitchCtrl.toFixed(2));setText('sensCtrlY',S.yawCtrl.toFixed(2));
+  setText('sensOffR',S.rollOffset.toFixed(2));setText('sensOffP',S.pitchOffset.toFixed(2));setText('sensOffY',S.yawOffset.toFixed(2));
   if(isFinite(S.bmpTemp))setText('sc-temp',S.bmpTemp.toFixed(1));
   if(activeTab==='sensors') drawImuPlot();
   if(activeTab==='motors') drawRpmGauges();
+  if(activeTab==='spectrum') drawSpectrumPlot();
+  if(activeTab==='ota') updateOtaUi();
   renderGps();
 }
 
 // ─── ResizeObserver ───────────────────────────────────────────────────────────
-const ro=new ResizeObserver(()=>{if(activeTab==='sensors')drawImuPlot();if(activeTab==='motors')drawRpmGauges();});
+const ro=new ResizeObserver(()=>{if(activeTab==='sensors')drawImuPlot();if(activeTab==='motors')drawRpmGauges();if(activeTab==='spectrum')drawSpectrumPlot();});
 ro.observe(document.getElementById('tab-sensors'));
 ro.observe(document.getElementById('tab-motors'));
-
-
-
-// ─── PWA install support ─────────────────────────────────────
-let deferredInstallPrompt = null;
-function showMobileToast(msg){
-  let el=document.getElementById('mobileToast');
-  if(!el){el=document.createElement('div');el.id='mobileToast';el.className='mobile-toast';document.body.appendChild(el);}
-  el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),4500);
-}
-window.addEventListener('beforeinstallprompt', (e)=>{
-  e.preventDefault(); deferredInstallPrompt=e;
-  const b=document.getElementById('btnInstallApp'); if(b)b.classList.add('show');
-});
-async function installApp(){
-  if(deferredInstallPrompt){
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice.catch(()=>{});
-    deferredInstallPrompt=null;
-    const b=document.getElementById('btnInstallApp'); if(b)b.classList.remove('show');
-  }else{
-    showMobileToast('Use browser menu → Add to Home Screen. For full PWA install, serve this folder from HTTPS or localhost.');
-  }
-}
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{});});
-}
+ro.observe(document.getElementById('tab-spectrum'));
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadConfig();  // load saved config from localStorage, update inputs + calc
+setupOtaDrop();
 document.getElementById('btnAI').classList.add('on');
 addCalLog('[GCS] Ground Station ready — ESP32 Quadcopter','lBOOT');
 addCalLog('[GCS] Connect: SERIAL (Chrome/Edge) or WI-FI (192.168.4.1)','lBOOT');
 addCalLog('[GCS] Use SIM/FLY SIM to preview dashboard with data','lBOOT');
 addCalLog('[GCS] Switch to GPS MAP tab to view Leaflet map','lBOOT');
+addCalLog('[GCS] OTA tab can upload Arduino-exported .bin files to /update','lBOOT');
 render();
 </script>
 </body>

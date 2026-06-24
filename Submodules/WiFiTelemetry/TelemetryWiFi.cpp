@@ -19,6 +19,7 @@ TelemetryWiFi::TelemetryWiFi(uint16_t port)
       _timingProvider(nullptr),
       _timingCsvProvider(nullptr),
       _timingResetHandler(nullptr),
+      _spectrumProvider(nullptr),
       _flightLogCount(nullptr),
       _flightLogHeader(nullptr),
       _flightLogRow(nullptr),
@@ -52,6 +53,7 @@ void TelemetryWiFi::setOtaAllowedProvider(bool (*p)())                      { _o
 void TelemetryWiFi::setTimingProvider(String (*p)())                       { _timingProvider       = p; }
 void TelemetryWiFi::setTimingCsvProvider(String (*p)())                    { _timingCsvProvider    = p; }
 void TelemetryWiFi::setTimingResetHandler(void (*h)())                     { _timingResetHandler   = h; }
+void TelemetryWiFi::setSpectrumProvider(String (*p)())                         { _spectrumProvider     = p; }
 void TelemetryWiFi::update()                                               { _server.handleClient(); }
 
 void TelemetryWiFi::setFlightLogCountProvider(uint16_t (*p)())     { _flightLogCount  = p; }
@@ -99,6 +101,8 @@ void TelemetryWiFi::_setupRoutes()
     _server.on("/timing/reset",   HTTP_OPTIONS, [this]() { _handleOptions(); });
     _server.on("/timing/csv",     HTTP_GET,     [this]() { _handleTimingCsv(); });
     _server.on("/timing/csv",     HTTP_OPTIONS, [this]() { _handleOptions(); });
+    _server.on("/spectrum",       HTTP_GET,     [this]() { _handleSpectrum(); });
+    _server.on("/spectrum",       HTTP_OPTIONS, [this]() { _handleOptions(); });
     _server.on("/flightlog/csv",   HTTP_GET,     [this]() { _handleFlightLogCsv(); });
     _server.on("/flightlog/csv",   HTTP_OPTIONS, [this]() { _handleOptions(); });
     _server.on("/flightlog/reset", HTTP_POST,    [this]() { _handleFlightLogReset(); });
@@ -125,7 +129,8 @@ void TelemetryWiFi::_handleRoot()
         "GET  /log?since=N      — calibration log lines\n"
         "GET  /timing           — IMU jitter stats (Welford)\n"
         "POST /timing/reset     — reset jitter stats\n"
-        "GET  /timing/csv       — download raw period_us ring buffer\n");
+        "GET  /timing/csv       — download raw period_us ring buffer\n"
+        "GET  /spectrum         — onboard vibration spectrum JSON\n");
 }
 
 void TelemetryWiFi::_handleTelemetry()
@@ -170,6 +175,18 @@ void TelemetryWiFi::_handleTimingCsv()
     }
     _server.sendHeader("Content-Disposition", "attachment; filename=\"timing.csv\"");
     _server.send(200, "text/csv", _timingCsvProvider());
+}
+
+
+void TelemetryWiFi::_handleSpectrum()
+{
+    _requestCount++;
+    _sendCorsHeaders();
+    if (!_spectrumProvider) {
+        _server.send(503, "application/json", "{\"ok\":false,\"error\":\"no spectrum provider\"}");
+        return;
+    }
+    _server.send(200, "application/json", _spectrumProvider());
 }
 
 void TelemetryWiFi::_handleFlightLogReset()
@@ -355,6 +372,9 @@ void TelemetryWiFi::_handleTune()
     auto tryF = [&](const char* key, bool& has, float& val) {
         float tmp; if (_jsonGetFloat(body, key, tmp)) { has = true; val = tmp; }
     };
+    auto tryB = [&](const char* key, bool& has, bool& val) {
+        bool tmp; if (_jsonGetBool(body, key, tmp)) { has = true; val = tmp; }
+    };
     // Pilot command limits
     tryF("max_angle_deg",           t.has_max_angle_deg,           t.max_angle_deg);
     tryF("max_rate_dps",            t.has_max_rate_dps,            t.max_rate_dps);
@@ -404,6 +424,31 @@ void TelemetryWiFi::_handleTune()
     // AHRS
     tryF("mahony_kp",               t.has_mahony_kp,               t.mahony_kp);
     tryF("mahony_ki",               t.has_mahony_ki,               t.mahony_ki);
+
+    // Motor vibration notch filter. Aliases support camelCase GCS controls.
+    tryB("notch_enable",            t.has_notch_enable,            t.notch_enable);
+    if (!t.has_notch_enable) { tryB("notchEnable", t.has_notch_enable, t.notch_enable); }
+    tryF("notch_freq_hz",           t.has_notch_freq_hz,           t.notch_freq_hz);
+    if (!t.has_notch_freq_hz) { tryF("notchFreqHz", t.has_notch_freq_hz, t.notch_freq_hz); }
+    tryF("notch_q",                 t.has_notch_q,                 t.notch_q);
+    if (!t.has_notch_q) { tryF("notchQ", t.has_notch_q, t.notch_q); }
+
+    // Attitude EKF tuning. Aliases support camelCase GCS controls.
+    tryF("ekf_angle_q",              t.has_ekf_angle_q,              t.ekf_angle_q);
+    if (!t.has_ekf_angle_q) { tryF("ekfAngleQ", t.has_ekf_angle_q, t.ekf_angle_q); }
+    tryF("ekf_bias_q",               t.has_ekf_bias_q,               t.ekf_bias_q);
+    if (!t.has_ekf_bias_q) { tryF("ekfBiasQ", t.has_ekf_bias_q, t.ekf_bias_q); }
+    tryF("ekf_accel_r",              t.has_ekf_accel_r,              t.ekf_accel_r);
+    if (!t.has_ekf_accel_r) { tryF("ekfAccelR", t.has_ekf_accel_r, t.ekf_accel_r); }
+    tryF("ekf_mag_r",                t.has_ekf_mag_r,                t.ekf_mag_r);
+    if (!t.has_ekf_mag_r) { tryF("ekfMagR", t.has_ekf_mag_r, t.ekf_mag_r); }
+    tryF("ekf_mag_declination_deg",  t.has_ekf_mag_declination_deg,  t.ekf_mag_declination_deg);
+    if (!t.has_ekf_mag_declination_deg) { tryF("ekfMagDeclinationDeg", t.has_ekf_mag_declination_deg, t.ekf_mag_declination_deg); }
+    tryF("ekf_mag_yaw_offset_deg",   t.has_ekf_mag_yaw_offset_deg,   t.ekf_mag_yaw_offset_deg);
+    if (!t.has_ekf_mag_yaw_offset_deg) { tryF("ekfMagYawOffsetDeg", t.has_ekf_mag_yaw_offset_deg, t.ekf_mag_yaw_offset_deg); }
+    tryF("ekf_mag_yaw_sign",         t.has_ekf_mag_yaw_sign,         t.ekf_mag_yaw_sign);
+    if (!t.has_ekf_mag_yaw_sign) { tryF("ekfMagYawSign", t.has_ekf_mag_yaw_sign, t.ekf_mag_yaw_sign); }
+
     bool accepted = _tuneHandler(t);
     if (accepted) {
         _server.send(200, "application/json", "{\"ok\":true,\"accepted\":true}");
@@ -430,7 +475,13 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"mode\":\""  + String(p.mode ? p.mode : "UNKNOWN") + "\"";
     j += ",\"armed\":"   + String(p.armed    ? "true" : "false");
     j += ",\"rcValid\":" + String(p.rc_valid ? "true" : "false");
-    // Raw AHRS values. These remain untouched by software level-zero trim.
+    j += ",\"imuValid\":" + String(p.imu_valid ? "true" : "false");
+    j += ",\"magValid\":" + String(p.mag_valid ? "true" : "false");
+    j += ",\"ahrsFilterMode\":" + String(p.ahrs_filter_mode);
+    j += ",\"ahrsFilter\":\"";
+    j += String(p.ahrs_filter ? p.ahrs_filter : "EKF");
+    j += "\"";
+    // Raw estimator values. These remain untouched by software level-zero trim.
     j += ",\"roll\":"    + String(p.roll_deg,  2);
     j += ",\"pitch\":"   + String(p.pitch_deg, 2);
     j += ",\"yaw\":"     + String(p.yaw_deg,   2);
@@ -450,6 +501,9 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"gx\":"      + String(p.gx_dps, 3);
     j += ",\"gy\":"      + String(p.gy_dps, 3);
     j += ",\"gz\":"      + String(p.gz_dps, 3);
+    j += ",\"mx\":"      + String(p.mx_uT, 3);
+    j += ",\"my\":"      + String(p.my_uT, 3);
+    j += ",\"mz\":"      + String(p.mz_uT, 3);
     j += ",\"thr\":"     + String(p.throttle, 3);
     j += ",\"rcRoll\":"  + String(p.rc_roll,  3);
     j += ",\"rcPitch\":" + String(p.rc_pitch, 3);
@@ -463,6 +517,15 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"rpmFR\":"   + String(p.rpm_fr,   0);
     j += ",\"rpmRL\":"   + String(p.rpm_rl,   0);
     j += ",\"rpmRR\":"   + String(p.rpm_rr,   0);
+    j += ",\"cmdRpmFL\":" + String(p.cmd_rpm_fl, 0);
+    j += ",\"cmdRpmFR\":" + String(p.cmd_rpm_fr, 0);
+    j += ",\"cmdRpmRL\":" + String(p.cmd_rpm_rl, 0);
+    j += ",\"cmdRpmRR\":" + String(p.cmd_rpm_rr, 0);
+    j += ",\"actualRpmFL\":" + String(p.actual_rpm_fl, 0);
+    j += ",\"actualRpmFR\":" + String(p.actual_rpm_fr, 0);
+    j += ",\"actualRpmRL\":" + String(p.actual_rpm_rl, 0);
+    j += ",\"actualRpmRR\":" + String(p.actual_rpm_rr, 0);
+    j += ",\"rpmActualValid\":" + String(p.rpm_actual_valid ? "true" : "false");
     j += ",\"bmpTempC\":"       + String(p.bmp_temp_c,       2);
     j += ",\"bmpPressureHpa\":" + String(p.bmp_pressure_hpa, 2);
     j += ",\"bmpAltitudeM\":"   + String(p.bmp_altitude_m,   2);
@@ -507,6 +570,17 @@ String TelemetryWiFi::_jsonFromPacket(const TelemetryPacket& p) const
     j += ",\"maxYawRateDps\":"           + String(p.yaw_max_rate_dps,              3);
     j += ",\"mahonyKp\":"                + String(p.mahony_kp,                     8);
     j += ",\"mahonyKi\":"                + String(p.mahony_ki,                     8);
+    j += ",\"madgwickBeta\":"             + String(p.madgwick_beta,                 8);
+    j += ",\"notchEnable\":"             + String(p.notch_enable ? "true" : "false");
+    j += ",\"notchFreqHz\":"             + String(p.notch_freq_hz,                  3);
+    j += ",\"notchQ\":"                  + String(p.notch_q,                        3);
+    j += ",\"ekfAngleQ\":"               + String(p.ekf_angle_q,                    9);
+    j += ",\"ekfBiasQ\":"                + String(p.ekf_bias_q,                     12);
+    j += ",\"ekfAccelR\":"               + String(p.ekf_accel_r,                    6);
+    j += ",\"ekfMagR\":"                 + String(p.ekf_mag_r,                      6);
+    j += ",\"ekfMagDeclinationDeg\":"    + String(p.ekf_mag_declination_deg,        3);
+    j += ",\"ekfMagYawOffsetDeg\":"      + String(p.ekf_mag_yaw_offset_deg,         3);
+    j += ",\"ekfMagYawSign\":"           + String(p.ekf_mag_yaw_sign,               1);
     j += ",\"tuneRequestSeq\":"          + String(p.tune_request_seq);
     j += ",\"tuneApplySeq\":"            + String(p.tune_apply_seq);
     j += ",\"tuneRejectSeq\":"           + String(p.tune_reject_seq);
@@ -545,4 +619,21 @@ bool TelemetryWiFi::_jsonGetFloat(const String& body, const char* key, float& ou
     if (!num.length()) return false;
     out = num.toFloat();
     return true;
+}
+
+
+bool TelemetryWiFi::_jsonGetBool(const String& body, const char* key, bool& out) const
+{
+    String pat = "\""; pat += key; pat += "\"";
+    int idx = body.indexOf(pat);
+    if (idx < 0) return false;
+    int pos = idx + pat.length();
+    while (pos < (int)body.length() && (body[pos]==' '||body[pos]==':')) pos++;
+
+    if (body.substring(pos, pos + 4).equalsIgnoreCase("true"))  { out = true;  return true; }
+    if (body.substring(pos, pos + 5).equalsIgnoreCase("false")) { out = false; return true; }
+
+    float f = 0.0f;
+    if (_jsonGetFloat(body, key, f)) { out = (f > 0.5f || f < -0.5f); return true; }
+    return false;
 }

@@ -27,7 +27,13 @@ struct TelemetryPacket {
     bool armed;
     bool rc_valid;
 
-    // Raw AHRS attitude from estimator
+    // Sensor/estimator health used by GCS status badges
+    bool imu_valid;
+    bool mag_valid;
+    uint8_t ahrs_filter_mode;   // 0=EKF, 1=Mahony, 2=Madgwick
+    const char* ahrs_filter;
+
+    // Raw estimator attitude. This is EKF/Mahony/Madgwick output BEFORE level-zero offset.
     float roll_deg, pitch_deg, yaw_deg;
 
     // Post-AHRS level-zero corrected attitude used by PID/control
@@ -48,7 +54,13 @@ struct TelemetryPacket {
     float throttle, rc_roll, rc_pitch, rc_yaw, rc_hz;
 
     float motor_fl, motor_fr, motor_rl, motor_rr;
+    // Commanded/estimated RPM from motor output × KV × Vbat.
     float rpm_fl,   rpm_fr,   rpm_rl,   rpm_rr;
+    float cmd_rpm_fl, cmd_rpm_fr, cmd_rpm_rl, cmd_rpm_rr;
+
+    // Actual RPM is only valid if ESC telemetry/RPM sensing is later added.
+    float actual_rpm_fl, actual_rpm_fr, actual_rpm_rl, actual_rpm_rr;
+    bool  rpm_actual_valid;
 
     float bmp_temp_c, bmp_pressure_hpa, bmp_altitude_m;
     bool  bmp_valid;
@@ -93,8 +105,24 @@ struct TelemetryPacket {
     float yaw_deadband;
     float yaw_max_rate_dps;
 
-    // AHRS
+    // AHRS / estimator selection
     float mahony_kp, mahony_ki;
+    float ahrs_filter_mode;
+    float madgwick_beta;
+
+    // Motor vibration notch filter
+    bool  notch_enable;
+    float notch_freq_hz;
+    float notch_q;
+
+    // Attitude EKF tuning
+    float ekf_angle_q;
+    float ekf_bias_q;
+    float ekf_accel_r;
+    float ekf_mag_r;
+    float ekf_mag_declination_deg;
+    float ekf_mag_yaw_offset_deg;
+    float ekf_mag_yaw_sign;
 
     // Tune transaction diagnostics
     uint32_t tune_request_seq;
@@ -157,6 +185,22 @@ struct TunePacket {
 
     // AHRS
     bool has_mahony_kp, has_mahony_ki;
+    bool has_ahrs_filter_mode;
+    bool has_madgwick_beta;
+
+    // Motor vibration notch filter
+    bool has_notch_enable;
+    bool has_notch_freq_hz;
+    bool has_notch_q;
+
+    // Attitude EKF tuning
+    bool has_ekf_angle_q;
+    bool has_ekf_bias_q;
+    bool has_ekf_accel_r;
+    bool has_ekf_mag_r;
+    bool has_ekf_mag_declination_deg;
+    bool has_ekf_mag_yaw_offset_deg;
+    bool has_ekf_mag_yaw_sign;
 
     float max_angle_deg;
     float max_rate_dps;
@@ -187,6 +231,20 @@ struct TunePacket {
     float yaw_max_rate_dps;
 
     float mahony_kp, mahony_ki;
+    float ahrs_filter_mode;
+    float madgwick_beta;
+
+    bool  notch_enable;
+    float notch_freq_hz;
+    float notch_q;
+
+    float ekf_angle_q;
+    float ekf_bias_q;
+    float ekf_accel_r;
+    float ekf_mag_r;
+    float ekf_mag_declination_deg;
+    float ekf_mag_yaw_offset_deg;
+    float ekf_mag_yaw_sign;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -213,6 +271,7 @@ public:
     void setTimingProvider(String (*provider)());
     void setTimingCsvProvider(String (*provider)());
     void setTimingResetHandler(void (*handler)());
+    void setSpectrumProvider(String (*provider)());
 
     void pushLog(const char* line);
     void pushLog(const String& line) { pushLog(line.c_str()); }
@@ -239,6 +298,7 @@ private:
     String   (*_timingProvider)();
     String   (*_timingCsvProvider)();
     void     (*_timingResetHandler)();
+    String   (*_spectrumProvider)();
 
     uint32_t   _requestCount;
 
@@ -265,6 +325,7 @@ private:
     void _handleTiming();
     void _handleTimingReset();
     void _handleTimingCsv();
+    void _handleSpectrum();
     void _handleFlightLogCsv();
     void _handleFlightLogReset();
     void _handleOptions();
@@ -278,6 +339,7 @@ private:
 
     String _jsonFromPacket(const TelemetryPacket& p) const;
     bool   _jsonGetFloat(const String& body, const char* key, float& out) const;
+    bool   _jsonGetBool (const String& body, const char* key, bool& out) const;
 };
 
 extern TelemetryWiFi telemetryWiFi;
