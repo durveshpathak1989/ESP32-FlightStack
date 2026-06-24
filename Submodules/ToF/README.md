@@ -1,42 +1,35 @@
-# TestQuad AHRS Library
+# Time-of-Flight Sensor Wrapper
 
 ## Purpose
 
-Provides reusable attitude-estimation primitives: shared AHRS data structures, a Mahony quaternion estimator, a Madgwick estimator, and a small roll/pitch EKF used for bench comparison and estimator experiments.
+Provides a small wrapper around optional VL53L4CX time-of-flight altitude sensing so the main firmware can compile even when the vendor library is absent.
 
 ## Files
 
-- `AHRSCommon.h`: Shared units, constants, input/output structures, and helper functions.
-- `MahonyAHRS.h/.cpp`: Quaternion Mahony complementary filter using gyro, accelerometer, and optional magnetometer.
-- `MadgwickAHRS.h/.cpp`: Madgwick-style gradient-descent AHRS implementation.
-- `RollPitchEKF.h/.cpp`: Small four-state roll/pitch estimator with gyro-bias tracking.
-- `library.properties`: Arduino library metadata.
+- `ToFSensor.h/.cpp`: Optional sensor initialization and read interface.
 
 ## Quick Start
 
 ```cpp
-#include "MahonyAHRS.h"
+#include "ToFSensor.h"
 
-MahonyAHRS ahrs;
+ToFSensor tof;
 
 void setup() {
-    ahrs.setGains(1.0f, 0.005f);
+    tof.begin(21, 22, 400000);
 }
 
 void loop() {
-    AHRSInput in{};
-    in.ax_g = 0.0f; in.ay_g = 0.0f; in.az_g = 1.0f;
-    in.gx_dps = 0.0f; in.gy_dps = 0.0f; in.gz_dps = 0.0f;
-    in.magValid = false;
-
-    AttitudeEstimate out{};
-    ahrs.update(in, 0.0025f, out);
+    ToFData d{};
+    if (tof.read(d) && d.valid) {
+        uint16_t rangeMm = d.distance_mm;
+    }
 }
 ```
 
 ## How It Fits Into The Flight Controller
 
-This library lives under `Submodules/AHRS` in the main `Test_Quad` firmware
+This library lives under `Submodules/ToF` in the main `Test_Quad` firmware
 and is built as an Arduino library by adding `Submodules/` to the Arduino
 library search path. The main firmware includes it directly from
 `RC_FlightController.ino` or from another support module.
@@ -48,10 +41,9 @@ where available so `VERBOSE_ON=0` builds can compile prints out.
 
 ## Data Type Choices
 
-- `float`: ESP32 hardware and Arduino math functions are efficient with 32-bit floats; attitude math does not need double precision at 400 Hz.
-- `AHRSInput`: Groups sensor values with explicit units, preventing accidental mixing of g, degrees/second, and microtesla.
-- `AttitudeEstimate`: Carries both Euler angles for telemetry/control and quaternion terms for filters that need continuous orientation state.
-- `bool magValid`: Separates 6-DOF and 9-DOF operation because this quad often runs without a trustworthy AK8963 magnetometer.
+- `uint16_t distance_mm`: Millimeter distance readings are non-negative and fit comfortably in 16 bits for typical ToF range.
+- `bool valid`: Optional hardware may be absent; validity prevents callers from trusting dummy values.
+- Compile-time feature flag: Keeps the project buildable without forcing every developer to install the vendor ToF library.
 
 ## Usage Guidance
 

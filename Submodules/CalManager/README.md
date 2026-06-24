@@ -1,42 +1,36 @@
-# TestQuad AHRS Library
+# Calibration Manager
 
 ## Purpose
 
-Provides reusable attitude-estimation primitives: shared AHRS data structures, a Mahony quaternion estimator, a Madgwick estimator, and a small roll/pitch EKF used for bench comparison and estimator experiments.
+Coordinates guided gyro, accelerometer, magnetometer, and ESC calibration workflows with safety checks and progress status for RC and web UI flows.
 
 ## Files
 
-- `AHRSCommon.h`: Shared units, constants, input/output structures, and helper functions.
-- `MahonyAHRS.h/.cpp`: Quaternion Mahony complementary filter using gyro, accelerometer, and optional magnetometer.
-- `MadgwickAHRS.h/.cpp`: Madgwick-style gradient-descent AHRS implementation.
-- `RollPitchEKF.h/.cpp`: Small four-state roll/pitch estimator with gyro-bias tracking.
-- `library.properties`: Arduino library metadata.
+- `CalibrationManager.h/.cpp`: Calibration state machine and status model.
 
 ## Quick Start
 
 ```cpp
-#include "MahonyAHRS.h"
+#include "CalibrationManager.h"
 
-MahonyAHRS ahrs;
+CalibrationManager cal;
 
 void setup() {
-    ahrs.setGains(1.0f, 0.005f);
+    cal.begin(imu);
 }
 
 void loop() {
-    AHRSInput in{};
-    in.ax_g = 0.0f; in.ay_g = 0.0f; in.az_g = 1.0f;
-    in.gx_dps = 0.0f; in.gy_dps = 0.0f; in.gz_dps = 0.0f;
-    in.magValid = false;
-
-    AttitudeEstimate out{};
-    ahrs.update(in, 0.0025f, out);
+    cal.setSafety(!armed);
+    if (requestFromUi) {
+        cal.request(CalibrationMode::IMU_ALL_GUIDED, CalibrationSource::WEB);
+    }
+    cal.update();
 }
 ```
 
 ## How It Fits Into The Flight Controller
 
-This library lives under `Submodules/AHRS` in the main `Test_Quad` firmware
+This library lives under `Submodules/CalManager` in the main `Test_Quad` firmware
 and is built as an Arduino library by adding `Submodules/` to the Arduino
 library search path. The main firmware includes it directly from
 `RC_FlightController.ino` or from another support module.
@@ -48,10 +42,11 @@ where available so `VERBOSE_ON=0` builds can compile prints out.
 
 ## Data Type Choices
 
-- `float`: ESP32 hardware and Arduino math functions are efficient with 32-bit floats; attitude math does not need double precision at 400 Hz.
-- `AHRSInput`: Groups sensor values with explicit units, preventing accidental mixing of g, degrees/second, and microtesla.
-- `AttitudeEstimate`: Carries both Euler angles for telemetry/control and quaternion terms for filters that need continuous orientation state.
-- `bool magValid`: Separates 6-DOF and 9-DOF operation because this quad often runs without a trustworthy AK8963 magnetometer.
+- `enum class CalibrationMode`: Strongly typed mode selection avoids confusing ESC, gyro, accel, and mag calibration requests.
+- `enum class CalibrationState`: Makes the workflow explicit and safe to expose over telemetry.
+- `CalibrationStatus`: A snapshot struct is easier for telemetry and UI code than exposing manager internals.
+- `uint32_t` timestamps: Arduino `millis()` returns unsigned 32-bit values; using the same type avoids signed rollover bugs.
+- Fixed char buffers: Status/error text uses bounded arrays to avoid heap fragmentation on ESP32.
 
 ## Usage Guidance
 

@@ -1,42 +1,32 @@
-# TestQuad AHRS Library
+# Biquad Notch Filter
 
 ## Purpose
 
-Provides reusable attitude-estimation primitives: shared AHRS data structures, a Mahony quaternion estimator, a Madgwick estimator, and a small roll/pitch EKF used for bench comparison and estimator experiments.
+Applies configurable second-order notch filtering to IMU channels to reduce motor-vibration energy before estimation and control.
 
 ## Files
 
-- `AHRSCommon.h`: Shared units, constants, input/output structures, and helper functions.
-- `MahonyAHRS.h/.cpp`: Quaternion Mahony complementary filter using gyro, accelerometer, and optional magnetometer.
-- `MadgwickAHRS.h/.cpp`: Madgwick-style gradient-descent AHRS implementation.
-- `RollPitchEKF.h/.cpp`: Small four-state roll/pitch estimator with gyro-bias tracking.
-- `library.properties`: Arduino library metadata.
+- `NotchFilter.h/.cpp`: Filter coefficient calculation, sample update, reset, and enable control.
 
 ## Quick Start
 
 ```cpp
-#include "MahonyAHRS.h"
+#include "NotchFilter.h"
 
-MahonyAHRS ahrs;
+NotchFilter notch;
 
 void setup() {
-    ahrs.setGains(1.0f, 0.005f);
+    notch.configure(400.0f, 90.0f, 8.0f, true);
 }
 
 void loop() {
-    AHRSInput in{};
-    in.ax_g = 0.0f; in.ay_g = 0.0f; in.az_g = 1.0f;
-    in.gx_dps = 0.0f; in.gy_dps = 0.0f; in.gz_dps = 0.0f;
-    in.magValid = false;
-
-    AttitudeEstimate out{};
-    ahrs.update(in, 0.0025f, out);
+    float filteredGyro = notch.apply(rawGyro);
 }
 ```
 
 ## How It Fits Into The Flight Controller
 
-This library lives under `Submodules/AHRS` in the main `Test_Quad` firmware
+This library lives under `Submodules/NotchFilter` in the main `Test_Quad` firmware
 and is built as an Arduino library by adding `Submodules/` to the Arduino
 library search path. The main firmware includes it directly from
 `RC_FlightController.ino` or from another support module.
@@ -48,10 +38,9 @@ where available so `VERBOSE_ON=0` builds can compile prints out.
 
 ## Data Type Choices
 
-- `float`: ESP32 hardware and Arduino math functions are efficient with 32-bit floats; attitude math does not need double precision at 400 Hz.
-- `AHRSInput`: Groups sensor values with explicit units, preventing accidental mixing of g, degrees/second, and microtesla.
-- `AttitudeEstimate`: Carries both Euler angles for telemetry/control and quaternion terms for filters that need continuous orientation state.
-- `bool magValid`: Separates 6-DOF and 9-DOF operation because this quad often runs without a trustworthy AK8963 magnetometer.
+- `float` coefficients: Biquad coefficients and IMU samples are continuous values; float is fast enough on ESP32.
+- `bool enabled`: Allows runtime tuning to bypass filtering without changing caller code.
+- Internal state floats: Previous input/output samples must preserve fractional precision for stable filtering.
 
 ## Usage Guidance
 

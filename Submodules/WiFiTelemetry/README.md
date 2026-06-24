@@ -1,42 +1,38 @@
-# TestQuad AHRS Library
+# Wi-Fi Telemetry and OTA Library
 
 ## Purpose
 
-Provides reusable attitude-estimation primitives: shared AHRS data structures, a Mahony quaternion estimator, a Madgwick estimator, and a small roll/pitch EKF used for bench comparison and estimator experiments.
+Runs the ESP32 access point and HTTP endpoints for telemetry JSON, runtime tuning, timing CSV, flight logs, calibration logs, vibration spectrum, and safe OTA updates.
 
 ## Files
 
-- `AHRSCommon.h`: Shared units, constants, input/output structures, and helper functions.
-- `MahonyAHRS.h/.cpp`: Quaternion Mahony complementary filter using gyro, accelerometer, and optional magnetometer.
-- `MadgwickAHRS.h/.cpp`: Madgwick-style gradient-descent AHRS implementation.
-- `RollPitchEKF.h/.cpp`: Small four-state roll/pitch estimator with gyro-bias tracking.
-- `library.properties`: Arduino library metadata.
+- `TelemetryWiFi.h/.cpp`: Web server, packet structs, JSON serialization, log ring buffer, tuning parser, OTA upload handling.
+- `TelemetryWiFi_FlightLog_Patch.md`: Historical notes for flight-log patching.
 
 ## Quick Start
 
 ```cpp
-#include "MahonyAHRS.h"
+#include "TelemetryWiFi.h"
 
-MahonyAHRS ahrs;
+bool provideTelemetry(TelemetryPacket& out) {
+    out.armed = false;
+    out.mode = "DISARMED";
+    return true;
+}
 
 void setup() {
-    ahrs.setGains(1.0f, 0.005f);
+    telemetryWiFi.setTelemetryProvider(provideTelemetry);
+    telemetryWiFi.begin("ESP32-DRONE", "12345678");
 }
 
 void loop() {
-    AHRSInput in{};
-    in.ax_g = 0.0f; in.ay_g = 0.0f; in.az_g = 1.0f;
-    in.gx_dps = 0.0f; in.gy_dps = 0.0f; in.gz_dps = 0.0f;
-    in.magValid = false;
-
-    AttitudeEstimate out{};
-    ahrs.update(in, 0.0025f, out);
+    telemetryWiFi.update();
 }
 ```
 
 ## How It Fits Into The Flight Controller
 
-This library lives under `Submodules/AHRS` in the main `Test_Quad` firmware
+This library lives under `Submodules/WiFiTelemetry` in the main `Test_Quad` firmware
 and is built as an Arduino library by adding `Submodules/` to the Arduino
 library search path. The main firmware includes it directly from
 `RC_FlightController.ino` or from another support module.
@@ -48,10 +44,10 @@ where available so `VERBOSE_ON=0` builds can compile prints out.
 
 ## Data Type Choices
 
-- `float`: ESP32 hardware and Arduino math functions are efficient with 32-bit floats; attitude math does not need double precision at 400 Hz.
-- `AHRSInput`: Groups sensor values with explicit units, preventing accidental mixing of g, degrees/second, and microtesla.
-- `AttitudeEstimate`: Carries both Euler angles for telemetry/control and quaternion terms for filters that need continuous orientation state.
-- `bool magValid`: Separates 6-DOF and 9-DOF operation because this quad often runs without a trustworthy AK8963 magnetometer.
+- `TelemetryPacket`: A flat packet struct makes JSON serialization predictable and avoids heap-heavy object graphs.
+- `TunePacket` with `has_*` flags: Partial tuning updates can safely distinguish omitted fields from fields intentionally set to zero.
+- Fixed log ring buffer: Calibration logs remain available over Wi-Fi without heap growth or file-system dependency.
+- `String` for HTTP JSON: Arduino WebServer sends `String` payloads naturally; packet data remains structured until serialization.
 
 ## Usage Guidance
 

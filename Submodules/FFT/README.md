@@ -1,42 +1,33 @@
-# TestQuad AHRS Library
+# Spectrum Analyzer
 
 ## Purpose
 
-Provides reusable attitude-estimation primitives: shared AHRS data structures, a Mahony quaternion estimator, a Madgwick estimator, and a small roll/pitch EKF used for bench comparison and estimator experiments.
+Collects IMU vibration samples and estimates dominant gyro vibration peaks for dynamic notch-filter tuning.
 
 ## Files
 
-- `AHRSCommon.h`: Shared units, constants, input/output structures, and helper functions.
-- `MahonyAHRS.h/.cpp`: Quaternion Mahony complementary filter using gyro, accelerometer, and optional magnetometer.
-- `MadgwickAHRS.h/.cpp`: Madgwick-style gradient-descent AHRS implementation.
-- `RollPitchEKF.h/.cpp`: Small four-state roll/pitch estimator with gyro-bias tracking.
-- `library.properties`: Arduino library metadata.
+- `SpectrumAnalyzer.h/.cpp`: Sample buffering, spectral analysis, JSON telemetry, and peak selection.
 
 ## Quick Start
 
 ```cpp
-#include "MahonyAHRS.h"
+#include "SpectrumAnalyzer.h"
 
-MahonyAHRS ahrs;
-
-void setup() {
-    ahrs.setGains(1.0f, 0.005f);
-}
+SpectrumAnalyzer spectrum;
 
 void loop() {
-    AHRSInput in{};
-    in.ax_g = 0.0f; in.ay_g = 0.0f; in.az_g = 1.0f;
-    in.gx_dps = 0.0f; in.gy_dps = 0.0f; in.gz_dps = 0.0f;
-    in.magValid = false;
-
-    AttitudeEstimate out{};
-    ahrs.update(in, 0.0025f, out);
+    spectrum.push(ax, ay, az, gx, gy, gz, motorsActive);
+    float peakHz = 0.0f, score = 0.0f;
+    uint32_t seq = 0;
+    if (spectrum.findGyroPeak(45.0f, 170.0f, 3.5f, peakHz, score, seq)) {
+        // Use peakHz to retune a notch filter slowly.
+    }
 }
 ```
 
 ## How It Fits Into The Flight Controller
 
-This library lives under `Submodules/AHRS` in the main `Test_Quad` firmware
+This library lives under `Submodules/FFT` in the main `Test_Quad` firmware
 and is built as an Arduino library by adding `Submodules/` to the Arduino
 library search path. The main firmware includes it directly from
 `RC_FlightController.ino` or from another support module.
@@ -48,10 +39,10 @@ where available so `VERBOSE_ON=0` builds can compile prints out.
 
 ## Data Type Choices
 
-- `float`: ESP32 hardware and Arduino math functions are efficient with 32-bit floats; attitude math does not need double precision at 400 Hz.
-- `AHRSInput`: Groups sensor values with explicit units, preventing accidental mixing of g, degrees/second, and microtesla.
-- `AttitudeEstimate`: Carries both Euler angles for telemetry/control and quaternion terms for filters that need continuous orientation state.
-- `bool magValid`: Separates 6-DOF and 9-DOF operation because this quad often runs without a trustworthy AK8963 magnetometer.
+- `float` samples: Vibration data comes from IMU values already scaled into g and degrees/second.
+- `uint32_t seq`: Monotonic sequence IDs let callers tell whether a peak is new.
+- Fixed buffers: Avoid heap allocation and unpredictable timing inside flight firmware.
+- `bool motorsActive`: Analysis can ignore bench/static samples that do not represent motor vibration.
 
 ## Usage Guidance
 

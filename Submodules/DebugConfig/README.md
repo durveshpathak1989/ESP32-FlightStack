@@ -1,42 +1,28 @@
-# TestQuad AHRS Library
+# Debug Print Configuration
 
 ## Purpose
 
-Provides reusable attitude-estimation primitives: shared AHRS data structures, a Mahony quaternion estimator, a Madgwick estimator, and a small roll/pitch EKF used for bench comparison and estimator experiments.
+Central build-time control for Serial debug output. `VERBOSE_ON=0` compiles debug prints out while preserving Wi-Fi telemetry and calibration log storage.
 
 ## Files
 
-- `AHRSCommon.h`: Shared units, constants, input/output structures, and helper functions.
-- `MahonyAHRS.h/.cpp`: Quaternion Mahony complementary filter using gyro, accelerometer, and optional magnetometer.
-- `MadgwickAHRS.h/.cpp`: Madgwick-style gradient-descent AHRS implementation.
-- `RollPitchEKF.h/.cpp`: Small four-state roll/pitch estimator with gyro-bias tracking.
-- `library.properties`: Arduino library metadata.
+- `DebugConfig.h`: Macro definitions for `DBG_PRINT`, `DBG_PRINTLN`, and `DBG_PRINTF`.
 
 ## Quick Start
 
 ```cpp
-#include "MahonyAHRS.h"
+// Default: verbose Serial output enabled.
+#include "DebugConfig.h"
 
-MahonyAHRS ahrs;
+DBG_PRINTLN(F("Boot message"));
 
-void setup() {
-    ahrs.setGains(1.0f, 0.005f);
-}
-
-void loop() {
-    AHRSInput in{};
-    in.ax_g = 0.0f; in.ay_g = 0.0f; in.az_g = 1.0f;
-    in.gx_dps = 0.0f; in.gy_dps = 0.0f; in.gz_dps = 0.0f;
-    in.magValid = false;
-
-    AttitudeEstimate out{};
-    ahrs.update(in, 0.0025f, out);
-}
+// Quiet build:
+// arduino-cli compile ... --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=0
 ```
 
 ## How It Fits Into The Flight Controller
 
-This library lives under `Submodules/AHRS` in the main `Test_Quad` firmware
+This library lives under `Submodules/DebugConfig` in the main `Test_Quad` firmware
 and is built as an Arduino library by adding `Submodules/` to the Arduino
 library search path. The main firmware includes it directly from
 `RC_FlightController.ino` or from another support module.
@@ -48,10 +34,9 @@ where available so `VERBOSE_ON=0` builds can compile prints out.
 
 ## Data Type Choices
 
-- `float`: ESP32 hardware and Arduino math functions are efficient with 32-bit floats; attitude math does not need double precision at 400 Hz.
-- `AHRSInput`: Groups sensor values with explicit units, preventing accidental mixing of g, degrees/second, and microtesla.
-- `AttitudeEstimate`: Carries both Euler angles for telemetry/control and quaternion terms for filters that need continuous orientation state.
-- `bool magValid`: Separates 6-DOF and 9-DOF operation because this quad often runs without a trustworthy AK8963 magnetometer.
+- Preprocessor macros: The compiler removes quiet-mode print calls completely, reducing timing jitter and binary size.
+- `((void)0)`: Disabled macros remain valid in expression contexts such as ternary branches.
+- `F()` strings: Callers may still store constant text in flash when verbose mode is enabled.
 
 ## Usage Guidance
 
