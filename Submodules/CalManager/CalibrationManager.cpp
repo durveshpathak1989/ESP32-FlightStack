@@ -13,6 +13,7 @@
  **/
 
 #include "CalibrationManager.h"
+#include "DebugConfig.h"
 
 // Physical pose list.
 // axis: 0=X, 1=Y, 2=Z
@@ -352,7 +353,7 @@ void CalibrationManager::_updateGyroCalibration()
     float rangeY = _gyroMaxY - _gyroMinY;
     float rangeZ = _gyroMaxZ - _gyroMinZ;
 
-    Serial.printf("[CAL] Gyro range: X=%.4f Y=%.4f Z=%.4f dps\n",
+    DBG_PRINTF("[CAL] Gyro range: X=%.4f Y=%.4f Z=%.4f dps\n",
                   rangeX, rangeY, rangeZ);
 
     const float GYRO_RANGE_LIMIT_DPS = 3.0f;
@@ -374,7 +375,7 @@ void CalibrationManager::_updateGyroCalibration()
         snprintf(_status.message, sizeof(_status.message),
                  "Gyro rejected — keep drone still");
 
-        Serial.printf("[CAL][FAIL] %s\n", _status.error);
+        DBG_PRINTF("[CAL][FAIL] %s\n", _status.error);
         return;
     }
 
@@ -390,7 +391,7 @@ void CalibrationManager::_updateGyroCalibration()
     _status.quality = gyroQuality;
     _status.progress = 1.0f;
 
-    Serial.printf("[CAL] Gyro done: X=%+.4f Y=%+.4f Z=%+.4f dps quality=%.2f\n",
+    DBG_PRINTF("[CAL] Gyro done: X=%+.4f Y=%+.4f Z=%+.4f dps quality=%.2f\n",
                   avgX, avgY, avgZ, gyroQuality);
 
     if (_status.mode == CalibrationMode::IMU_ALL_GUIDED) {
@@ -434,7 +435,7 @@ void CalibrationManager::_startAccelCalibration()
              "Accel 1/6: %s — flip SWC",
              ACCEL_POSES[_accelPoseIndex].label);
 
-    Serial.printf("[CAL] Accel pose 1/6: %s — flip SWC when still\n",
+    DBG_PRINTF("[CAL] Accel pose 1/6: %s — flip SWC when still\n",
                   ACCEL_POSES[_accelPoseIndex].label);
 }
 
@@ -491,12 +492,12 @@ void CalibrationManager::_captureAccelPose()
     int8_t sign = pose.sign;
     float value = axisValue[axis];
 
-    Serial.printf("[CAL] Accel pose %u/6 %s: ax=%+.4f ay=%+.4f az=%+.4f g\n",
+    DBG_PRINTF("[CAL] Accel pose %u/6 %s: ax=%+.4f ay=%+.4f az=%+.4f g\n",
                   (unsigned)(_accelPoseIndex + 1),
                   pose.label,
                   ax, ay, az);
 
-    Serial.printf("[CAL] Routed to sensor %c%c = %+.4f g\n",
+    DBG_PRINTF("[CAL] Routed to sensor %c%c = %+.4f g\n",
                   sign > 0 ? '+' : '-',
                   axis == 0 ? 'X' : axis == 1 ? 'Y' : 'Z',
                   value);
@@ -504,7 +505,7 @@ void CalibrationManager::_captureAccelPose()
     if ((sign > 0 && value < 0.5f) ||
         (sign < 0 && value > -0.5f)) {
 
-        Serial.println(F("[CAL][WARN] Accel sign/magnitude unexpected."));
+        DBG_PRINTLN(F("[CAL][WARN] Accel sign/magnitude unexpected."));
     }
 
     if (sign > 0) {
@@ -535,7 +536,7 @@ void CalibrationManager::_captureAccelPose()
              (unsigned)(_accelPoseIndex + 1),
              ACCEL_POSES[_accelPoseIndex].label);
 
-    Serial.printf("[CAL] Next accel pose %u/6: %s\n",
+    DBG_PRINTF("[CAL] Next accel pose %u/6: %s\n",
                   (unsigned)(_accelPoseIndex + 1),
                   ACCEL_POSES[_accelPoseIndex].label);
 }
@@ -562,7 +563,7 @@ void CalibrationManager::_finishAccelCalibration()
         snprintf(_status.message, sizeof(_status.message),
                  "Accel calibration failed");
 
-        Serial.println(F("[CAL][FAIL] Accel calibration incomplete."));
+        DBG_PRINTLN(F("[CAL][FAIL] Accel calibration incomplete."));
         return;
     }
 
@@ -580,10 +581,10 @@ void CalibrationManager::_finishAccelCalibration()
 
     _imu->cal.valid = true;
 
-    Serial.printf("[CAL] Accel bias:  X=%+.4f Y=%+.4f Z=%+.4f g\n",
+    DBG_PRINTF("[CAL] Accel bias:  X=%+.4f Y=%+.4f Z=%+.4f g\n",
                   _imu->cal.ax_b, _imu->cal.ay_b, _imu->cal.az_b);
 
-    Serial.printf("[CAL] Accel scale: X=%+.4f Y=%+.4f Z=%+.4f\n",
+    DBG_PRINTF("[CAL] Accel scale: X=%+.4f Y=%+.4f Z=%+.4f\n",
                   _imu->cal.ax_s, _imu->cal.ay_s, _imu->cal.az_s);
 
     _status.progress = 1.0f;
@@ -639,7 +640,7 @@ void CalibrationManager::_startMagCalibration()
     snprintf(_status.message, sizeof(_status.message),
              "Mag: rotate all axes 30 sec");
 
-    Serial.println(F("[CAL] Mag calibration started. Rotate through all axes."));
+    DBG_PRINTLN(F("[CAL] Mag calibration started. Rotate through all axes."));
 }
 
 void CalibrationManager::_updateMagCalibration()
@@ -693,7 +694,7 @@ void CalibrationManager::_updateMagCalibration()
     if (now - _lastMagPrintMs >= 5000) {
         _lastMagPrintMs = now;
 
-        Serial.printf("[CAL] Mag progress %.0f%% samples=%u\n",
+        DBG_PRINTF("[CAL] Mag progress %.0f%% samples=%u\n",
                       _status.progress * 100.0f,
                       _magValidSamples);
     }
@@ -715,7 +716,7 @@ void CalibrationManager::_updateMagCalibration()
         snprintf(_status.message, sizeof(_status.message),
                  "Mag calibration failed");
 
-        Serial.printf("[CAL][FAIL] %s\n", _status.error);
+        DBG_PRINTF("[CAL][FAIL] %s\n", _status.error);
         return;
     }
 
@@ -735,13 +736,13 @@ void CalibrationManager::_updateMagCalibration()
 
     _imu->cal.valid = true;
 
-    Serial.printf("[CAL] Mag range: X=%.2f Y=%.2f Z=%.2f uT\n",
+    DBG_PRINTF("[CAL] Mag range: X=%.2f Y=%.2f Z=%.2f uT\n",
                   rx, ry, rz);
 
-    Serial.printf("[CAL] Mag bias:  X=%+.2f Y=%+.2f Z=%+.2f uT\n",
+    DBG_PRINTF("[CAL] Mag bias:  X=%+.2f Y=%+.2f Z=%+.2f uT\n",
                   _imu->cal.mx_b, _imu->cal.my_b, _imu->cal.mz_b);
 
-    Serial.printf("[CAL] Mag scale: X=%+.4f Y=%+.4f Z=%+.4f\n",
+    DBG_PRINTF("[CAL] Mag scale: X=%+.4f Y=%+.4f Z=%+.4f\n",
                   _imu->cal.mx_s, _imu->cal.my_s, _imu->cal.mz_s);
 
     _status.quality = constrain((float)_magValidSamples / 300.0f, 0.0f, 1.0f);
@@ -771,7 +772,7 @@ void CalibrationManager::_finishFullCalibration()
     _imu->cal.valid = true;
     _imu->saveCalibration();
 
-    Serial.println(F("[CAL] Full saved calibration:"));
+    DBG_PRINTLN(F("[CAL] Full saved calibration:"));
     _imu->printCalibration();
 
     _status.state = CalibrationState::DONE;

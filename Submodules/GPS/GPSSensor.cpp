@@ -5,6 +5,7 @@
  */
 
 #include "GPSSensor.h"
+#include "DebugConfig.h"
 
 // ─────────────────────────────────────────────────────────────
 //  Singleton
@@ -29,10 +30,10 @@ GPSSensor::GPSSensor(HardwareSerial& serial)
 void GPSSensor::begin(int rxPin, int txPin, uint32_t baud)
 {
     _serial.begin(baud, SERIAL_8N1, rxPin, txPin);
-    Serial.printf("[GPS] UART1 init — RX=GPIO%d  TX=GPIO%d  %lu baud\n",
+    DBG_PRINTF("[GPS] UART1 init — RX=GPIO%d  TX=GPIO%d  %lu baud\n",
                   rxPin, txPin, (unsigned long)baud);
-    Serial.println(F("[GPS] Waiting for NMEA sentences..."));
-    Serial.println(F("[GPS] Cold fix typically takes 30–90 s outdoors."));
+    DBG_PRINTLN(F("[GPS] Waiting for NMEA sentences..."));
+    DBG_PRINTLN(F("[GPS] Cold fix typically takes 30–90 s outdoors."));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -346,20 +347,20 @@ String GPSSensor::lonStr() const
 
 void GPSSensor::printRaw() const
 {
-    Serial.printf("[GPS RAW] %s\n", _lastRaw);
+    DBG_PRINTF("[GPS RAW] %s\n", _lastRaw);
 }
 
 void GPSSensor::printData() const
 {
     GPSData d = get();
-    Serial.printf("[GPS] Fix=%s  Sats=%d  HDOP=%.1f  Quality=%d\n",
+    DBG_PRINTF("[GPS] Fix=%s  Sats=%d  HDOP=%.1f  Quality=%d\n",
                   d.valid ? "YES" : "NO", d.satellites, d.hdop, d.fix_quality);
     if (d.valid) {
-        Serial.printf("[GPS] Lat=%.6f  Lon=%.6f  Alt=%.1fm\n",
+        DBG_PRINTF("[GPS] Lat=%.6f  Lon=%.6f  Alt=%.1fm\n",
                       d.latitude, d.longitude, d.altitude_m);
-        Serial.printf("[GPS] Speed=%.1f km/h  Course=%.1f°\n",
+        DBG_PRINTF("[GPS] Speed=%.1f km/h  Course=%.1f°\n",
                       d.speed_kmh, d.course_deg);
-        Serial.printf("[GPS] UTC %02d:%02d:%02d  %02d/%02d/%04d\n",
+        DBG_PRINTF("[GPS] UTC %02d:%02d:%02d  %02d/%02d/%04d\n",
                       d.hour, d.minute, d.second, d.day, d.month, d.year);
     }
 }

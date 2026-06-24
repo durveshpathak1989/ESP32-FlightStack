@@ -6,6 +6,7 @@
  */
 
 #include "FlySkyiBUS.h"
+#include "DebugConfig.h"
 
 // ─────────────────────────────────────────────────────────────
 //  Singleton
@@ -38,9 +39,9 @@ void FlySkyiBUS::begin(int rxPin, int txPin, uint8_t uartNum)
     //_serial.setRxBufferSize(512); 
     _serial.begin(IBUS_BAUD, SERIAL_8N1, rxPin, txPin);
 
-    Serial.printf("[iBUS] Initialised on UART%u  RX=GPIO%d  TX=GPIO%d\n",
+    DBG_PRINTF("[iBUS] Initialised on UART%u  RX=GPIO%d  TX=GPIO%d\n",
                   uartNum, rxPin, txPin);
-    Serial.println("[iBUS] Waiting for FlySky FS-iA6B frames...");
+    DBG_PRINTLN("[iBUS] Waiting for FlySky FS-iA6B frames...");
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ void FlySkyiBUS::update()
             _failsafeCount++;
             xSemaphoreGive(_mutex);
         }
-        Serial.println("[iBUS] FAILSAFE: signal lost!");
+        DBG_PRINTLN("[iBUS] FAILSAFE: signal lost!");
     }
 }
 
@@ -322,11 +323,11 @@ RCCommand FlySkyiBUS::getCommand() const
 // ─────────────────────────────────────────────────────────────
 void FlySkyiBUS::printChannels() const
 {
-    Serial.print("[iBUS] CH: ");
+    DBG_PRINT("[iBUS] CH: ");
     for (int i = 0; i < IBUS_CHANNELS; i++) {
-        Serial.printf("CH%d=%4d ", i + 1, getChannel(i));
+        DBG_PRINTF("CH%d=%4d ", i + 1, getChannel(i));
     }
-    Serial.printf("| %.1f Hz | FS#%lu | CSUMFAIL#%lu\n",
+    DBG_PRINTF("| %.1f Hz | FS#%lu | CSUMFAIL#%lu\n",
                   getFrameRate(), (unsigned long)getFailsafeCount(),
                   (unsigned long)getChecksumFailCount());
 }
@@ -344,7 +345,7 @@ void FlySkyiBUS::printCommand() const
         case FlightMode::ACRO:     modeStr = "ACRO    "; break;
         case FlightMode::FAILSAFE: modeStr = "FAILSAFE"; break;
     }
-    Serial.printf("[CMD] Mode=%-8s  T=%+.2f  R=%+.2f  P=%+.2f  Y=%+.2f  SWD=%d\n",
+    DBG_PRINTF("[CMD] Mode=%-8s  T=%+.2f  R=%+.2f  P=%+.2f  Y=%+.2f  SWD=%d\n",
                   modeStr,
                   cmd.throttle, cmd.roll, cmd.pitch, cmd.yaw,
                   (int)cmd.swdHigh);

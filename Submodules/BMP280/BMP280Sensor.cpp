@@ -5,6 +5,7 @@
  */
 
 #include "BMP280Sensor.h"
+#include "DebugConfig.h"
 
 // BMP280 register map
 #define BMP280_REG_ID          0xD0
@@ -35,12 +36,12 @@ bool BMP280Sensor::begin(uint8_t address, int sdaPin, int sclPin, uint32_t i2cHz
 
     uint8_t id = _read8(BMP280_REG_ID);
     if (id != BMP280_CHIP_ID) {
-        Serial.printf("[BMP280] WHO_AM_I=0x%02X expected 0x58 at address 0x%02X\n", id, _addr);
+        DBG_PRINTF("[BMP280] WHO_AM_I=0x%02X expected 0x58 at address 0x%02X\n", id, _addr);
         return false;
     }
 
     if (!_readCalibration()) {
-        Serial.println(F("[BMP280] Failed to read compensation data"));
+        DBG_PRINTLN(F("[BMP280] Failed to read compensation data"));
         return false;
     }
 
@@ -51,7 +52,7 @@ bool BMP280Sensor::begin(uint8_t address, int sdaPin, int sclPin, uint32_t i2cHz
     _write8(BMP280_REG_CTRL_MEAS, 0b01010111);
 
     _begun = true;
-    Serial.printf("[BMP280] OK at I2C address 0x%02X, SDA=GPIO%d, SCL=GPIO%d\n", _addr, sdaPin, sclPin);
+    DBG_PRINTF("[BMP280] OK at I2C address 0x%02X, SDA=GPIO%d, SCL=GPIO%d\n", _addr, sdaPin, sclPin);
     return true;
 }
 
@@ -65,15 +66,15 @@ bool BMP280Sensor::beginAuto(int sdaPin, int sclPin, uint32_t i2cHz)
     for (uint8_t i = 0; i < 2; i++) {
         _addr = addresses[i];
         uint8_t id = _read8(BMP280_REG_ID);
-        Serial.printf("[BMP280] Probe address 0x%02X: chip ID 0x%02X\n", _addr, id);
+        DBG_PRINTF("[BMP280] Probe address 0x%02X: chip ID 0x%02X\n", _addr, id);
         if (id == BMP280_CHIP_ID) {
             return begin(_addr, sdaPin, sclPin, i2cHz);
         }
     }
 
-    Serial.println(F("[BMP280] Not found at 0x76 or 0x77."));
-    Serial.println(F("[BMP280] Check: VCC=3.3V, GND common, SDA=21, SCL=22, CSB=3.3V."));
-    Serial.println(F("[BMP280] If your board labels are SDI/SCK, use SDI->SDA and SCK->SCL."));
+    DBG_PRINTLN(F("[BMP280] Not found at 0x76 or 0x77."));
+    DBG_PRINTLN(F("[BMP280] Check: VCC=3.3V, GND common, SDA=21, SCL=22, CSB=3.3V."));
+    DBG_PRINTLN(F("[BMP280] If your board labels are SDI/SCK, use SDI->SDA and SCK->SCL."));
     return false;
 }
 
@@ -81,17 +82,17 @@ void BMP280Sensor::scanI2C(int sdaPin, int sclPin, uint32_t i2cHz)
 {
     _wire.begin(sdaPin, sclPin, i2cHz);
     delay(25);
-    Serial.printf("[I2C] Scanning SDA=GPIO%d SCL=GPIO%d at %lu Hz...\n", sdaPin, sclPin, (unsigned long)i2cHz);
+    DBG_PRINTF("[I2C] Scanning SDA=GPIO%d SCL=GPIO%d at %lu Hz...\n", sdaPin, sclPin, (unsigned long)i2cHz);
     uint8_t found = 0;
     for (uint8_t addr = 1; addr < 127; addr++) {
         _wire.beginTransmission(addr);
         uint8_t err = _wire.endTransmission();
         if (err == 0) {
-            Serial.printf("[I2C] Found device at 0x%02X\n", addr);
+            DBG_PRINTF("[I2C] Found device at 0x%02X\n", addr);
             found++;
         }
     }
-    if (!found) Serial.println(F("[I2C] No devices found. Wiring/power/pins are likely wrong."));
+    if (!found) DBG_PRINTLN(F("[I2C] No devices found. Wiring/power/pins are likely wrong."));
 }
 
 bool BMP280Sensor::isConnected()

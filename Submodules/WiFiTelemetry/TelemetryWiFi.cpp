@@ -5,6 +5,7 @@
  */
 
 #include "TelemetryWiFi.h"
+#include "DebugConfig.h"
 
 TelemetryWiFi telemetryWiFi(80);
 
@@ -35,15 +36,15 @@ bool TelemetryWiFi::begin(const char* ssid, const char* password,
     WiFi.mode(WIFI_AP);
     WiFi.setSleep(false);
     if (!WiFi.softAPConfig(localIp, gateway, subnet)) {
-        Serial.println(F("[WiFi] softAPConfig failed")); return false;
+        DBG_PRINTLN(F("[WiFi] softAPConfig failed")); return false;
     }
     if (!WiFi.softAP(ssid, password)) {
-        Serial.println(F("[WiFi] softAP failed")); return false;
+        DBG_PRINTLN(F("[WiFi] softAP failed")); return false;
     }
     _setupRoutes();
     _server.begin();
-    Serial.printf("[WiFi] SSID=%s  PASS=%s\n", ssid, password);
-    Serial.printf("[WiFi] http://%s/\n", WiFi.softAPIP().toString().c_str());
+    DBG_PRINTF("[WiFi] SSID=%s  PASS=%s\n", ssid, password);
+    DBG_PRINTF("[WiFi] http://%s/\n", WiFi.softAPIP().toString().c_str());
     return true;
 }
 
@@ -66,7 +67,7 @@ uint32_t  TelemetryWiFi::requestCount() const { return _requestCount; }
 
 void TelemetryWiFi::pushLog(const char* line)
 {
-    Serial.println(line);
+    DBG_PRINTLN(line);
     portENTER_CRITICAL(&_logMux);
     uint8_t slot;
     if (_logCount < WIFI_LOG_CAPACITY) {
@@ -300,11 +301,11 @@ void TelemetryWiFi::_handleOtaUpload()
         if (!_isOtaAllowed()) {
             _otaRejected = true;
             _otaError = "OTA rejected: disarm, lower throttle, and stop motors first";
-            Serial.println("[OTA] Rejected — unsafe state");
+            DBG_PRINTLN("[OTA] Rejected — unsafe state");
             return;
         }
 
-        Serial.printf("[OTA] Start: %s\n", upload.filename.c_str());
+        DBG_PRINTF("[OTA] Start: %s\n", upload.filename.c_str());
         if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
             _otaRejected = true;
             _otaError = "Update.begin failed";
@@ -323,7 +324,7 @@ void TelemetryWiFi::_handleOtaUpload()
     else if (upload.status == UPLOAD_FILE_END) {
         if (_otaRejected) return;
         if (Update.end(true)) {
-            Serial.printf("[OTA] Success: %u bytes\n", upload.totalSize);
+            DBG_PRINTF("[OTA] Success: %u bytes\n", upload.totalSize);
         } else {
             _otaRejected = true;
             _otaError = "Update.end failed";
@@ -334,7 +335,7 @@ void TelemetryWiFi::_handleOtaUpload()
         _otaRejected = true;
         _otaError = "upload aborted";
         Update.abort();
-        Serial.println("[OTA] Aborted");
+        DBG_PRINTLN("[OTA] Aborted");
     }
 }
 

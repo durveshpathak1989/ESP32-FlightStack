@@ -16,6 +16,7 @@
  */
 
 #include "MPU9250.h"
+#include "DebugConfig.h"
 #include <Preferences.h>
 
 // ─────────────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ void MPU9250::_readMagASA() {
     cal.mag_asa_y = ((float)asa[1] - 128.0f) / 256.0f + 1.0f;
     cal.mag_asa_z = ((float)asa[2] - 128.0f) / 256.0f + 1.0f;
 
-    Serial.printf("[MPU9250] Mag ASA: X=%.4f Y=%.4f Z=%.4f\n",
+    DBG_PRINTF("[MPU9250] Mag ASA: X=%.4f Y=%.4f Z=%.4f\n",
                   cal.mag_asa_x, cal.mag_asa_y, cal.mag_asa_z);
 
     _akWrite(AK_REG_CNTL1, 0x00);   // power down before next mode change
@@ -166,11 +167,11 @@ bool MPU9250::begin() {
     uint8_t who = _readReg(MPU_REG_WHO_AM_I);
 
     if (who == MPU6500_WHO_AM_I_VAL) {
-        Serial.println(F("[MPU9250] Detected MPU-6500 (WHO_AM_I=0x70)."));
+        DBG_PRINTLN(F("[MPU9250] Detected MPU-6500 (WHO_AM_I=0x70)."));
     } else if (who == MPU9250_WHO_AM_I_VAL) {
-        Serial.printf("[MPU9250] WHO_AM_I=0x%02X OK\n", who);
+        DBG_PRINTF("[MPU9250] WHO_AM_I=0x%02X OK\n", who);
     } else {
-        Serial.printf("[MPU9250] WHO_AM_I=0x%02X — expected 0x71 or 0x70. Check wiring!\n", who);
+        DBG_PRINTF("[MPU9250] WHO_AM_I=0x%02X — expected 0x71 or 0x70. Check wiring!\n", who);
         return false;
     }
 
@@ -186,7 +187,7 @@ bool MPU9250::begin() {
     uint8_t akWho = _akReadByte(AK_REG_WIA);
 
     if (akWho == AK_WIA_VAL) {
-        Serial.printf("[MPU9250] AK8963 WHO_AM_I=0x%02X OK — magnetometer active\n", akWho);
+        DBG_PRINTF("[MPU9250] AK8963 WHO_AM_I=0x%02X OK — magnetometer active\n", akWho);
         _hasMag = true;
 
         _readMagASA();
@@ -197,7 +198,7 @@ bool MPU9250::begin() {
         _akSetupContinuous();
         delay(50);
     } else {
-        Serial.printf("[MPU9250] AK8963 not found (WHO_AM_I=0x%02X). Running 6-DOF.\n", akWho);
+        DBG_PRINTF("[MPU9250] AK8963 not found (WHO_AM_I=0x%02X). Running 6-DOF.\n", akWho);
         _hasMag = false;
         _magValid = false;
 
@@ -368,12 +369,12 @@ void MPU9250::sampleAvg(int N, MPU_SensorData& out) {
 //  Calibration: Gyro
 // ─────────────────────────────────────────────────────────────
 void MPU9250::calibrateGyro() {
-    Serial.println(F("\n[CAL] Gyro — place drone flat and still."));
-    Serial.println(F("[CAL] Press ENTER to start..."));
+    DBG_PRINTLN(F("\n[CAL] Gyro — place drone flat and still."));
+    DBG_PRINTLN(F("[CAL] Press ENTER to start..."));
     while (!Serial.available()) delay(10);
     while (Serial.available()) Serial.read();
 
-    Serial.println(F("[CAL] Sampling 1000 readings (2 s)..."));
+    DBG_PRINTLN(F("[CAL] Sampling 1000 readings (2 s)..."));
 
     MPU_SensorData avg;
     sampleAvg(1000, avg);
@@ -382,7 +383,7 @@ void MPU9250::calibrateGyro() {
     cal.gy_b = avg.gy_dps;
     cal.gz_b = avg.gz_dps;
 
-    Serial.printf("[CAL] Gyro bias: X=%+.4f  Y=%+.4f  Z=%+.4f  °/s\n",
+    DBG_PRINTF("[CAL] Gyro bias: X=%+.4f  Y=%+.4f  Z=%+.4f  °/s\n",
                   cal.gx_b, cal.gy_b, cal.gz_b);
 }
 
@@ -401,11 +402,11 @@ void MPU9250::calibrateAccel() {
 
     float readings[6][3];
 
-    Serial.println(F("\n[CAL] Accel 6-position calibration."));
-    Serial.println(F("[CAL] For each orientation, place drone then press ENTER.\n"));
+    DBG_PRINTLN(F("\n[CAL] Accel 6-position calibration."));
+    DBG_PRINTLN(F("[CAL] For each orientation, place drone then press ENTER.\n"));
 
     for (int pos = 0; pos < 6; pos++) {
-        Serial.printf("[CAL] Position %d/6: %s\n[CAL] Press ENTER when ready...\n",
+        DBG_PRINTF("[CAL] Position %d/6: %s\n[CAL] Press ENTER when ready...\n",
                       pos + 1, labels[pos]);
 
         while (!Serial.available()) delay(10);
@@ -418,7 +419,7 @@ void MPU9250::calibrateAccel() {
         readings[pos][1] = avg.ay_g;
         readings[pos][2] = avg.az_g;
 
-        Serial.printf("[CAL]  Got: ax=%+.4f  ay=%+.4f  az=%+.4f\n",
+        DBG_PRINTF("[CAL]  Got: ax=%+.4f  ay=%+.4f  az=%+.4f\n",
                       avg.ax_g, avg.ay_g, avg.az_g);
     }
 
@@ -434,9 +435,9 @@ void MPU9250::calibrateAccel() {
     cal.ay_s = (fabsf(hrY) > 0.01f) ? 1.0f / hrY : 1.0f;
     cal.az_s = (fabsf(hrZ) > 0.01f) ? 1.0f / hrZ : 1.0f;
 
-    Serial.printf("[CAL] Accel bias: X=%+.4f  Y=%+.4f  Z=%+.4f  g\n",
+    DBG_PRINTF("[CAL] Accel bias: X=%+.4f  Y=%+.4f  Z=%+.4f  g\n",
                   cal.ax_b, cal.ay_b, cal.az_b);
-    Serial.printf("[CAL] Accel scale: X=%+.4f  Y=%+.4f  Z=%+.4f\n",
+    DBG_PRINTF("[CAL] Accel scale: X=%+.4f  Y=%+.4f  Z=%+.4f\n",
                   cal.ax_s, cal.ay_s, cal.az_s);
 }
 
@@ -445,12 +446,12 @@ void MPU9250::calibrateAccel() {
 // ─────────────────────────────────────────────────────────────
 void MPU9250::calibrateMag(uint32_t durationMs) {
     if (!_hasMag) {
-        Serial.println(F("[CAL] No AK8963 magnetometer detected. Skipping mag calibration."));
+        DBG_PRINTLN(F("[CAL] No AK8963 magnetometer detected. Skipping mag calibration."));
         return;
     }
 
-    Serial.println(F("\n[CAL] Mag calibration — rotate slowly through ALL axes."));
-    Serial.printf("[CAL] Duration: %lu s. Press ENTER to start...\n", durationMs / 1000);
+    DBG_PRINTLN(F("\n[CAL] Mag calibration — rotate slowly through ALL axes."));
+    DBG_PRINTF("[CAL] Duration: %lu s. Press ENTER to start...\n", durationMs / 1000);
 
     while (!Serial.available()) delay(10);
     while (Serial.available()) Serial.read();
@@ -481,7 +482,7 @@ void MPU9250::calibrateMag(uint32_t durationMs) {
         }
 
         if (millis() - lastPrint > 2000) {
-            Serial.printf("[CAL] %lu s remaining...\n", (end_ms - millis()) / 1000);
+            DBG_PRINTF("[CAL] %lu s remaining...\n", (end_ms - millis()) / 1000);
             lastPrint = millis();
         }
 
@@ -501,9 +502,9 @@ void MPU9250::calibrateMag(uint32_t durationMs) {
     cal.my_s = (ry > 0.1f) ? avg / ry : 1.0f;
     cal.mz_s = (rz > 0.1f) ? avg / rz : 1.0f;
 
-    Serial.printf("[CAL] Mag bias:  X=%+.2f  Y=%+.2f  Z=%+.2f  µT\n",
+    DBG_PRINTF("[CAL] Mag bias:  X=%+.2f  Y=%+.2f  Z=%+.2f  µT\n",
                   cal.mx_b, cal.my_b, cal.mz_b);
-    Serial.printf("[CAL] Mag scale: X=%+.4f  Y=%+.4f  Z=%+.4f\n",
+    DBG_PRINTF("[CAL] Mag scale: X=%+.4f  Y=%+.4f  Z=%+.4f\n",
                   cal.mx_s, cal.my_s, cal.mz_s);
 }
 
@@ -538,7 +539,7 @@ void MPU9250::saveCalibration(const char* ns) {
     p.end();
 
     cal.valid = true;
-    Serial.println(F("[NVS] Calibration saved."));
+    DBG_PRINTLN(F("[NVS] Calibration saved."));
 }
 
 bool MPU9250::loadCalibration(const char* ns) {
@@ -586,18 +587,18 @@ void MPU9250::eraseCalibration(const char* ns) {
     cal.mx_s = cal.my_s = cal.mz_s = 1.0f;
     cal.mag_asa_x = cal.mag_asa_y = cal.mag_asa_z = 1.0f;
 
-    Serial.println(F("[NVS] Calibration erased."));
+    DBG_PRINTLN(F("[NVS] Calibration erased."));
 }
 
 void MPU9250::printCalibration() {
-    Serial.println(F("\n--- MPU9250 Calibration ---"));
-    Serial.printf("  Gyro bias:   X=%+.4f  Y=%+.4f  Z=%+.4f  °/s\n", cal.gx_b, cal.gy_b, cal.gz_b);
-    Serial.printf("  Accel bias:  X=%+.4f  Y=%+.4f  Z=%+.4f  g\n",   cal.ax_b, cal.ay_b, cal.az_b);
-    Serial.printf("  Accel scale: X=%+.4f  Y=%+.4f  Z=%+.4f\n",      cal.ax_s, cal.ay_s, cal.az_s);
-    Serial.printf("  Mag bias:    X=%+.2f  Y=%+.2f  Z=%+.2f  µT\n",  cal.mx_b, cal.my_b, cal.mz_b);
-    Serial.printf("  Mag scale:   X=%+.4f  Y=%+.4f  Z=%+.4f\n",      cal.mx_s, cal.my_s, cal.mz_s);
-    Serial.printf("  Mag ASA:     X=%.4f  Y=%.4f  Z=%.4f\n",         cal.mag_asa_x, cal.mag_asa_y, cal.mag_asa_z);
-    Serial.printf("  Valid: %s\n", cal.valid ? "YES" : "NO");
+    DBG_PRINTLN(F("\n--- MPU9250 Calibration ---"));
+    DBG_PRINTF("  Gyro bias:   X=%+.4f  Y=%+.4f  Z=%+.4f  °/s\n", cal.gx_b, cal.gy_b, cal.gz_b);
+    DBG_PRINTF("  Accel bias:  X=%+.4f  Y=%+.4f  Z=%+.4f  g\n",   cal.ax_b, cal.ay_b, cal.az_b);
+    DBG_PRINTF("  Accel scale: X=%+.4f  Y=%+.4f  Z=%+.4f\n",      cal.ax_s, cal.ay_s, cal.az_s);
+    DBG_PRINTF("  Mag bias:    X=%+.2f  Y=%+.2f  Z=%+.2f  µT\n",  cal.mx_b, cal.my_b, cal.mz_b);
+    DBG_PRINTF("  Mag scale:   X=%+.4f  Y=%+.4f  Z=%+.4f\n",      cal.mx_s, cal.my_s, cal.mz_s);
+    DBG_PRINTF("  Mag ASA:     X=%.4f  Y=%.4f  Z=%.4f\n",         cal.mag_asa_x, cal.mag_asa_y, cal.mag_asa_z);
+    DBG_PRINTF("  Valid: %s\n", cal.valid ? "YES" : "NO");
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -605,12 +606,12 @@ void MPU9250::printCalibration() {
 // ─────────────────────────────────────────────────────────────
 void MPU9250::diagMag() {
     if (!_hasMag) {
-        Serial.println(F("[DIAG] No AK8963 magnetometer detected at boot."));
+        DBG_PRINTLN(F("[DIAG] No AK8963 magnetometer detected at boot."));
         return;
     }
 
-    Serial.println(F("\n[DIAG] Raw EXT_SENS_DATA (10 samples):"));
-    Serial.println(F("  [  ST1  ] [  HXL  HXH  HYL  HYH  HZL  HZH  ] [  ST2  ]"));
+    DBG_PRINTLN(F("\n[DIAG] Raw EXT_SENS_DATA (10 samples):"));
+    DBG_PRINTLN(F("  [  ST1  ] [  HXL  HXH  HYL  HYH  HZL  HZH  ] [  ST2  ]"));
 
     for (int i = 0; i < 10; i++) {
         uint8_t mag[8];
@@ -627,7 +628,7 @@ void MPU9250::diagMag() {
         float my = ry * MAG_SCALE_16BIT * cal.mag_asa_y;
         float mz = rz * MAG_SCALE_16BIT * cal.mag_asa_z;
 
-        Serial.printf("  [0x%02X %s] [%6d %6d %6d]  ST2=0x%02X %s  → %.1f %.1f %.1f µT\n",
+        DBG_PRINTF("  [0x%02X %s] [%6d %6d %6d]  ST2=0x%02X %s  → %.1f %.1f %.1f µT\n",
                       mag[0], drdy ? "DRDY" : "    ",
                       rx, ry, rz,
                       mag[7], hofl ? "HOFL" : "    ",
@@ -636,11 +637,11 @@ void MPU9250::diagMag() {
         delay(15);
     }
 
-    Serial.println(F("\n[DIAG] SLV0 config registers:"));
-    Serial.printf("  SLV0_ADDR(0x25) = 0x%02X (should be 0x8C = AK8963|READ)\n", _readReg(MPU_REG_I2C_SLV0_ADDR));
-    Serial.printf("  SLV0_REG (0x26) = 0x%02X (should be 0x02 = ST1)\n",       _readReg(MPU_REG_I2C_SLV0_REG));
-    Serial.printf("  SLV0_CTRL(0x27) = 0x%02X (should be 0x88 = EN|8bytes)\n", _readReg(MPU_REG_I2C_SLV0_CTRL));
-    Serial.printf("  USER_CTRL(0x6A) = 0x%02X (bit5=I2C_MST_EN should be 1)\n", _readReg(MPU_REG_USER_CTRL));
-    Serial.printf("  I2C_MST_CTRL(0x24) = 0x%02X\n",                            _readReg(MPU_REG_I2C_MST_CTRL));
-    Serial.printf("  I2C_MST_STATUS(0x36) = 0x%02X\n",                          _readReg(MPU_REG_I2C_MST_STATUS));
+    DBG_PRINTLN(F("\n[DIAG] SLV0 config registers:"));
+    DBG_PRINTF("  SLV0_ADDR(0x25) = 0x%02X (should be 0x8C = AK8963|READ)\n", _readReg(MPU_REG_I2C_SLV0_ADDR));
+    DBG_PRINTF("  SLV0_REG (0x26) = 0x%02X (should be 0x02 = ST1)\n",       _readReg(MPU_REG_I2C_SLV0_REG));
+    DBG_PRINTF("  SLV0_CTRL(0x27) = 0x%02X (should be 0x88 = EN|8bytes)\n", _readReg(MPU_REG_I2C_SLV0_CTRL));
+    DBG_PRINTF("  USER_CTRL(0x6A) = 0x%02X (bit5=I2C_MST_EN should be 1)\n", _readReg(MPU_REG_USER_CTRL));
+    DBG_PRINTF("  I2C_MST_CTRL(0x24) = 0x%02X\n",                            _readReg(MPU_REG_I2C_MST_CTRL));
+    DBG_PRINTF("  I2C_MST_STATUS(0x36) = 0x%02X\n",                          _readReg(MPU_REG_I2C_MST_STATUS));
 }

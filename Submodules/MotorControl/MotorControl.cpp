@@ -19,6 +19,7 @@
  */
 
 #include "MotorControl.h"
+#include "DebugConfig.h"
 
 #if __has_include(<esp_arduino_version.h>)
   #include <esp_arduino_version.h>
@@ -98,7 +99,7 @@ static void _attachChannels(void) {
 //  Public API implementation
 // ─────────────────────────────────────────────────────────────
 void motorBegin(void) {
-    Serial.println(F("[MOTOR] Initialising fast PWM channels..."));
+    DBG_PRINTLN(F("[MOTOR] Initialising fast PWM channels..."));
 
     pinMode(27, INPUT);  // MPU INT safety: never drive it as output
 
@@ -106,24 +107,24 @@ void motorBegin(void) {
     _allUs(MOTOR_US_MIN, true);
     s_state = {0.0f, 0.0f, 0.0f, 0.0f, false};
 
-    Serial.printf("[MOTOR] FL=GPIO%d/ch%d  FR=GPIO%d/ch%d  RL=GPIO%d/ch%d  RR=GPIO%d/ch%d\n",
+    DBG_PRINTF("[MOTOR] FL=GPIO%d/ch%d  FR=GPIO%d/ch%d  RL=GPIO%d/ch%d  RR=GPIO%d/ch%d\n",
                   MOTOR_PIN_FL, MOTOR_CH_FL,
                   MOTOR_PIN_FR, MOTOR_CH_FR,
                   MOTOR_PIN_RL, MOTOR_CH_RL,
                   MOTOR_PIN_RR, MOTOR_CH_RR);
-    Serial.printf("[MOTOR] PWM: %d Hz  %d-bit  %u–%u us\n",
+    DBG_PRINTF("[MOTOR] PWM: %d Hz  %d-bit  %u–%u us\n",
                   MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION, MOTOR_US_MIN, MOTOR_US_MAX);
-    Serial.println(F("[MOTOR] All motors at minimum. Ready."));
+    DBG_PRINTLN(F("[MOTOR] All motors at minimum. Ready."));
 }
 
 bool motorArm(void) {
-    Serial.println(F("[MOTOR] Arming sequence..."));
+    DBG_PRINTLN(F("[MOTOR] Arming sequence..."));
     _allUs(MOTOR_US_ARM, true);
     delay(500);
     _allUs(MOTOR_US_MIN, true);
     delay(2000);
     s_state.armed = true;
-    Serial.println(F("[MOTOR] Armed. ESC ready."));
+    DBG_PRINTLN(F("[MOTOR] Armed. ESC ready."));
     return true;
 }
 
@@ -131,7 +132,7 @@ void motorDisarm(void) {
     _allUs(MOTOR_US_ARM, true);
     s_state.armed  = false;
     s_state.fl = s_state.fr = s_state.rl = s_state.rr = 0.0f;
-    Serial.println(F("[MOTOR] Disarmed."));
+    DBG_PRINTLN(F("[MOTOR] Disarmed."));
 }
 
 void motorOff(void) {
@@ -203,34 +204,34 @@ MotorState_t motorGetState(void) {
 }
 
 void motorEscArm(void) {
-    Serial.println(F("[ESC] Sending arm pulse (1000 us x 3 s)..."));
+    DBG_PRINTLN(F("[ESC] Sending arm pulse (1000 us x 3 s)..."));
     _allUs(MOTOR_US_MIN, true);
     delay(3000);
-    Serial.println(F("[ESC] ESC armed and ready."));
+    DBG_PRINTLN(F("[ESC] ESC armed and ready."));
     s_state.armed = true;
 }
 
 void motorEscCalibrate(void) {
     _attachChannels();
 
-    Serial.println(F(""));
-    Serial.println(F("╔══════════════════════════════════════════════════════╗"));
-    Serial.println(F("║          ESC ENDPOINT CALIBRATION ROUTINE           ║"));
-    Serial.println(F("╠══════════════════════════════════════════════════════╣"));
-    Serial.println(F("║  REMOVE ALL PROPELLERS BEFORE CONTINUING            ║"));
-    Serial.println(F("╚══════════════════════════════════════════════════════╝"));
-    Serial.println(F("[CAL] Step 1 — Disconnect battery, then press any key."));
+    DBG_PRINTLN(F(""));
+    DBG_PRINTLN(F("╔══════════════════════════════════════════════════════╗"));
+    DBG_PRINTLN(F("║          ESC ENDPOINT CALIBRATION ROUTINE           ║"));
+    DBG_PRINTLN(F("╠══════════════════════════════════════════════════════╣"));
+    DBG_PRINTLN(F("║  REMOVE ALL PROPELLERS BEFORE CONTINUING            ║"));
+    DBG_PRINTLN(F("╚══════════════════════════════════════════════════════╝"));
+    DBG_PRINTLN(F("[CAL] Step 1 — Disconnect battery, then press any key."));
     while (!Serial.available()) delay(20);
     while (Serial.available()) Serial.read();
 
-    Serial.println(F("[CAL] Sending HIGH endpoint. Connect battery now."));
+    DBG_PRINTLN(F("[CAL] Sending HIGH endpoint. Connect battery now."));
     _allUs(MOTOR_US_CAL_HIGH, true);
     delay(5000);
 
-    Serial.println(F("[CAL] Sending LOW endpoint."));
+    DBG_PRINTLN(F("[CAL] Sending LOW endpoint."));
     _allUs(MOTOR_US_MIN, true);
     delay(5000);
 
-    Serial.println(F("[CAL] ESC calibration done. Power-cycle ESCs."));
+    DBG_PRINTLN(F("[CAL] ESC calibration done. Power-cycle ESCs."));
     s_state.armed = false;
 }

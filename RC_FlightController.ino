@@ -41,6 +41,7 @@
 
 #include <SPI.h>
 #include <stdarg.h>
+#include "DebugConfig.h"
 #include "MotorControl.h"
 #include "MPU9250.h"
 #include "FlySkyiBUS.h"
@@ -315,7 +316,7 @@ static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
         int32_t jitterSigned  = (int32_t)periodUs - (int32_t)targetUs;
         int32_t headroomFull  = (int32_t)targetUs - (int32_t)fullUs;
 
-        Serial.printf("[TIME] period=%luus jitter=%+ldus ctrl=%luus full=%luus "
+        DBG_PRINTF("[TIME] period=%luus jitter=%+ldus ctrl=%luus full=%luus "
                       "headroom=%+ldus maxCtrl=%luus maxFull=%luus "
                       "overCtrl=%lu overFull=%lu missed=%lu "
                       "phase imu=%luus rc=%luus motor=%luus state=%luus\n",
@@ -1016,7 +1017,7 @@ static bool handleTune(const TunePacket& in)
     uint32_t appliedSeq = g_tuneApplySeq;
     xSemaphoreGive(g_tuneMutex);
 
-    Serial.printf("[TUNE] Applied immediately seq=%lu.\n", (unsigned long)appliedSeq);
+    DBG_PRINTF("[TUNE] Applied immediately seq=%lu.\n", (unsigned long)appliedSeq);
     calLogf("[TUNE] Applied seq=%lu.", (unsigned long)appliedSeq);
     return true;
 }
@@ -1229,13 +1230,13 @@ static void taskGPS(void* /*pv*/)
         }
         if (millis() - lastPrintMs >= 5000) {
             if (d.valid)
-                Serial.printf("[GPS] Fix  Lat=%.6f  Lon=%.6f  Alt=%.1fm  Sats=%d"
+                DBG_PRINTF("[GPS] Fix  Lat=%.6f  Lon=%.6f  Alt=%.1fm  Sats=%d"
                               "  HDOP=%.1f  Speed=%.1fkm/h  UTC=%02d:%02d:%02d\n",
                               d.latitude, d.longitude, d.altitude_m,
                               d.satellites, d.hdop, d.speed_kmh,
                               d.hour, d.minute, d.second);
             else
-                Serial.printf("[GPS] No fix  Sats=%d  Sentences=%lu\n",
+                DBG_PRINTF("[GPS] No fix  Sats=%d  Sentences=%lu\n",
                               d.satellites, (unsigned long)d.sentenceCount);
             lastPrintMs = millis();
         }
@@ -1303,7 +1304,7 @@ static void taskRC(void* /*pv*/)
             uint32_t failPerS = fails - lastCsumFail;
             lastCsumFail = fails;
             lastReportMs = nowMs;
-            Serial.printf("[iBUS] %.0f Hz good | %lu bad/s | %lu bad total\n",
+            DBG_PRINTF("[iBUS] %.0f Hz good | %lu bad/s | %lu bad total\n",
                           rcReceiver.getFrameRate(),
                           (unsigned long)failPerS,
                           (unsigned long)fails);
@@ -1418,7 +1419,7 @@ static void updateDynamicNotchFromFFT()
             if (nowMs - lastGatePrintMs >= 1000) {
                 lastGatePrintMs = nowMs;
 
-                Serial.printf("[DYN_NOTCH_GATE] blocked armed=%d motorOut=%d rcValid=%d throttle=%.3f minThrottle=%.3f\n",
+                DBG_PRINTF("[DYN_NOTCH_GATE] blocked armed=%d motorOut=%d rcValid=%d throttle=%.3f minThrottle=%.3f\n",
                               s.armed ? 1 : 0,
                               g_motorOutputsActive ? 1 : 0,
                               s.rc.valid ? 1 : 0,
@@ -1462,7 +1463,7 @@ static void updateDynamicNotchFromFFT()
             if (nowMs - lastNoPeakPrintMs >= 1000) {
                 lastNoPeakPrintMs = nowMs;
 
-                Serial.printf("[DYN_NOTCH_NO_PEAK] current=%.1fHz min=%.1f max=%.1f minScore=%.2f seq=%lu\n",
+                DBG_PRINTF("[DYN_NOTCH_NO_PEAK] current=%.1fHz min=%.1f max=%.1f minScore=%.2f seq=%lu\n",
                               currentHz,
                               DYN_NOTCH_MIN_HZ,
                               DYN_NOTCH_MAX_HZ,
@@ -1496,7 +1497,7 @@ static void updateDynamicNotchFromFFT()
     }
 
     if (LOG_DYNAMIC_NOTCH_DEBUG) {
-        Serial.printf("[DYN_NOTCH] peak=%.1fHz score=%.3f current=%.1fHz -> request=%.1fHz seq=%lu\n",
+        DBG_PRINTF("[DYN_NOTCH] peak=%.1fHz score=%.3f current=%.1fHz -> request=%.1fHz seq=%lu\n",
                       peakHz,
                       peakScore,
                       currentHz,
@@ -1781,12 +1782,12 @@ static void taskControl(void* /*pv*/)
                                     s.ay_g * s.ay_g +
                                     s.az_g * s.az_g) - 1.0f);
 
-                    Serial.printf("[DYN_FFT_INPUT] pushes=%lu motorOut=%d gyroMag=%.3f dps accelVib=%.4f g\n",
+                    DBG_PRINTF("[DYN_FFT_INPUT] pushes=%lu motorOut=%d gyroMag=%.3f dps accelVib=%.4f g\n",
                                   (unsigned long)dynFftPushCount,
                                   g_motorOutputsActive ? 1 : 0,
                                   gyroMag,
                                   accelVib);
-                    Serial.printf("[DYN_NOTCH_HOOK] motorOut=%d notchEnable=%d notchHz=%.1f Q=%.1f\n",
+                    DBG_PRINTF("[DYN_NOTCH_HOOK] motorOut=%d notchEnable=%d notchHz=%.1f Q=%.1f\n",
                                   g_motorOutputsActive ? 1 : 0,
                                   g_tuning.notch_enable ? 1 : 0,
                                   g_tuning.notch_freq_hz,
@@ -1886,7 +1887,7 @@ static void taskControl(void* /*pv*/)
                 levelZeroCount = 0;
                 levelZeroStartMs = millis();
                 levelRollSum = levelPitchSum = levelYawSum = 0.0;
-                Serial.println(F("[LEVEL] Capturing software zero — keep drone still..."));
+                DBG_PRINTLN(F("[LEVEL] Capturing software zero — keep drone still..."));
                 calLog("[LEVEL] Capturing software zero — keep drone still...");
             }
 
@@ -1901,7 +1902,7 @@ static void taskControl(void* /*pv*/)
                 g_levelYawOffsetDeg   = (float)(levelYawSum   / (double)levelZeroCount);
                 computeControlAttitude(att, rollCtrlDeg, pitchCtrlDeg, yawCtrlDeg);
 
-                Serial.printf("[LEVEL] Zero saved: rollOff=%+.2f pitchOff=%+.2f yawOff=%+.2f deg\n",
+                DBG_PRINTF("[LEVEL] Zero saved: rollOff=%+.2f pitchOff=%+.2f yawOff=%+.2f deg\n",
                               g_levelRollOffsetDeg, g_levelPitchOffsetDeg, g_levelYawOffsetDeg);
                 calLogf("[LEVEL] Zero saved: R=%+.2f P=%+.2f Y=%+.2f deg",
                         g_levelRollOffsetDeg, g_levelPitchOffsetDeg, g_levelYawOffsetDeg);
@@ -2126,7 +2127,7 @@ static void taskControl(void* /*pv*/)
             uint32_t motorSatNowMs = millis();
             if (motorSatNowMs - lastMotorSatPrintMs >= 250) {
                 lastMotorSatPrintMs = motorSatNowMs;
-                Serial.printf("[MOTOR_SAT] thr=%.3f rO=%.3f pO=%.3f yO=%.3f "
+                DBG_PRINTF("[MOTOR_SAT] thr=%.3f rO=%.3f pO=%.3f yO=%.3f "
                               "maxBefore=%.3f MOTOR_MAX=%.3f "
                               "FL=%.3f FR=%.3f RL=%.3f RR=%.3f\n",
                               thr, rO, pO, yO,
@@ -2185,7 +2186,7 @@ static void taskControl(void* /*pv*/)
             if (motorRateNowMs - lastMotorRatePrintMs >= 1000) {
                 lastMotorRatePrintMs = motorRateNowMs;
 
-                Serial.printf("[MOTOR_RATE] target=200Hz writes=%lu skips=%lu lastMotorUs=%lu\n",
+                DBG_PRINTF("[MOTOR_RATE] target=200Hz writes=%lu skips=%lu lastMotorUs=%lu\n",
                               (unsigned long)motorWriteCount,
                               (unsigned long)motorSkipCount,
                               (unsigned long)g_execTiming.lastMotorUs);
@@ -2341,12 +2342,12 @@ static void taskSerial(void* /*pv*/)
     TickType_t lastWake = xTaskGetTickCount();
     uint32_t tick = 0;
 
-    Serial.println(F("\n╔══════════════════════════════════════════════════════╗"));
-    Serial.println(F("  ║  FlySky iBUS + MPU-9250/6500 + BMP280 + GPS  v4.0.0  ║"));
-    Serial.println(F("  ║  Wi-Fi: ESP32-DRONE / 12345678 → 192.168.4.1         ║"));
-    Serial.println(F("  ║  taskControl: timer 400 Hz, original RC              ║"));
-    Serial.println(F("  ║  Type 'p' to toggle the [PID] tuning trace.          ║"));
-    Serial.println(F("  ╚══════════════════════════════════════════════════════╝"));
+    DBG_PRINTLN(F("\n╔══════════════════════════════════════════════════════╗"));
+    DBG_PRINTLN(F("  ║  FlySky iBUS + MPU-9250/6500 + BMP280 + GPS  v4.0.0  ║"));
+    DBG_PRINTLN(F("  ║  Wi-Fi: ESP32-DRONE / 12345678 → 192.168.4.1         ║"));
+    DBG_PRINTLN(F("  ║  taskControl: timer 400 Hz, original RC              ║"));
+    DBG_PRINTLN(F("  ║  Type 'p' to toggle the [PID] tuning trace.          ║"));
+    DBG_PRINTLN(F("  ╚══════════════════════════════════════════════════════╝"));
 
     for (;;) {
 
@@ -2381,7 +2382,7 @@ static void taskSerial(void* /*pv*/)
             lastCalState = calStatus.state;
             lastCalPrintMs = millis();
 
-            Serial.printf("[CAL-MGR] run=%lu state=%u active=%d safe=%d confirm=%d progress=%.2f msg=%s\n",
+            DBG_PRINTF("[CAL-MGR] run=%lu state=%u active=%d safe=%d confirm=%d progress=%.2f msg=%s\n",
                         (unsigned long)calStatus.runId,
                         (unsigned)calStatus.state,
                         calStatus.active ? 1 : 0,
@@ -2396,7 +2397,7 @@ static void taskSerial(void* /*pv*/)
             int c = Serial.read();
             if (c == 'p' || c == 'P') {
                 g_pidTrace = !g_pidTrace;
-                Serial.printf("[CMD] PID trace %s\n", g_pidTrace ? "ON" : "OFF");
+                DBG_PRINTF("[CMD] PID trace %s\n", g_pidTrace ? "ON" : "OFF");
             }
         }
 
@@ -2420,7 +2421,7 @@ static void taskSerial(void* /*pv*/)
 
         // 1 Hz status line
         if (tick % 20 == 0) {
-            Serial.printf("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+            DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
                           "CTRL R=%+6.1f P=%+6.1f Y=%+6.1f | "
                           "OFF R=%+5.2f P=%+5.2f Y=%+5.2f | "
                           "MOT %.2f %.2f %.2f %.2f | "
@@ -2437,7 +2438,7 @@ static void taskSerial(void* /*pv*/)
                           imu.isMagConnected() ? "9DOF" : "6DOF",
                           (s.ahrsFilterMode == 1) ? "Mahony" : ((s.ahrsFilterMode == 2) ? "Madgwick" : "EKF"),
                           mahony.kp());
-            Serial.printf("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+            DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
                           s.rc.raw[0], s.rc.raw[1], s.rc.raw[2], s.rc.raw[3], s.rc.raw[4],
                           s.rc.raw[5], s.rc.raw[6], s.rc.raw[7], s.rc.raw[8], s.rc.raw[9]);
             
@@ -2445,7 +2446,7 @@ static void taskSerial(void* /*pv*/)
                       s.my_uT * s.my_uT +
                       s.mz_uT * s.mz_uT);
 
-            Serial.printf("          SENS: acc=%+.4f %+.4f %+.4f g | "
+            DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
                         "gyro=%+.4f %+.4f %+.4f dps | "
                         "mag=%+.2f %+.2f %+.2f uT | norm=%.2f uT\n",
                         s.ax_g, s.ay_g, s.az_g,
@@ -2456,7 +2457,7 @@ static void taskSerial(void* /*pv*/)
 
         // ~4 Hz PID tuning trace (sibling of the 1 Hz block; gated by 'p')
         if (g_pidTrace && s.armed && (tick % 5 == 0)) {
-            Serial.printf("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
+            DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
                           "ctrlAtt R=%+6.2f P=%+6.2f Y=%+6.2f | "
                           "gyro gx=%+7.1f gy=%+7.1f gz=%+7.1f | "
                           "out rO=%+.4f pO=%+.4f yO=%+.4f | "
@@ -2631,49 +2632,49 @@ void setup()
     SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_MPU_CS);
     delay(10);
 
-    Serial.print(F("[BOOT] IMU... "));
+    DBG_PRINT(F("[BOOT] IMU... "));
     if (!imu.begin()) {
-        Serial.println(F("FAILED. Check SPI wiring. Halting."));
+        DBG_PRINTLN(F("FAILED. Check SPI wiring. Halting."));
         while (true) delay(1000);
     }
-    Serial.println(F("OK"));
+    DBG_PRINTLN(F("OK"));
     calManager.begin(imu);
     calManager.attachMotorOutputs(writeMotors, motorsOff);
-    Serial.println(F("[BOOT] CalibrationManager ready."));
+    DBG_PRINTLN(F("[BOOT] CalibrationManager ready."));
 
     if (imu.hasMag()) {
-        Serial.println(F("[BOOT] AK8963 magnetometer: DETECTED — 9-DOF AHRS"));
+        DBG_PRINTLN(F("[BOOT] AK8963 magnetometer: DETECTED — 9-DOF AHRS"));
     } else {
-        Serial.println(F("[BOOT] AK8963 magnetometer: NOT FOUND — 6-DOF AHRS"));
-        Serial.println(F("[BOOT] Roll and pitch accurate. Yaw will drift."));
+        DBG_PRINTLN(F("[BOOT] AK8963 magnetometer: NOT FOUND — 6-DOF AHRS"));
+        DBG_PRINTLN(F("[BOOT] Roll and pitch accurate. Yaw will drift."));
     }
 
     bmp280.scanI2C(PIN_BMP_SDA, PIN_BMP_SCL, 100000);
-    Serial.print(F("[BOOT] BMP280... "));
+    DBG_PRINT(F("[BOOT] BMP280... "));
     bmp280.beginAuto(PIN_BMP_SDA, PIN_BMP_SCL, 100000)
-        ? Serial.println(F("OK")) : Serial.println(F("not found."));
+        ? DBG_PRINTLN(F("OK")) : DBG_PRINTLN(F("not found."));
 
-    Serial.print(F("[BOOT] VL53L4CX ToF... "));
+    DBG_PRINT(F("[BOOT] VL53L4CX ToF... "));
     tofSensor.begin(PIN_BMP_SDA, PIN_BMP_SCL, 400000)
-        ? Serial.println(F("OK")) : Serial.println(F("disabled/not found."));
+        ? DBG_PRINTLN(F("OK")) : DBG_PRINTLN(F("disabled/not found."));
 
-    Serial.print(F("[BOOT] CPU monitor... "));
+    DBG_PRINT(F("[BOOT] CPU monitor... "));
     cpuUtilization.begin(1000)
-        ? Serial.println(F("OK")) : Serial.println(F("idle-hook failed."));
+        ? DBG_PRINTLN(F("OK")) : DBG_PRINTLN(F("idle-hook failed."));
 
-    Serial.println(F("[BOOT] GPS (GY-GPS6MV2)..."));
+    DBG_PRINTLN(F("[BOOT] GPS (GY-GPS6MV2)..."));
     gps.begin(PIN_GPS_RX, PIN_GPS_TX, 9600);
 
-    Serial.print(F("[BOOT] NVS calibration... "));
+    DBG_PRINT(F("[BOOT] NVS calibration... "));
     if (imu.loadCalibration()) {
-        Serial.println(F("loaded."));
+        DBG_PRINTLN(F("loaded."));
         imu.printCalibration();
     } else {
-        Serial.println(F("none — flip SWD UP (disarmed) to calibrate."));
+        DBG_PRINTLN(F("none — flip SWD UP (disarmed) to calibrate."));
     }
 
     rcReceiver.begin(PIN_IBUS_RX, PIN_IBUS_TX, 2);
-    Serial.println(F("[BOOT] iBUS ready."));
+    DBG_PRINTLN(F("[BOOT] iBUS ready."));
 
     syncTuningFromObjects();
 
@@ -2695,15 +2696,15 @@ void setup()
 
     if (esp_timer_create(&controlTimerArgs, &g_controlTimer) != ESP_OK ||
         esp_timer_start_periodic(g_controlTimer, TIMING_TARGET_US) != ESP_OK) {
-        Serial.println(F("[BOOT][ERROR] Failed to start 400 Hz control timer."));
+        DBG_PRINTLN(F("[BOOT][ERROR] Failed to start 400 Hz control timer."));
         while (true) delay(1000);
     }
 
-    Serial.println(F("[BOOT] All tasks running."));
-    Serial.println(F("[BOOT] Timing target: 2500 us (400 Hz control loop)."));
-    Serial.println(F("[BOOT] Ground station: http://192.168.4.1"));
-    Serial.println(F("[BOOT] GPS fix takes 30-90 s outdoors."));
-    Serial.printf("[BOOT] Free heap: %u bytes\n", ESP.getFreeHeap());
+    DBG_PRINTLN(F("[BOOT] All tasks running."));
+    DBG_PRINTLN(F("[BOOT] Timing target: 2500 us (400 Hz control loop)."));
+    DBG_PRINTLN(F("[BOOT] Ground station: http://192.168.4.1"));
+    DBG_PRINTLN(F("[BOOT] GPS fix takes 30-90 s outdoors."));
+    DBG_PRINTF("[BOOT] Free heap: %u bytes\n", ESP.getFreeHeap());
 }
 
 void loop() { vTaskDelay(portMAX_DELAY); }

@@ -1,4 +1,5 @@
 #include "ToFSensor.h"
+#include "DebugConfig.h"
 
 ToFSensor tofSensor(Wire);
 
@@ -14,16 +15,16 @@ bool ToFSensor::begin(int sdaPin, int sclPin, uint32_t i2cHz)
 
 #if TOF_ENABLE_VL53L4CX
     if (!_vl53.begin(0x29, &_wire)) {
-        Serial.println(F("[TOF] VL53L4CX not found at 0x29."));
+        DBG_PRINTLN(F("[TOF] VL53L4CX not found at 0x29."));
         _begun = false;
         return false;
     }
     _vl53.startRanging();
     _begun = true;
-    Serial.printf("[TOF] VL53L4CX OK on SDA=GPIO%d SCL=GPIO%d\n", sdaPin, sclPin);
+    DBG_PRINTF("[TOF] VL53L4CX OK on SDA=GPIO%d SCL=GPIO%d\n", sdaPin, sclPin);
     return true;
 #else
-    Serial.println(F("[TOF] VL53L4CX wrapper present but disabled. Set TOF_ENABLE_VL53L4CX=1 after installing library."));
+    DBG_PRINTLN(F("[TOF] VL53L4CX wrapper present but disabled. Set TOF_ENABLE_VL53L4CX=1 after installing library."));
     _begun = false;
     return false;
 #endif
