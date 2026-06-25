@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Drone GCS · Logging Diagnostics</title>
+  <style>
+    :root{--bg:#0b0f14;--panel:#121923;--panel2:#172232;--text:#e7eef8;--muted:#9fb0c3;--line:#2b3b51;--good:#30d158;--warn:#ff9f0a;--bad:#ff453a;--blue:#64d2ff}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    header{padding:18px 20px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#101824,#0b0f14)}
+    h1{margin:0;font-size:20px} .sub{color:var(--muted);font-size:13px;margin-top:4px}
+    main{padding:16px;display:grid;gap:14px;grid-template-columns:repeat(12,1fr)}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.24)}
+    .span12{grid-column:span 12}.span6{grid-column:span 6}.span4{grid-column:span 4}.span3{grid-column:span 3}
+    @media(max-width:900px){.span6,.span4,.span3{grid-column:span 12}}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.grow{flex:1}
+    input{background:#0d131c;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:14px;min-width:260px}
+    button,a.btn{background:#1f6feb;color:white;border:0;border-radius:10px;padding:10px 12px;font-weight:700;text-decoration:none;cursor:pointer;display:inline-block}
+    button.secondary{background:#253247}.danger{background:#9b1c1c} .ok{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}.muted{color:var(--muted)}
+    .metric{display:grid;grid-template-columns:1fr auto;gap:6px;border-bottom:1px solid rgba(255,255,255,.06);padding:7px 0}.metric:last-child{border-bottom:0}.metric b{font-variant-numeric:tabular-nums}
+    canvas{width:100%;height:230px;background:#0d131c;border:1px solid var(--line);border-radius:12px}.mini{font-size:12px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid rgba(255,255,255,.06);padding:6px;text-align:left}th{color:var(--muted);font-weight:600}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Drone GCS · Logging Diagnostics</h1>
+  <div class="sub">V5.0.0-compatible diagnostic page for EKF target tracking, sensor quality, PID terms, motor symmetry, and CSV log download.</div>
+</header>
+<main>
+  <section class="card span12">
+    <div class="row">
+      <label class="mini">ESP32 base URL</label>
+      <input id="baseUrl" value="http://192.168.4.1" />
+      <button id="connectBtn">Connect</button>
+      <button id="resetLogBtn" class="secondary">Reset flight log</button>
+      <a id="downloadCsv" class="btn" href="http://192.168.4.1/flightlog/csv" download="flightlog.csv">Download CSV</a>
+      <span id="status" class="muted">idle</span>
+    </div>
+  </section>
+
+  <section class="card span3"><h3>State</h3><div id="stateMetrics"></div></section>
+  <section class="card span3"><h3>Sensor quality</h3><div id="sensorMetrics"></div></section>
+  <section class="card span3"><h3>Tracking</h3><div id="trackingMetrics"></div></section>
+  <section class="card span3"><h3>Motor symmetry</h3><div id="motorMetrics"></div></section>
+
+  <section class="card span6"><h3>Roll target vs EKF/control</h3><canvas id="rollCanvas" width="900" height="260"></canvas></section>
+  <section class="card span6"><h3>Pitch target vs EKF/control</h3><canvas id="pitchCanvas" width="900" height="260"></canvas></section>
+  <section class="card span6"><h3>Accel / gyro norm</h3><canvas id="qualityCanvas" width="900" height="260"></canvas></section>
+  <section class="card span6"><h3>Motor diagonal difference</h3><canvas id="motorCanvas" width="900" height="260"></canvas></section>
+
+  <section class="card span12">
+    <h3>Telemetry fields being watched</h3>
+    <table><thead><tr><th>Group</th><th>Fields</th><th>Purpose</th></tr></thead><tbody>
+      <tr><td>EKF/target</td><td>targetRollDeg, targetPitchDeg, roll, pitch, rollCtrl, pitchCtrl</td><td>Proves angle-mode tracking and zero-offset behavior.</td></tr>
+      <tr><td>Sensor quality</td><td>ax, ay, az, gx, gy, gz, mx, my, mz</td><td>Derives accelNorm, gyroNorm, magNorm under throttle.</td></tr>
+      <tr><td>PID terms</td><td>angleRollP/I/D, rateRollP/I/D, etc.</td><td>Shows integrator buildup and damping. Displays as -- until firmware patch is applied.</td></tr>
+      <tr><td>Motors</td><td>motFL, motFR, motRL, motRR, rpmFL, rpmFR, rpmRL, rpmRR</td><td>Separates command asymmetry from RPM response.</td></tr>
+    </tbody></table>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let base = $('baseUrl').value.replace(/\/$/, '');
+let timer = null;
+const hist = [];
+const maxN = 220;
+
+function n(v, dp=2){ const x=Number(v); return Number.isFinite(x)?x.toFixed(dp):'--'; }
+function f(v){ const x=Number(v); return Number.isFinite(x)?x:0; }
+function metric(label, val, cls=''){ return `<div class="metric"><span>${label}</span><b class="${cls}">${val}</b></div>`; }
+function modeClass(m){ return m==='ANGLE'||m==='ACRO'?'ok':(m==='FAILSAFE'?'bad':'warn'); }
+function getTargetRoll(t){ return Number.isFinite(+t.targetRollDeg) ? +t.targetRollDeg : f(t.rcRoll)*f(t.maxAngleDeg || 10); }
+function getTargetPitch(t){ return Number.isFinite(+t.targetPitchDeg) ? +t.targetPitchDeg : f(t.rcPitch)*f(t.maxAngleDeg || 10); }
+
+function draw(canvas, series, yLabel){
+  const c=$(canvas), ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H); ctx.fillStyle='#0d131c'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#253247'; ctx.lineWidth=1;
+  for(let i=1;i<5;i++){ const y=i*H/5; ctx.beginPath(); ctx.moveTo(42,y); ctx.lineTo(W-12,y); ctx.stroke(); }
+  const vals = series.flatMap(s=>s.data).filter(Number.isFinite);
+  let min=Math.min(...vals, -1), max=Math.max(...vals, 1); if(max-min<1){max+=.5;min-=.5;}
+  const pad=(max-min)*0.12; min-=pad; max+=pad;
+  ctx.fillStyle='#9fb0c3'; ctx.font='12px system-ui'; ctx.fillText(yLabel,8,14); ctx.fillText(max.toFixed(1),8,28); ctx.fillText(min.toFixed(1),8,H-8);
+  series.forEach((s,idx)=>{
+    ctx.strokeStyle=['#64d2ff','#30d158','#ff9f0a','#ff453a'][idx%4]; ctx.lineWidth=2; ctx.beginPath();
+    s.data.forEach((v,i)=>{ const x=42+i*Math.max(1,(W-58)/(Math.max(1,s.data.length-1))); const y=H-18-((v-min)/(max-min))*(H-40); if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+    ctx.stroke(); ctx.fillStyle=ctx.strokeStyle; ctx.fillText(s.name, W-150, 18+idx*16);
+  });
+}
+
+async function poll(){
+  try{
+    const r=await fetch(base+'/telemetry',{cache:'no-store'}); const t=await r.json();
+    if(!t.ok) throw new Error(t.error||'telemetry not ok');
+    const accelNorm=Math.hypot(f(t.ax),f(t.ay),f(t.az));
+    const gyroNorm=Math.hypot(f(t.gx),f(t.gy),f(t.gz));
+    const magNorm=Math.hypot(f(t.mx),f(t.my),f(t.mz));
+    const targetRoll=getTargetRoll(t), targetPitch=getTargetPitch(t);
+    const rollErr=targetRoll-f(t.rollCtrl), pitchErr=targetPitch-f(t.pitchCtrl);
+    const motorDiagA=f(t.motFL)+f(t.motRR), motorDiagB=f(t.motFR)+f(t.motRL), motorDiagDiff=motorDiagA-motorDiagB;
+    const rpmDiagA=f(t.rpmFL)+f(t.rpmRR), rpmDiagB=f(t.rpmFR)+f(t.rpmRL), rpmDiagDiff=rpmDiagA-rpmDiagB;
+    hist.push({targetRoll,targetPitch,roll:f(t.roll),pitch:f(t.pitch),rollCtrl:f(t.rollCtrl),pitchCtrl:f(t.pitchCtrl),accelNorm,gyroNorm,motorDiagDiff,rpmDiagDiff});
+    while(hist.length>maxN)hist.shift();
+    $('status').innerHTML=`<span class="ok">connected</span> · ${new Date().toLocaleTimeString()}`;
+    $('stateMetrics').innerHTML = metric('Mode', t.mode, modeClass(t.mode)) + metric('Armed', t.armed?'YES':'NO', t.armed?'ok':'warn') + metric('Filter', t.ahrsFilter||'--') + metric('Throttle', n(t.thr,3)) + metric('RC Hz', n(t.rcHz,1));
+    $('sensorMetrics').innerHTML = metric('Accel norm', n(accelNorm,3)+' g', accelNorm>1.25?'warn':'ok') + metric('Gyro norm', n(gyroNorm,1)+' dps', gyroNorm>60?'warn':'ok') + metric('Mag norm', n(magNorm,1)+' uT') + metric('EKF mag used', t.ekfMagUsed===true?'YES':(t.ekfMagUsed===false?'NO':'--'));
+    $('trackingMetrics').innerHTML = metric('Target roll', n(targetRoll,2)+'°') + metric('Ctrl roll', n(t.rollCtrl,2)+'°') + metric('Roll err', n(rollErr,2)+'°', Math.abs(rollErr)>3?'warn':'ok') + metric('Target pitch', n(targetPitch,2)+'°') + metric('Ctrl pitch', n(t.pitchCtrl,2)+'°') + metric('Pitch err', n(pitchErr,2)+'°', Math.abs(pitchErr)>3?'warn':'ok');
+    $('motorMetrics').innerHTML = metric('Diag cmd A-B', n(motorDiagDiff,4), Math.abs(motorDiagDiff)>0.05?'warn':'ok') + metric('RPM A-B', n(rpmDiagDiff,0)) + metric('FL FR RL RR', `${n(t.motFL,2)} ${n(t.motFR,2)} ${n(t.motRL,2)} ${n(t.motRR,2)}`) + metric('Saturation', t.motorSaturated?'YES':'NO', t.motorSaturated?'bad':'ok');
+    draw('rollCanvas',[{name:'target',data:hist.map(x=>x.targetRoll)},{name:'ctrl',data:hist.map(x=>x.rollCtrl)},{name:'ekf',data:hist.map(x=>x.roll)}],'deg');
+    draw('pitchCanvas',[{name:'target',data:hist.map(x=>x.targetPitch)},{name:'ctrl',data:hist.map(x=>x.pitchCtrl)},{name:'ekf',data:hist.map(x=>x.pitch)}],'deg');
+    draw('qualityCanvas',[{name:'accelNorm g',data:hist.map(x=>x.accelNorm)},{name:'gyroNorm/100',data:hist.map(x=>x.gyroNorm/100)}],'norm');
+    draw('motorCanvas',[{name:'motor diag diff',data:hist.map(x=>x.motorDiagDiff)},{name:'rpm diff/10000',data:hist.map(x=>x.rpmDiagDiff/10000)}],'diff');
+  }catch(e){ $('status').innerHTML=`<span class="bad">${e.message}</span>`; }
+}
+$('connectBtn').onclick=()=>{ base=$('baseUrl').value.replace(/\/$/,''); $('downloadCsv').href=base+'/flightlog/csv'; clearInterval(timer); poll(); timer=setInterval(poll,250); };
+$('resetLogBtn').onclick=async()=>{ base=$('baseUrl').value.replace(/\/$/,''); await fetch(base+'/flightlog/reset',{method:'POST'}); hist.length=0; $('status').innerHTML='<span class="warn">flight log reset</span>'; };
+$('connectBtn').click();
+</script>
+</body>
+</html>
