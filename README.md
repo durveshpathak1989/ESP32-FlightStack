@@ -2,9 +2,45 @@
 
 A custom quadcopter flight controller built around the **Adafruit HUZZAH32 / ESP32-WROOM-32E**, written in Arduino C++ on top of FreeRTOS. The project targets both stable flight and rigorous embedded-systems research: real-time scheduling, sensor fusion, Wi-Fi telemetry, onboard logging, runtime PID tuning, autonomous calibration, and over-the-air firmware updates, all on a $10 microcontroller.
 
-**Firmware version:** v4.0.0  
+**Firmware version:** v5.0.0  
 **Control loop:** 400 Hz, `esp_timer`-driven, pinned to Core 1  
 **AHRS default:** Attitude EKF (switchable at runtime to Mahony or Madgwick)
+
+---
+
+## Open The Arduino Sketch
+
+Open this file in Arduino IDE:
+
+```text
+RC_FlightController/RC_FlightController.ino
+```
+
+The folder name and the `.ino` file name match on purpose. Arduino expects that shape:
+
+```text
+RC_FlightController/
+  RC_FlightController.ino
+  src/
+    Submodules/
+      CalManager/
+      IMU/
+      Madgwick/
+      MahonyAHRS/
+      MotorControl/
+      ...
+```
+
+Think of `RC_FlightController.ino` like the pilot, and `src/Submodules` like the toolbox beside the pilot. When Arduino builds the sketch, it automatically compiles the tools in `src/Submodules`, so you should not need to move the libraries by hand.
+
+`Madgwick` and `MahonyAHRS` are also under `src/Submodules`, so Arduino compiles them automatically with the rest of the flight code. The shared AHRS types live in `src/Submodules/AHRS`.
+
+After cloning with submodules, compile from the sketch folder:
+
+```bash
+git submodule update --init --recursive
+arduino-cli compile --fqbn esp32:esp32:esp32 RC_FlightController
+```
 
 ---
 
@@ -835,7 +871,7 @@ OTA is gated on disarmed + throttle low + motors off. Confirm all three in the G
 
 ---
 
-## Known Firmware Issues (v4.0.0)
+## Known Firmware Issues (v5.0.0)
 
 The following issues are identified and tracked for the next release:
 

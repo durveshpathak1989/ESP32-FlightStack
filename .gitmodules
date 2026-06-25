@@ -1,0 +1,64 @@
+[submodule "Submodules/AHRS"]
+	path = RC_FlightController/src/Submodules/AHRS
+	url = https://github.com/durveshpathak1989/ahrs.git
+	branch = master
+[submodule "Submodules/BMP280"]
+	path = RC_FlightController/src/Submodules/BMP280
+	url = https://github.com/durveshpathak1989/bmp280.git
+	branch = master
+[submodule "Submodules/CalManager"]
+	path = RC_FlightController/src/Submodules/CalManager
+	url = https://github.com/durveshpathak1989/calmanager.git
+	branch = master
+[submodule "Submodules/DebugConfig"]
+	path = RC_FlightController/src/Submodules/DebugConfig
+	url = https://github.com/durveshpathak1989/debugconfig.git
+	branch = master
+[submodule "Submodules/EKF"]
+	path = RC_FlightController/src/Submodules/EKF
+	url = https://github.com/durveshpathak1989/ekf.git
+	branch = master
+[submodule "Submodules/ESP32Core"]
+	path = RC_FlightController/src/Submodules/ESP32Core
+	url = https://github.com/durveshpathak1989/esp32core.git
+	branch = master
+[submodule "Submodules/FFT"]
+	path = RC_FlightController/src/Submodules/FFT
+	url = https://github.com/durveshpathak1989/fft.git
+	branch = master
+[submodule "Submodules/GPS"]
+	path = RC_FlightController/src/Submodules/GPS
+	url = https://github.com/durveshpathak1989/gps.git
+	branch = master
+[submodule "Submodules/IMU"]
+	path = RC_FlightController/src/Submodules/IMU
+	url = https://github.com/durveshpathak1989/imu.git
+	branch = master
+[submodule "Submodules/Madgwick"]
+	path = RC_FlightController/src/Submodules/Madgwick
+	url = https://github.com/durveshpathak1989/madgwick.git
+	branch = master
+[submodule "Submodules/MahonyAHRS"]
+	path = RC_FlightController/src/Submodules/MahonyAHRS
+	url = https://github.com/durveshpathak1989/mahonyahrs.git
+	branch = master
+[submodule "Submodules/MotorControl"]
+	path = RC_FlightController/src/Submodules/MotorControl
+	url = https://github.com/durveshpathak1989/motorcontrol.git
+	branch = master
+[submodule "Submodules/NotchFilter"]
+	path = RC_FlightController/src/Submodules/NotchFilter
+	url = https://github.com/durveshpathak1989/notchfilter.git
+	branch = master
+[submodule "Submodules/ToF"]
+	path = RC_FlightController/src/Submodules/ToF
+	url = https://github.com/durveshpathak1989/tof.git
+	branch = master
+[submodule "Submodules/WiFiTelemetry"]
+	path = RC_FlightController/src/Submodules/WiFiTelemetry
+	url = https://github.com/durveshpathak1989/wifitelemetry.git
+	branch = master
+[submodule "Submodules/iFly"]
+	path = RC_FlightController/src/Submodules/iFly
+	url = https://github.com/durveshpathak1989/ifly.git
+	branch = master
