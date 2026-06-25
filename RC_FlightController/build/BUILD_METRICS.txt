@@ -12,22 +12,22 @@ RC_FlightController.ino.merged.bin
 RC_FlightController.ino.partitions.bin
 
 Program storage / flash:
-Used:    1,095,907 bytes
+Used:    1,094,383 bytes
 Maximum: 1,966,080 bytes
 Flash utilization: 55%
 
 Dynamic memory / RAM:
-Used by global variables: 98,036 bytes
+Used by global variables: 66,132 bytes
 Maximum:                  327,680 bytes
-Free for local variables: 229,644 bytes
-RAM utilization:          29%
+Free for local variables: 261,548 bytes
+RAM utilization:          20%
 
 Quiet VERBOSE_ON=0 verification:
-Program storage used: 1,084,603 bytes out of 1,966,080 bytes
+Program storage used: 1,082,879 bytes out of 1,966,080 bytes
 Flash utilization: 55%
-Global variables used: 98,028 bytes out of 327,680 bytes
-RAM utilization: 29%
-Free RAM for local variables: 229,652 bytes
+Global variables used: 66,132 bytes out of 327,680 bytes
+RAM utilization: 20%
+Free RAM for local variables: 261,548 bytes
 
 Core 0 / Core 1 CPU utilization:
 Core 0 utilization after build: not available at build time

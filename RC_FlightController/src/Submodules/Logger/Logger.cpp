@@ -76,7 +76,7 @@ uint16_t Logger::_mapChronologicalIndex(uint16_t chronologicalIndex) const {
 void Logger::_appendFloat(String& s, float v, uint8_t dp) {
     s += ',';
     if (isnan(v) || isinf(v)) s += '0';
-    else s += String(v, dp);
+    else s += String(v, (unsigned int)dp);
 }
 
 String Logger::csvHeader() const {

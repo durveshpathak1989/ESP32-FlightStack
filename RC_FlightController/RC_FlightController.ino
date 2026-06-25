@@ -62,6 +62,7 @@
 #include "src/Submodules/MahonyAHRS/MahonyAHRS.h"
 #include "src/Submodules/ESP32Core/CPUUtilization.h"
 #include "src/Submodules/GPS/GPSSensor.h"
+#include "src/Submodules/Logger/Logger.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -186,56 +187,6 @@ static constexpr float TUNE_MADGWICK_BETA       = 0.080f;
 static constexpr uint32_t LEVEL_ZERO_SAMPLE_MS = 1200;
 static constexpr uint16_t LEVEL_ZERO_SWB_THRESHOLD = 1700;
 
-struct FlightLogRow {
-    uint32_t t_us;
-    uint32_t loop_count;
-    uint16_t period_us;
-    int16_t  jitter_us;
-    uint16_t control_exec_us;
-    uint16_t imu_read_us;
-    uint16_t rc_read_us;
-    uint16_t motor_exec_us;
-    uint8_t  mode;        // 0=DISARM 1=ANGLE 2=ACRO 3=FAILSAFE
-    uint8_t  flags;       // bit0 armed, bit1 imuOk, bit2 rcValid, bit3 magValid, bit4 bmpValid, bit5 gpsValid, bit6 motorSaturated, bit7 rpmActualValid
-
-    uint16_t ch[IBUS_CHANNELS];
-    float rcThrottle, thrRaw, thrShaped;
-    float rcRoll, rcPitch, rcYaw;
-
-    float estRoll, estPitch, estYaw;
-    float ctrlRoll, ctrlPitch, ctrlYaw;
-    float offRoll, offPitch, offYaw;
-
-    float rawAx, rawAy, rawAz;
-    float rawGx, rawGy, rawGz;
-    float filtAx, filtAy, filtAz;
-    float filtGx, filtGy, filtGz;
-    float mx, my, mz;
-    float magNorm;
-
-    float ekfBgx, ekfBgy, ekfBgz;
-    uint8_t ahrsMode;
-    bool    ekfMagUsed;
-
-    float targetRollDeg, targetPitchDeg, targetYawDeg;
-    float targetRollRateDps, targetPitchRateDps, targetYawRateDps;
-    float angleErrRollDeg, angleErrPitchDeg, yawErrDeg;
-    float rateErrRollDps, rateErrPitchDps, rateErrYawDps;
-    float rO, pO, yO;
-
-    float mFL, mFR, mRL, mRR;
-    float cmdRpmFL, cmdRpmFR, cmdRpmRL, cmdRpmRR;
-    float actualRpmFL, actualRpmFR, actualRpmRL, actualRpmRR;
-
-    float notchFreqHz, notchQ;
-    bool  notchEnable;
-
-    float bmpAltM;
-    float bmpVzMps;
-    float cpu0Pct, cpu1Pct;
-};
-
-
 // ─────────────────────────────────────────────────────────────
 //  Calibration timing
 // ─────────────────────────────────────────────────────────────
@@ -252,6 +203,8 @@ struct FlightLogRow {
 // ─────────────────────────────────────────────────────────────
 #define MOTOR_KV         920.0f
 #define BATTERY_VOLTAGE    11.1f
+
+static Logger flightLogger(600);  // 100 Hz x 6 s
 
 // ─────────────────────────────────────────────────────────────
 //  IMU loop timing instrumentation — Test 7.1
@@ -549,13 +502,25 @@ static void controlTimerCallback(void* /*arg*/)
 // ─────────────────────────────────────────────────────────────
 struct PID {
     float kp, ki, kd, integral=0, prevError=0, iLimit=50.0f;
+    float lastP=0.0f, lastI=0.0f, lastD=0.0f, lastOut=0.0f;
+
     PID(float p,float i,float d,float il=50.0f):kp(p),ki(i),kd(d),iLimit(il){}
+
     float update(float err,float dt){
         integral=constrain(integral+err*dt,-iLimit,iLimit);
-        float d2=(err-prevError)/dt; prevError=err;
-        return kp*err+ki*integral+kd*d2;
+        float d2=(dt > 0.000001f) ? ((err-prevError)/dt) : 0.0f;
+        prevError=err;
+        lastP = kp * err;
+        lastI = ki * integral;
+        lastD = kd * d2;
+        lastOut = lastP + lastI + lastD;
+        return lastOut;
     }
-    void reset(){integral=0;prevError=0;}
+
+    void reset(){
+        integral=0; prevError=0;
+        lastP=lastI=lastD=lastOut=0.0f;
+    }
 };
 
 static PID pidRateRoll  (TUNE_RATE_ROLL_KP,   TUNE_RATE_ROLL_KI,   TUNE_RATE_ROLL_KD);
@@ -1530,100 +1495,20 @@ static void updateDynamicNotchFromFFT()
 //  so no giant CSV String is ever built in heap.
 // ═════════════════════════════════════════════════════════════
 
-static FlightLogRow  g_log[FLIGHT_LOG_SIZE];
-static volatile uint16_t g_logHead   = 0;
-static volatile bool     g_logFull   = false;
-static volatile bool     g_logActive = true;   // writes enabled; GET freezes it
-static portMUX_TYPE      g_logMux    = portMUX_INITIALIZER_UNLOCKED;
-
-static void pushFlightLog(const FlightLogRow& row)
-{
-    portENTER_CRITICAL(&g_logMux);
-    if (g_logActive) {
-        g_log[g_logHead] = row;
-        if (++g_logHead >= FLIGHT_LOG_SIZE) { g_logHead = 0; g_logFull = true; }
-    }
-    portEXIT_CRITICAL(&g_logMux);
+static void resetFlightLog() {
+    flightLogger.reset();
 }
 
-static void resetFlightLog()    // POST /flightlog/reset — clear + re-arm logging
-{
-    portENTER_CRITICAL(&g_logMux);
-    g_logHead = 0; g_logFull = false; g_logActive = true;
-    portEXIT_CRITICAL(&g_logMux);
+static uint16_t flightLogCount() {
+    return flightLogger.countAndFreeze();
 }
 
-// Called by the WiFi CSV handler. Freezes the buffer so the read is
-// race-free, then reports how many rows are available.
-static uint16_t flightLogCount()
-{
-    portENTER_CRITICAL(&g_logMux);
-    g_logActive = false;
-    uint16_t n = g_logFull ? FLIGHT_LOG_SIZE : g_logHead;
-    portEXIT_CRITICAL(&g_logMux);
-    return n;
+static String flightLogHeader() {
+    return flightLogger.csvHeader();
 }
 
-static String flightLogHeader()
-{
-    return F("t_us,loop_count,period_us,jitter_us,control_exec_us,imu_read_us,rc_read_us,motor_exec_us,"
-             "mode,armed,imuOk,rcValid,magValid,bmpValid,gpsValid,motorSaturated,rpmActualValid,"
-             "ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,"
-             "rcThrottle,thrRaw,thrShaped,rcRoll,rcPitch,rcYaw,"
-             "estRoll,estPitch,estYaw,ctrlRoll,ctrlPitch,ctrlYaw,offRoll,offPitch,offYaw,"
-             "rawAx,rawAy,rawAz,rawGx,rawGy,rawGz,filtAx,filtAy,filtAz,filtGx,filtGy,filtGz,"
-             "mx,my,mz,magNorm,ahrsMode,ekfMagUsed,ekfBgx,ekfBgy,ekfBgz,"
-             "targetRollDeg,targetPitchDeg,targetYawDeg,targetRollRateDps,targetPitchRateDps,targetYawRateDps,"
-             "angleErrRollDeg,angleErrPitchDeg,yawErrDeg,rateErrRollDps,rateErrPitchDps,rateErrYawDps,"
-             "rollRateOut,pitchRateOut,yawRateOut,"
-             "motFL,motFR,motRL,motRR,cmdRpmFL,cmdRpmFR,cmdRpmRL,cmdRpmRR,actualRpmFL,actualRpmFR,actualRpmRL,actualRpmRR,"
-             "notchEnable,notchFreqHz,notchQ,bmpAltM,bmpVzMps,cpu0Pct,cpu1Pct\n");
-}
-
-// Row i in chronological order. Buffer is frozen during download.
-static String flightLogRowCsv(uint16_t i)
-{
-    uint16_t head, n; bool full;
-    portENTER_CRITICAL(&g_logMux);
-    full = g_logFull; head = g_logHead;
-    portEXIT_CRITICAL(&g_logMux);
-    n = full ? FLIGHT_LOG_SIZE : head;
-    if (i >= n) return String();
-
-    const FlightLogRow& r = g_log[full ? ((head + i) % FLIGHT_LOG_SIZE) : i];
-
-    String s; s.reserve(900);
-    s += String(r.t_us);                 s += ',';
-    s += String(r.loop_count);           s += ',';
-    s += String(r.period_us);            s += ',';
-    s += String(r.jitter_us);            s += ',';
-    s += String(r.control_exec_us);      s += ',';
-    s += String(r.imu_read_us);          s += ',';
-    s += String(r.rc_read_us);           s += ',';
-    s += String(r.motor_exec_us);        s += ',';
-    s += String(r.mode);                 s += ',';
-    s += String((r.flags & 0x01) ? 1 : 0); s += ',';
-    s += String((r.flags & 0x02) ? 1 : 0); s += ',';
-    s += String((r.flags & 0x04) ? 1 : 0); s += ',';
-    s += String((r.flags & 0x08) ? 1 : 0); s += ',';
-    s += String((r.flags & 0x10) ? 1 : 0); s += ',';
-    s += String((r.flags & 0x20) ? 1 : 0); s += ',';
-    s += String((r.flags & 0x40) ? 1 : 0); s += ',';
-    s += String((r.flags & 0x80) ? 1 : 0);
-    for (uint8_t k = 0; k < IBUS_CHANNELS; k++) { s += ','; s += String(r.ch[k]); }
-    #define CSVF(v,dp) do { s += ','; s += String((v), (dp)); } while(0)
-    CSVF(r.rcThrottle,4); CSVF(r.thrRaw,4); CSVF(r.thrShaped,4); CSVF(r.rcRoll,4); CSVF(r.rcPitch,4); CSVF(r.rcYaw,4);
-    CSVF(r.estRoll,3); CSVF(r.estPitch,3); CSVF(r.estYaw,3); CSVF(r.ctrlRoll,3); CSVF(r.ctrlPitch,3); CSVF(r.ctrlYaw,3); CSVF(r.offRoll,3); CSVF(r.offPitch,3); CSVF(r.offYaw,3);
-    CSVF(r.rawAx,5); CSVF(r.rawAy,5); CSVF(r.rawAz,5); CSVF(r.rawGx,3); CSVF(r.rawGy,3); CSVF(r.rawGz,3); CSVF(r.filtAx,5); CSVF(r.filtAy,5); CSVF(r.filtAz,5); CSVF(r.filtGx,3); CSVF(r.filtGy,3); CSVF(r.filtGz,3);
-    CSVF(r.mx,3); CSVF(r.my,3); CSVF(r.mz,3); CSVF(r.magNorm,3); s += ','; s += String(r.ahrsMode); s += ','; s += String(r.ekfMagUsed ? 1 : 0); CSVF(r.ekfBgx,5); CSVF(r.ekfBgy,5); CSVF(r.ekfBgz,5);
-    CSVF(r.targetRollDeg,3); CSVF(r.targetPitchDeg,3); CSVF(r.targetYawDeg,3); CSVF(r.targetRollRateDps,3); CSVF(r.targetPitchRateDps,3); CSVF(r.targetYawRateDps,3);
-    CSVF(r.angleErrRollDeg,3); CSVF(r.angleErrPitchDeg,3); CSVF(r.yawErrDeg,3); CSVF(r.rateErrRollDps,3); CSVF(r.rateErrPitchDps,3); CSVF(r.rateErrYawDps,3);
-    CSVF(r.rO,5); CSVF(r.pO,5); CSVF(r.yO,5);
-    CSVF(r.mFL,4); CSVF(r.mFR,4); CSVF(r.mRL,4); CSVF(r.mRR,4); CSVF(r.cmdRpmFL,0); CSVF(r.cmdRpmFR,0); CSVF(r.cmdRpmRL,0); CSVF(r.cmdRpmRR,0); CSVF(r.actualRpmFL,0); CSVF(r.actualRpmFR,0); CSVF(r.actualRpmRL,0); CSVF(r.actualRpmRR,0);
-    s += ','; s += String(r.notchEnable ? 1 : 0); CSVF(r.notchFreqHz,2); CSVF(r.notchQ,2); CSVF(r.bmpAltM,3); CSVF(r.bmpVzMps,3); CSVF(r.cpu0Pct,1); CSVF(r.cpu1Pct,1);
-    #undef CSVF
-    s += '\n';
-    return s;
+static String flightLogRowCsv(uint16_t i) {
+    return flightLogger.csvRow(i);
 }
 
 
@@ -2115,10 +2000,15 @@ static void taskControl(void* /*pv*/)
 
         float thr = constrain(thrSmooth, 0.0f, 1.0f);
 
-        float fl = thr + rO - pO - yO;
-        float fr = thr - rO - pO + yO;
-        float rl = thr + rO + pO + yO;
-        float rr = thr - rO + pO - yO;
+        float flPre = thr + rO - pO - yO;
+        float frPre = thr - rO - pO + yO;
+        float rlPre = thr + rO + pO + yO;
+        float rrPre = thr - rO + pO - yO;
+
+        float fl = flPre;
+        float fr = frPre;
+        float rl = rlPre;
+        float rr = rrPre;
 
         // Desaturate high side first
         bool motorSaturated = false;
@@ -2220,63 +2110,134 @@ static void taskControl(void* /*pv*/)
         static uint8_t logDiv = 0;
         if (++logDiv >= 4) {
             logDiv = 0;
-            FlightLogRow row;
+            LoggerRow row;
             memset(&row, 0, sizeof(row));
-            row.t_us       = nowUs;
+            row.t_us = nowUs;
             row.loop_count = g_state.loopCount;
             auto clampU16 = [](uint32_t v) -> uint16_t {
                 return (uint16_t)((v > 65535UL) ? 65535UL : v);
             };
-            row.period_us  = clampU16(periodUs);
-            int32_t jitSigned = (int32_t)periodUs - (int32_t)TARGET_US;
-            row.jitter_us  = (int16_t)constrain(jitSigned, -32768, 32767);
+            row.period_us = clampU16(periodUs);
+            row.jitter_us = (int16_t)constrain((int32_t)periodUs - (int32_t)TARGET_US, -32768, 32767);
             row.control_exec_us = clampU16(controlDoneUs - execStartUs);
+            row.imu_read_us = clampU16(g_execTiming.lastImuUs);
+            row.rc_read_us = clampU16(g_execTiming.lastRcUs);
+            row.ahrs_exec_us = 0;
+            row.pid_exec_us = 0;
+            row.motor_exec_us = clampU16(g_execTiming.lastMotorUs);
+            row.mode = (uint8_t)cmd.mode;
+            row.flags = ((cmd.mode != FlightMode::DISARMED) ? 0x0001 : 0)
+                      | (imuOk ? 0x0002 : 0)
+                      | (cmd.valid ? 0x0004 : 0)
+                      | ((imuOk && imu.isMagConnected()) ? 0x0008 : 0)
+                      | (motorSaturated ? 0x0010 : 0)
+                      | (g_state.rpmActualValid ? 0x0020 : 0);
 
-            // Copy volatile timing values into non-volatile locals before clamping.
-            // This avoids C++ template deduction errors from min(volatile uint32_t&, uint32_t).
-            uint32_t imuReadUs   = g_execTiming.lastImuUs;
-            uint32_t rcReadUs    = g_execTiming.lastRcUs;
-            uint32_t motorExecUs = g_execTiming.lastMotorUs;
-            row.imu_read_us    = clampU16(imuReadUs);
-            row.rc_read_us     = clampU16(rcReadUs);
-            row.motor_exec_us  = clampU16(motorExecUs);
-            row.mode      = (uint8_t)cmd.mode;
-            bool magOkNow = imuOk && imu.isMagConnected();
-            row.flags     = 0x01
-                          | (imuOk ? 0x02 : 0x00)
-                          | (cmd.valid ? 0x04 : 0x00)
-                          | (magOkNow ? 0x08 : 0x00)
-                          | (g_state.bmpValid ? 0x10 : 0x00)
-                          | (g_state.gps.valid ? 0x20 : 0x00)
-                          | (motorSaturated ? 0x40 : 0x00);
-            for (uint8_t k = 0; k < IBUS_CHANNELS; k++) row.ch[k] = cmd.raw[k];
-            row.rcThrottle = cmd.throttle;
-            row.thrRaw = thrRaw;
-            row.thrShaped = thr;
-            row.rcRoll = rollCmd; row.rcPitch = pitchCmd; row.rcYaw = yawCmd;
-            row.estRoll = imuOk ? att.roll_deg : 0.0f; row.estPitch = imuOk ? att.pitch_deg : 0.0f; row.estYaw = imuOk ? att.yaw_deg : 0.0f;
-            row.ctrlRoll = roll; row.ctrlPitch = pitch; row.ctrlYaw = imuOk ? yawCtrlDeg : 0.0f;
-            row.offRoll = g_levelRollOffsetDeg; row.offPitch = g_levelPitchOffsetDeg; row.offYaw = g_levelYawOffsetDeg;
-            row.rawAx = imuOk ? s.ax_g : 0.0f; row.rawAy = imuOk ? s.ay_g : 0.0f; row.rawAz = imuOk ? s.az_g : 0.0f;
-            row.rawGx = imuOk ? s.gx_dps : 0.0f; row.rawGy = imuOk ? s.gy_dps : 0.0f; row.rawGz = imuOk ? s.gz_dps : 0.0f;
-            row.filtAx = filtAx; row.filtAy = filtAy; row.filtAz = filtAz;
-            row.filtGx = gx; row.filtGy = gy; row.filtGz = gz;
-            row.mx = imuOk ? s.mx_uT : 0.0f; row.my = imuOk ? s.my_uT : 0.0f; row.mz = imuOk ? s.mz_uT : 0.0f; row.magNorm = magNorm_uT;
-            row.ahrsMode = g_ahrsFilterModeActive;
-            row.ekfMagUsed = attitudeEKF.lastMagAccepted();
-            row.ekfBgx = attitudeEKF.rollBiasDps(); row.ekfBgy = attitudeEKF.pitchBiasDps(); row.ekfBgz = attitudeEKF.yawBiasDps();
-            row.targetRollDeg = targetRollDeg; row.targetPitchDeg = targetPitchDeg; row.targetYawDeg = targetYawDeg;
-            row.targetRollRateDps = targetRollRateDps; row.targetPitchRateDps = targetPitchRateDps; row.targetYawRateDps = targetYawRateDps;
-            row.angleErrRollDeg = angleErrRollDeg; row.angleErrPitchDeg = angleErrPitchDeg; row.yawErrDeg = yawErrDeg;
-            row.rateErrRollDps = rateErrRollDps; row.rateErrPitchDps = rateErrPitchDps; row.rateErrYawDps = rateErrYawDps;
-            row.rO = rO; row.pO = pO; row.yO = yO;
-            row.mFL = fl; row.mFR = fr; row.mRL = rl; row.mRR = rr;
-            row.cmdRpmFL = cmdRpmFL; row.cmdRpmFR = cmdRpmFR; row.cmdRpmRL = cmdRpmRL; row.cmdRpmRR = cmdRpmRR;
-            row.actualRpmFL = 0.0f; row.actualRpmFR = 0.0f; row.actualRpmRL = 0.0f; row.actualRpmRR = 0.0f;
-            row.notchEnable = tune.notch_enable; row.notchFreqHz = tune.notch_freq_hz; row.notchQ = tune.notch_q;
-            row.bmpAltM = g_state.bmpAltitude_m; row.bmpVzMps = g_state.bmpVerticalSpeed_mps;
-            row.cpu0Pct = g_state.cpuCore0_pct; row.cpu1Pct = g_state.cpuCore1_pct;
-            pushFlightLog(row);
+            row.throttle = cmd.throttle;
+            row.rc_roll = rollCmd;
+            row.rc_pitch = pitchCmd;
+            row.rc_yaw = yawCmd;
+            row.target_roll_deg = targetRollDeg;
+            row.target_pitch_deg = targetPitchDeg;
+            row.target_yaw_deg = targetYawDeg;
+            row.target_roll_rate_dps = targetRollRateDps;
+            row.target_pitch_rate_dps = targetPitchRateDps;
+            row.target_yaw_rate_dps = targetYawRateDps;
+
+            row.ekf_roll_deg = imuOk ? att.roll_deg : 0.0f;
+            row.ekf_pitch_deg = imuOk ? att.pitch_deg : 0.0f;
+            row.ekf_yaw_deg = imuOk ? att.yaw_deg : 0.0f;
+            row.ctrl_roll_deg = roll;
+            row.ctrl_pitch_deg = pitch;
+            row.ctrl_yaw_deg = imuOk ? yawCtrlDeg : 0.0f;
+            row.zero_roll_deg = g_levelRollOffsetDeg;
+            row.zero_pitch_deg = g_levelPitchOffsetDeg;
+            row.zero_yaw_deg = g_levelYawOffsetDeg;
+
+            row.ax_g = imuOk ? s.ax_g : 0.0f;
+            row.ay_g = imuOk ? s.ay_g : 0.0f;
+            row.az_g = imuOk ? s.az_g : 0.0f;
+            row.gx_dps = imuOk ? s.gx_dps : 0.0f;
+            row.gy_dps = imuOk ? s.gy_dps : 0.0f;
+            row.gz_dps = imuOk ? s.gz_dps : 0.0f;
+            row.mx_uT = imuOk ? s.mx_uT : 0.0f;
+            row.my_uT = imuOk ? s.my_uT : 0.0f;
+            row.mz_uT = imuOk ? s.mz_uT : 0.0f;
+            row.accel_norm_g = sqrtf(row.ax_g*row.ax_g + row.ay_g*row.ay_g + row.az_g*row.az_g);
+            row.gyro_norm_dps = sqrtf(row.gx_dps*row.gx_dps + row.gy_dps*row.gy_dps + row.gz_dps*row.gz_dps);
+            row.mag_norm_uT = sqrtf(row.mx_uT*row.mx_uT + row.my_uT*row.my_uT + row.mz_uT*row.mz_uT);
+            row.ekf_bgx_dps = attitudeEKF.rollBiasDps();
+            row.ekf_bgy_dps = attitudeEKF.pitchBiasDps();
+            row.ekf_bgz_dps = attitudeEKF.yawBiasDps();
+            row.ahrs_mode = g_ahrsFilterModeActive;
+            row.ekf_mag_used = attitudeEKF.lastMagAccepted() ? 1 : 0;
+
+            row.angle_roll_error_deg = angleErrRollDeg;
+            row.angle_pitch_error_deg = angleErrPitchDeg;
+            row.yaw_error_deg = yawErrDeg;
+            row.rate_roll_error_dps = rateErrRollDps;
+            row.rate_pitch_error_dps = rateErrPitchDps;
+            row.rate_yaw_error_dps = rateErrYawDps;
+
+            row.angle_roll_p = pidAngleRoll.lastP;
+            row.angle_roll_i = pidAngleRoll.lastI;
+            row.angle_roll_d = pidAngleRoll.lastD;
+            row.angle_roll_out = targetRollRateDps;
+            row.angle_pitch_p = pidAnglePitch.lastP;
+            row.angle_pitch_i = pidAnglePitch.lastI;
+            row.angle_pitch_d = pidAnglePitch.lastD;
+            row.angle_pitch_out = targetPitchRateDps;
+            row.angle_yaw_p = pidAngleYaw.lastP;
+            row.angle_yaw_i = pidAngleYaw.lastI;
+            row.angle_yaw_d = pidAngleYaw.lastD;
+            row.angle_yaw_out = targetYawRateDps;
+
+            row.rate_roll_p = pidRateRoll.lastP;
+            row.rate_roll_i = pidRateRoll.lastI;
+            row.rate_roll_d = pidRateRoll.lastD;
+            row.rate_roll_out = rO;
+            row.rate_pitch_p = pidRatePitch.lastP;
+            row.rate_pitch_i = pidRatePitch.lastI;
+            row.rate_pitch_d = pidRatePitch.lastD;
+            row.rate_pitch_out = pO;
+            row.rate_yaw_p = pidRateYaw.lastP;
+            row.rate_yaw_i = pidRateYaw.lastI;
+            row.rate_yaw_d = pidRateYaw.lastD;
+            row.rate_yaw_out = yO;
+
+            row.motor_fl_pre = flPre;
+            row.motor_fr_pre = frPre;
+            row.motor_rl_pre = rlPre;
+            row.motor_rr_pre = rrPre;
+            row.motor_fl = fl;
+            row.motor_fr = fr;
+            row.motor_rl = rl;
+            row.motor_rr = rr;
+            row.motor_diag_a = fl + rr;
+            row.motor_diag_b = fr + rl;
+            row.motor_diag_diff = row.motor_diag_a - row.motor_diag_b;
+
+            row.rpm_fl = cmdRpmFL;
+            row.rpm_fr = cmdRpmFR;
+            row.rpm_rl = cmdRpmRL;
+            row.rpm_rr = cmdRpmRR;
+            row.rpm_diag_a = cmdRpmFL + cmdRpmRR;
+            row.rpm_diag_b = cmdRpmFR + cmdRpmRL;
+            row.rpm_diag_diff = row.rpm_diag_a - row.rpm_diag_b;
+
+            row.battery_v = BATTERY_VOLTAGE;
+            row.cpu0_pct = g_state.cpuCore0_pct;
+            row.cpu1_pct = g_state.cpuCore1_pct;
+            row.notch_freq_hz = tune.notch_freq_hz;
+            row.notch_q = tune.notch_q;
+            row.notch_enable = tune.notch_enable ? 1 : 0;
+            row.bmp_alt_m = g_state.bmpAltitude_m;
+            row.bmp_vz_mps = g_state.bmpVerticalSpeed_mps;
+            row.gps_valid = g_state.gps.valid ? 1 : 0;
+            row.gps_sats = g_state.gps.satellites;
+            row.gps_hdop = g_state.gps.hdop;
+
+            flightLogger.push(row);
         }
 
         // ── Publish flight state (incl. true PID outputs) ─────
@@ -2627,6 +2588,7 @@ void setup()
     configASSERT(g_flightMutex);
     configASSERT(g_tuneMutex);
     configASSERT(g_timingMutex);
+    configASSERT(flightLogger.begin());
 
     memset(&g_state,    0, sizeof(g_state));
     memset(&g_timing,   0, sizeof(g_timing));
