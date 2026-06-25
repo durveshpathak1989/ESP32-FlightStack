@@ -1,6 +1,6 @@
 RC_FlightController build metrics
 
-Last regenerated: 2026-06-24
+Last regenerated: 2026-06-25
 
 Build command:
 arduino-cli compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --output-dir build .
@@ -12,7 +12,7 @@ RC_FlightController.ino.merged.bin
 RC_FlightController.ino.partitions.bin
 
 Program storage / flash:
-Used:    1,095,887 bytes
+Used:    1,095,907 bytes
 Maximum: 1,966,080 bytes
 Flash utilization: 55%
 
@@ -23,7 +23,7 @@ Free for local variables: 229,644 bytes
 RAM utilization:          29%
 
 Quiet VERBOSE_ON=0 verification:
-Program storage used: 1,084,583 bytes out of 1,966,080 bytes
+Program storage used: 1,084,603 bytes out of 1,966,080 bytes
 Flash utilization: 55%
 Global variables used: 98,028 bytes out of 327,680 bytes
 RAM utilization: 29%
