@@ -1390,7 +1390,7 @@ async function toggleWifi(){
   wifiOn=true;setConn(true,'WIFI');wifiLogSeq=0;
   addCalLog('[GS] Wi-Fi connected','lBOOT');
   await pollWifi();await pollWifiLog();
-  wifiTimer=setInterval(pollWifi,100);wifiLogTimer=setInterval(pollWifiLog,500);
+  wifiTimer=setInterval(pollWifi,Math.max(50,+CFG.pollMs||100));wifiLogTimer=setInterval(pollWifiLog,500);
 }
 function stopWifi(){
   wifiOn=false;if(wifiTimer){clearInterval(wifiTimer);wifiTimer=null;}if(wifiLogTimer){clearInterval(wifiLogTimer);wifiLogTimer=null;}
