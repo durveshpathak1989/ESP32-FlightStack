@@ -204,7 +204,8 @@ static constexpr uint16_t LEVEL_ZERO_SWB_THRESHOLD = 1700;
 #define MOTOR_KV         920.0f
 #define BATTERY_VOLTAGE    11.1f
 
-static Logger flightLogger(600);  // 100 Hz x 6 s
+static constexpr uint16_t FLIGHT_LOGGER_CAPACITY = 120;  // 100 Hz x 1.2 s, heap-safe on ESP32
+static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
 // ─────────────────────────────────────────────────────────────
 //  IMU loop timing instrumentation — Test 7.1
@@ -2588,7 +2589,9 @@ void setup()
     configASSERT(g_flightMutex);
     configASSERT(g_tuneMutex);
     configASSERT(g_timingMutex);
-    configASSERT(flightLogger.begin());
+    if (!flightLogger.begin()) {
+        DBG_PRINTLN(F("[BOOT][WARN] FlightLogger allocation failed; /flightlog/csv disabled."));
+    }
 
     memset(&g_state,    0, sizeof(g_state));
     memset(&g_timing,   0, sizeof(g_timing));
