@@ -889,7 +889,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
       <div class="sec-title">GCS SETTINGS <span class="badge-gcs">GCS only</span></div>
       <div class="cfg-section">
         <div class="cfg-row"><span class="cfg-lbl">ESP32 Wi-Fi IP</span><input class="cfg-inp" id="cfg-ip" value="192.168.4.1" style="text-align:left;font-size:11px"></div>
-        <div class="cfg-row"><span class="cfg-lbl">Telemetry Poll Rate<small>ms — lower = smoother, higher = less CPU</small></span><input class="cfg-inp" id="cfg-poll" value="100" type="number" min="50" max="1000" step="50"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Telemetry Poll Rate<small>ms — lower = smoother, higher = less Core0 load</small></span><input class="cfg-inp" id="cfg-poll" value="250" type="number" min="250" max="1000" step="50"></div>
         <div class="cfg-row"><span class="cfg-lbl">Plot Buffer Size<small>samples — larger = longer history</small></span><input class="cfg-inp" id="cfg-plotbuf" value="300" type="number" min="50" max="1000" step="50"></div>
         <div class="cfg-row"><span class="cfg-lbl">GPS Track Max Points<small>reduce on slow devices</small></span><input class="cfg-inp" id="cfg-gpstrk" value="3000" type="number" min="100" max="10000" step="100"></div>
       </div>
@@ -931,7 +931,7 @@ const CFG_DEFAULTS = {
   ekfAngleQ:0.0008, ekfBiasQ:0.000001, ekfAccelR:0.060, ekfMagR:0.200,
   ekfMagDeclinationDeg:0.0, ekfMagYawOffsetDeg:0.0, ekfMagYawSign:1,
   dshot:300, dshotMin:48, dshotMax:2047, bidir:0,
-  wifiIp:'192.168.4.1', pollMs:100, plotBuf:300, gpsTrack:3000
+  wifiIp:'192.168.4.1', pollMs:250, plotBuf:300, gpsTrack:3000
 };
 const CFG = Object.assign({}, CFG_DEFAULTS);
 
@@ -999,7 +999,7 @@ function readCfgFromInputs(){
   CFG.dshotMax = +document.getElementById('cfg-dshotmax').value||2047;
   CFG.bidir    = +document.getElementById('cfg-bidir').value||0;
   CFG.wifiIp   = document.getElementById('cfg-ip').value||'192.168.4.1';
-  CFG.pollMs   = +document.getElementById('cfg-poll').value||100;
+  CFG.pollMs   = Math.max(250,+document.getElementById('cfg-poll').value||250);
   CFG.plotBuf  = +document.getElementById('cfg-plotbuf').value||300;
   CFG.gpsTrack = +document.getElementById('cfg-gpstrk').value||3000;
 }
@@ -1415,7 +1415,8 @@ async function toggleWifi(){
   addCalLog('[GS] Wi-Fi connected','lBOOT');
   await pollIdentity();
   await pollWifi();await pollWifiLog();
-  wifiTimer=setInterval(pollWifi,Math.max(50,+CFG.pollMs||100));wifiLogTimer=setInterval(pollWifiLog,500);
+  const wifiPollMs=Math.max(250,+CFG.pollMs||250);
+  wifiTimer=setInterval(pollWifi,wifiPollMs);wifiLogTimer=setInterval(pollWifiLog,1000);
 }
 function stopWifi(){
   wifiOn=false;if(wifiTimer){clearInterval(wifiTimer);wifiTimer=null;}if(wifiLogTimer){clearInterval(wifiLogTimer);wifiLogTimer=null;}
