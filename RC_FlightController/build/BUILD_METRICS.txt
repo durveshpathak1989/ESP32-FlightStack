@@ -12,9 +12,9 @@ RC_FlightController.ino.merged.bin
 RC_FlightController.ino.partitions.bin
 
 Program storage / flash:
-Used:    1,081,199 bytes
+Used:    1,082,523 bytes
 Maximum: 1,966,080 bytes
-Flash utilization: 54%
+Flash utilization: 55%
 
 Dynamic memory / RAM:
 Used by global variables: 66,420 bytes
@@ -23,11 +23,24 @@ Free for local variables: 261,260 bytes
 RAM utilization:          20%
 
 Quiet VERBOSE_ON=0 verification:
-Program storage used: 1,081,199 bytes out of 1,966,080 bytes
-Flash utilization: 54%
+Program storage used: 1,082,523 bytes out of 1,966,080 bytes
+Flash utilization: 55%
 Global variables used: 66,420 bytes out of 327,680 bytes
 RAM utilization: 20%
 Free RAM for local variables: 261,260 bytes
+
+Firmware identity embedded in this build:
+FW_NAME: RC_FlightController
+FW_VERSION: V5.2.0
+FW_SOURCE_BRANCH: master
+FW_SOURCE_COMMIT: 43ac3718872d
+FW_SOURCE_DIRTY: 0
+FW_BUILD_ID: 20260626T201800Z-master-43ac3718872d
+FW_BUILD_TIME_ISO: 2026-06-26T20:18:00Z
+
+Binary SHA256:
+RC_FlightController.ino.bin: 7519394f6704c4211e6b3ecce01bebe2b8cd26c72c2530bb74cb9c25ed081428
+RC_FlightController.ino.merged.bin: 27e435246e181bd20765a7873a681e077d6e27a3dad8a607d0af5fb890ec407d
 
 Runtime heap note:
 The flight logger allocates its row buffer from heap during setup().
