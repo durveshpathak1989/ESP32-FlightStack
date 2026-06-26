@@ -336,6 +336,7 @@ SpectrumAnalyzer spectrumAnalyzer(NOTCH_SAMPLE_HZ);
 struct FlightState {
     // Raw estimator attitude from EKF/Mahony/Madgwick. Keep untouched for telemetry/debug.
     float roll_deg, pitch_deg, yaw_deg;
+    float q0, q1, q2, q3;
     bool imuValid;
     bool magValid;
     uint8_t ahrsFilterMode;
@@ -348,6 +349,7 @@ struct FlightState {
     float ax_g, ay_g, az_g;
     float gx_dps, gy_dps, gz_dps;
     float mx_uT, my_uT, mz_uT;
+    float imuTemp_c;
     float bmpTemp_c, bmpPressure_hpa, bmpAltitude_m;
     bool  bmpValid;
     float cpuCore0_pct, cpuCore1_pct;
@@ -368,6 +370,24 @@ struct FlightState {
     float rollRateError_dps, pitchRateError_dps, yawRateError_dps;
     float yawError_deg;
     bool  motorSaturated;
+    bool  angleModeActive, acroModeActive;
+    uint32_t rcFailsafeCount;
+    uint16_t modeSwitchRaw_us, armSwitchRaw_us;
+    uint16_t auxTune1Raw_us, auxTune2Raw_us;
+    bool  angleLoopEnabled, rateLoopEnabled;
+    float actualRollRate_dps, actualPitchRate_dps, actualYawRate_dps;
+    float angleRollP, angleRollI, angleRollD;
+    float anglePitchP, anglePitchI, anglePitchD;
+    float rateRollP, rateRollI, rateRollD;
+    float ratePitchP, ratePitchI, ratePitchD;
+    float rateYawP, rateYawI, rateYawD;
+    float angleRollIterm, anglePitchIterm;
+    uint32_t pidResetCount;
+    uint32_t modeTransitionCount, lastModeChange_ms;
+    uint32_t armingTransitionCount, lastArmChange_ms;
+    bool  throttleLow;
+    float controlAuthorityRemaining;
+    bool  rollOutputLimited, pitchOutputLimited, yawOutputLimited, rateOutputLimited;
     float cmdRpmFL, cmdRpmFR, cmdRpmRL, cmdRpmRR;
     float actualRpmFL, actualRpmFR, actualRpmRL, actualRpmRR;
     bool  rpmActualValid;
@@ -385,6 +405,15 @@ struct FlightState {
 };
 static FlightState       g_state;
 static SemaphoreHandle_t g_flightMutex;
+
+static volatile uint32_t g_pidResetCount = 0;
+static volatile uint32_t g_modeTransitionCount = 0;
+static volatile uint32_t g_lastModeChangeMs = 0;
+static volatile uint32_t g_armingTransitionCount = 0;
+static volatile uint32_t g_lastArmChangeMs = 0;
+static bool g_transitionTrackerInitialized = false;
+static FlightMode g_lastObservedMode = FlightMode::DISARMED;
+static bool g_lastObservedArmed = false;
 
 // Software level-zero trim state. Offset is post-AHRS only.
 static float g_levelRollOffsetDeg  = 0.0f;
@@ -773,6 +802,38 @@ static const char* flightModeToStr(FlightMode m) {
     }
 }
 
+static void updateControlTransitionCounters(const RCCommand& cmd)
+{
+    const bool armedNow = cmd.valid &&
+                          cmd.mode != FlightMode::DISARMED &&
+                          cmd.mode != FlightMode::FAILSAFE;
+    const uint32_t nowMs = millis();
+
+    if (!g_transitionTrackerInitialized) {
+        g_transitionTrackerInitialized = true;
+        g_lastObservedMode = cmd.mode;
+        g_lastObservedArmed = armedNow;
+        return;
+    }
+
+    bool resetEvent = false;
+    if (cmd.mode != g_lastObservedMode) {
+        g_lastObservedMode = cmd.mode;
+        g_modeTransitionCount++;
+        g_lastModeChangeMs = nowMs;
+        resetEvent = true;
+    }
+
+    if (armedNow != g_lastObservedArmed) {
+        g_lastObservedArmed = armedNow;
+        g_armingTransitionCount++;
+        g_lastArmChangeMs = nowMs;
+        resetEvent = true;
+    }
+
+    if (resetEvent) g_pidResetCount++;
+}
+
 static bool provideTelemetry(TelemetryPacket& out)
 {
     FlightState s;
@@ -795,6 +856,7 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.ahrs_filter_mode = s.ahrsFilterMode;
     out.ahrs_filter = (s.ahrsFilterMode == 1) ? "Mahony" : ((s.ahrsFilterMode == 2) ? "Madgwick" : "EKF");
     out.roll_deg  = s.roll_deg;  out.pitch_deg = s.pitch_deg; out.yaw_deg = s.yaw_deg;
+    out.q0=s.q0; out.q1=s.q1; out.q2=s.q2; out.q3=s.q3;
     out.roll_ctrl_deg  = s.roll_ctrl_deg;
     out.pitch_ctrl_deg = s.pitch_ctrl_deg;
     out.yaw_ctrl_deg   = s.yaw_ctrl_deg;
@@ -804,6 +866,7 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.ax_g=s.ax_g; out.ay_g=s.ay_g; out.az_g=s.az_g;
     out.gx_dps=s.gx_dps; out.gy_dps=s.gy_dps; out.gz_dps=s.gz_dps;
     out.mx_uT=s.mx_uT;   out.my_uT=s.my_uT;   out.mz_uT=s.mz_uT;
+    out.imu_temp_c=s.imuTemp_c;
     out.raw_ax_g=s.rawAx_g; out.raw_ay_g=s.rawAy_g; out.raw_az_g=s.rawAz_g;
     out.raw_gx_dps=s.rawGx_dps; out.raw_gy_dps=s.rawGy_dps; out.raw_gz_dps=s.rawGz_dps;
     out.filt_ax_g=s.filtAx_g; out.filt_ay_g=s.filtAy_g; out.filt_az_g=s.filtAz_g;
@@ -816,6 +879,31 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.roll_rate_error_dps=s.rollRateError_dps; out.pitch_rate_error_dps=s.pitchRateError_dps; out.yaw_rate_error_dps=s.yawRateError_dps;
     out.yaw_error_deg=s.yawError_deg;
     out.motor_saturated=s.motorSaturated;
+    out.angle_mode_active=s.angleModeActive; out.acro_mode_active=s.acroModeActive;
+    out.rc_ch1_us=s.rc.raw[0]; out.rc_ch2_us=s.rc.raw[1]; out.rc_ch3_us=s.rc.raw[2]; out.rc_ch4_us=s.rc.raw[3]; out.rc_ch5_us=s.rc.raw[4];
+    out.rc_ch6_us=s.rc.raw[5]; out.rc_ch7_us=s.rc.raw[6]; out.rc_ch8_us=s.rc.raw[7]; out.rc_ch9_us=s.rc.raw[8]; out.rc_ch10_us=s.rc.raw[9];
+    out.rc_failsafe_count=s.rcFailsafeCount;
+    out.mode_switch_raw_us=s.modeSwitchRaw_us; out.arm_switch_raw_us=s.armSwitchRaw_us;
+    out.aux_tune1_raw_us=s.auxTune1Raw_us; out.aux_tune2_raw_us=s.auxTune2Raw_us;
+    out.angle_loop_enabled=s.angleLoopEnabled; out.rate_loop_enabled=s.rateLoopEnabled;
+    out.actual_roll_rate_dps=s.actualRollRate_dps;
+    out.actual_pitch_rate_dps=s.actualPitchRate_dps;
+    out.actual_yaw_rate_dps=s.actualYawRate_dps;
+    out.angle_roll_p=s.angleRollP; out.angle_roll_i=s.angleRollI; out.angle_roll_d=s.angleRollD;
+    out.angle_pitch_p=s.anglePitchP; out.angle_pitch_i=s.anglePitchI; out.angle_pitch_d=s.anglePitchD;
+    out.rate_roll_p=s.rateRollP; out.rate_roll_i=s.rateRollI; out.rate_roll_d=s.rateRollD;
+    out.rate_pitch_p=s.ratePitchP; out.rate_pitch_i=s.ratePitchI; out.rate_pitch_d=s.ratePitchD;
+    out.rate_yaw_p=s.rateYawP; out.rate_yaw_i=s.rateYawI; out.rate_yaw_d=s.rateYawD;
+    out.angle_roll_iterm=s.angleRollIterm; out.angle_pitch_iterm=s.anglePitchIterm;
+    out.pid_reset_count=s.pidResetCount;
+    out.mode_transition_count=s.modeTransitionCount; out.last_mode_change_ms=s.lastModeChange_ms;
+    out.arming_transition_count=s.armingTransitionCount; out.last_arm_change_ms=s.lastArmChange_ms;
+    out.throttle_low=s.throttleLow;
+    out.control_authority_remaining=s.controlAuthorityRemaining;
+    out.roll_output_limited=s.rollOutputLimited;
+    out.pitch_output_limited=s.pitchOutputLimited;
+    out.yaw_output_limited=s.yawOutputLimited;
+    out.rate_output_limited=s.rateOutputLimited;
     out.bmp_vertical_speed_mps=s.bmpVerticalSpeed_mps;
 
     out.accel_roll_deg  = s.accelRoll_deg;
@@ -1753,6 +1841,7 @@ static void taskControl(void* /*pv*/)
 
         phaseStartUs = micros();
         RCCommand cmd = rcReceiver.getCommand();
+        updateControlTransitionCounters(cmd);
         g_execTiming.lastRcUs = micros() - phaseStartUs;
  
         float rollCtrlDeg = 0.0f, pitchCtrlDeg = 0.0f, yawCtrlDeg = 0.0f;
@@ -1835,9 +1924,50 @@ static void taskControl(void* /*pv*/)
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
                 g_state.pidRollOut = g_state.pidPitchOut = g_state.pidYawOut = 0;
                 g_state.rc      = cmd;
+                g_state.angleModeActive = false;
+                g_state.acroModeActive = false;
+                g_state.modeSwitchRaw_us = cmd.raw[RC_CH_AUX2];
+                g_state.armSwitchRaw_us = cmd.raw[RC_CH_FLIGHTMODE];
+                g_state.auxTune1Raw_us = cmd.raw[RC_CH_AUX1];
+                g_state.auxTune2Raw_us = cmd.raw[RC_CH_AUX5];
+                g_state.rcFailsafeCount = rcReceiver.getFailsafeCount();
+                g_state.angleLoopEnabled = false;
+                g_state.rateLoopEnabled = false;
+                g_state.actualRollRate_dps = imuOk ? gxf : 0.0f;
+                g_state.actualPitchRate_dps = imuOk ? gyf : 0.0f;
+                g_state.actualYawRate_dps = imuOk ? gzf : 0.0f;
+                g_state.angleRollP = pidAngleRoll.lastP;
+                g_state.angleRollI = pidAngleRoll.lastI;
+                g_state.angleRollD = pidAngleRoll.lastD;
+                g_state.anglePitchP = pidAnglePitch.lastP;
+                g_state.anglePitchI = pidAnglePitch.lastI;
+                g_state.anglePitchD = pidAnglePitch.lastD;
+                g_state.rateRollP = pidRateRoll.lastP;
+                g_state.rateRollI = pidRateRoll.lastI;
+                g_state.rateRollD = pidRateRoll.lastD;
+                g_state.ratePitchP = pidRatePitch.lastP;
+                g_state.ratePitchI = pidRatePitch.lastI;
+                g_state.ratePitchD = pidRatePitch.lastD;
+                g_state.rateYawP = pidRateYaw.lastP;
+                g_state.rateYawI = pidRateYaw.lastI;
+                g_state.rateYawD = pidRateYaw.lastD;
+                g_state.angleRollIterm = pidAngleRoll.integral;
+                g_state.anglePitchIterm = pidAnglePitch.integral;
+                g_state.pidResetCount = g_pidResetCount;
+                g_state.modeTransitionCount = g_modeTransitionCount;
+                g_state.lastModeChange_ms = g_lastModeChangeMs;
+                g_state.armingTransitionCount = g_armingTransitionCount;
+                g_state.lastArmChange_ms = g_lastArmChangeMs;
+                g_state.throttleLow = true;
+                g_state.controlAuthorityRemaining = 0.0f;
+                g_state.rollOutputLimited = false;
+                g_state.pitchOutputLimited = false;
+                g_state.yawOutputLimited = false;
+                g_state.rateOutputLimited = false;
                 if (imuOk) {
                     g_state.roll_deg = att.roll_deg;  g_state.pitch_deg = att.pitch_deg;
                     g_state.yaw_deg  = att.yaw_deg;
+                    g_state.q0 = att.q0; g_state.q1 = att.q1; g_state.q2 = att.q2; g_state.q3 = att.q3;
                     g_state.imuValid = imuOk;
                     g_state.magValid = imu.isMagConnected();
                     g_state.ahrsFilterMode = g_ahrsFilterModeActive;
@@ -1850,6 +1980,7 @@ static void taskControl(void* /*pv*/)
                     g_state.ax_g=s.ax_g; g_state.ay_g=s.ay_g; g_state.az_g=s.az_g;
                     g_state.gx_dps=s.gx_dps; g_state.gy_dps=s.gy_dps; g_state.gz_dps=s.gz_dps;
                     g_state.mx_uT=s.mx_uT; g_state.my_uT=s.my_uT; g_state.mz_uT=s.mz_uT;
+                    g_state.imuTemp_c=s.temp_c;
                     g_state.accelRoll_deg = accelRollDeg;
                     g_state.accelPitch_deg = accelPitchDeg;
                     g_state.gyroRoll_deg = g_gyroRollDeg;
@@ -1968,6 +2099,11 @@ static void taskControl(void* /*pv*/)
             yO = pidRateYaw.update(rateErrYawDps, dt);
         }
 
+        const bool rollOutputLimited = (rO > tune.roll_output_limit) || (rO < -tune.roll_output_limit);
+        const bool pitchOutputLimited = (pO > tune.pitch_output_limit) || (pO < -tune.pitch_output_limit);
+        const bool yawOutputLimited = (yO > tune.yaw_output_limit) || (yO < -tune.yaw_output_limit);
+        const bool rateOutputLimited = rollOutputLimited || pitchOutputLimited || yawOutputLimited;
+
         rO = constrain(rO, -tune.roll_output_limit,  tune.roll_output_limit);
         pO = constrain(pO, -tune.pitch_output_limit, tune.pitch_output_limit);
         yO = constrain(yO, -tune.yaw_output_limit,   tune.yaw_output_limit);
@@ -2014,6 +2150,7 @@ static void taskControl(void* /*pv*/)
         // Desaturate high side first
         bool motorSaturated = false;
         float maxMotor = max(max(fl, fr), max(rl, rr));
+        const float controlAuthorityRemaining = max(0.0f, MOTOR_MAX - maxMotor);
         if (maxMotor > MOTOR_MAX) {
             motorSaturated = true;
             float excess = maxMotor - MOTOR_MAX;
@@ -2247,6 +2384,7 @@ static void taskControl(void* /*pv*/)
             if (imuOk) {
                 g_state.roll_deg = att.roll_deg;  g_state.pitch_deg = att.pitch_deg;
                 g_state.yaw_deg  = att.yaw_deg;
+                g_state.q0=att.q0; g_state.q1=att.q1; g_state.q2=att.q2; g_state.q3=att.q3;
                 g_state.imuValid = imuOk;
                 g_state.magValid = imu.isMagConnected();
                 g_state.ahrsFilterMode = g_ahrsFilterModeActive;
@@ -2259,6 +2397,7 @@ static void taskControl(void* /*pv*/)
                 g_state.ax_g=s.ax_g; g_state.ay_g=s.ay_g; g_state.az_g=s.az_g;
                 g_state.gx_dps=s.gx_dps; g_state.gy_dps=s.gy_dps; g_state.gz_dps=s.gz_dps;
                 g_state.mx_uT=s.mx_uT; g_state.my_uT=s.my_uT; g_state.mz_uT=s.mz_uT;
+                g_state.imuTemp_c=s.temp_c;
                 g_state.rawAx_g=s.ax_g; g_state.rawAy_g=s.ay_g; g_state.rawAz_g=s.az_g;
                 g_state.rawGx_dps=s.gx_dps; g_state.rawGy_dps=s.gy_dps; g_state.rawGz_dps=s.gz_dps;
                 g_state.filtAx_g=filtAx; g_state.filtAy_g=filtAy; g_state.filtAz_g=filtAz;
@@ -2287,6 +2426,46 @@ static void taskControl(void* /*pv*/)
             g_state.motorFL=fl; g_state.motorFR=fr;
             g_state.motorRL=rl; g_state.motorRR=rr;
             g_state.pidRollOut=rO; g_state.pidPitchOut=pO; g_state.pidYawOut=yO;
+            g_state.angleModeActive = (cmd.mode == FlightMode::ANGLE);
+            g_state.acroModeActive = (cmd.mode == FlightMode::ACRO);
+            g_state.modeSwitchRaw_us = cmd.raw[RC_CH_AUX2];
+            g_state.armSwitchRaw_us = cmd.raw[RC_CH_FLIGHTMODE];
+            g_state.auxTune1Raw_us = cmd.raw[RC_CH_AUX1];
+            g_state.auxTune2Raw_us = cmd.raw[RC_CH_AUX5];
+            g_state.rcFailsafeCount = rcReceiver.getFailsafeCount();
+            g_state.angleLoopEnabled = (cmd.mode == FlightMode::ANGLE) && imuOk;
+            g_state.rateLoopEnabled = imuOk && (cmd.mode == FlightMode::ANGLE || cmd.mode == FlightMode::ACRO);
+            g_state.actualRollRate_dps = gx;
+            g_state.actualPitchRate_dps = gy;
+            g_state.actualYawRate_dps = gz;
+            g_state.angleRollP = pidAngleRoll.lastP;
+            g_state.angleRollI = pidAngleRoll.lastI;
+            g_state.angleRollD = pidAngleRoll.lastD;
+            g_state.anglePitchP = pidAnglePitch.lastP;
+            g_state.anglePitchI = pidAnglePitch.lastI;
+            g_state.anglePitchD = pidAnglePitch.lastD;
+            g_state.rateRollP = pidRateRoll.lastP;
+            g_state.rateRollI = pidRateRoll.lastI;
+            g_state.rateRollD = pidRateRoll.lastD;
+            g_state.ratePitchP = pidRatePitch.lastP;
+            g_state.ratePitchI = pidRatePitch.lastI;
+            g_state.ratePitchD = pidRatePitch.lastD;
+            g_state.rateYawP = pidRateYaw.lastP;
+            g_state.rateYawI = pidRateYaw.lastI;
+            g_state.rateYawD = pidRateYaw.lastD;
+            g_state.angleRollIterm = pidAngleRoll.integral;
+            g_state.anglePitchIterm = pidAnglePitch.integral;
+            g_state.pidResetCount = g_pidResetCount;
+            g_state.modeTransitionCount = g_modeTransitionCount;
+            g_state.lastModeChange_ms = g_lastModeChangeMs;
+            g_state.armingTransitionCount = g_armingTransitionCount;
+            g_state.lastArmChange_ms = g_lastArmChangeMs;
+            g_state.throttleLow = (thrRaw <= THROTTLE_CUT);
+            g_state.controlAuthorityRemaining = controlAuthorityRemaining;
+            g_state.rollOutputLimited = rollOutputLimited;
+            g_state.pitchOutputLimited = pitchOutputLimited;
+            g_state.yawOutputLimited = yawOutputLimited;
+            g_state.rateOutputLimited = rateOutputLimited;
             g_state.armed=true; g_state.rc=cmd;
             xSemaphoreGive(g_flightMutex);
         }
