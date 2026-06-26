@@ -1438,7 +1438,8 @@ function applyJson(j){
   S.mode=(j.mode||'UNKNOWN').toUpperCase();S.armed=!!j.armed;
   S.motFL=+j.motFL||0;S.motFR=+j.motFR||0;S.motRL=+j.motRL||0;S.motRR=+j.motRR||0;
   S.motorFLPreSat=+j.motorFLPreSat||0;S.motorFRPreSat=+j.motorFRPreSat||0;S.motorRLPreSat=+j.motorRLPreSat||0;S.motorRRPreSat=+j.motorRRPreSat||0;
-  S.loopPeriodUs=+j.loopPeriodUs||0;S.loopJitterUs=+j.loopJitterUs||0;S.imuReadUs=+j.imuReadUs||0;S.controlUpdateUs=+j.controlUpdateUs||0;S.motorWriteUs=+j.motorWriteUs||0;
+  S.loopPeriodUs=+j.loopPeriodUs||0;S.loopJitterUs=+j.loopJitterUs||0;S.imuReadUs=+j.imuReadUs||0;S.ahrsUpdateUs=+j.ahrsUpdateUs||0;S.controlUpdateUs=+j.controlUpdateUs||0;S.motorWriteUs=+j.motorWriteUs||0;
+  S.wifiServiceUs=+j.wifiServiceUs||0;S.onboardLogWriteUs=+j.onboardLogWriteUs||0;
   S.missedLoopCount=+j.missedLoopCount||0;
   S.rpmFL=+j.rpmFL||0;S.rpmFR=+j.rpmFR||0;S.rpmRL=+j.rpmRL||0;S.rpmRR=+j.rpmRR||0;
   S.cmdRpmFL=+j.cmdRpmFL||S.rpmFL;S.cmdRpmFR=+j.cmdRpmFR||S.rpmFR;S.cmdRpmRL=+j.cmdRpmRL||S.rpmRL;S.cmdRpmRR=+j.cmdRpmRR||S.rpmRR;

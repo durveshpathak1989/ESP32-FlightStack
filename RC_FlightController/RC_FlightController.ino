@@ -236,12 +236,15 @@ struct ExecTimingStats {
     // Phase timing to identify the blocker when ctrl time is too high.
     uint32_t lastImuUs;
     uint32_t lastRcUs;
+    uint32_t lastAhrsUs;
     uint32_t lastMotorUs;
     uint32_t lastStateUs;
+    uint32_t lastLogUs;
     uint32_t missedTimerReleases;
 };
 
-static volatile ExecTimingStats g_execTiming = {0,0,0,0,0,0,0,0,0,0,0};
+static volatile ExecTimingStats g_execTiming = {0,0,0,0,0,0,0,0,0,0,0,0,0};
+static volatile uint32_t g_lastWifiServiceUs = 0;
 
 static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
                                      uint32_t periodUs, uint32_t targetUs)
@@ -280,7 +283,7 @@ static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
         DBG_PRINTF("[TIME] period=%luus jitter=%+ldus ctrl=%luus full=%luus "
                       "headroom=%+ldus maxCtrl=%luus maxFull=%luus "
                       "overCtrl=%lu overFull=%lu missed=%lu "
-                      "phase imu=%luus rc=%luus motor=%luus state=%luus\n",
+                      "phase imu=%luus rc=%luus ahrs=%luus motor=%luus state=%luus log=%luus wifi=%luus\n",
                       (unsigned long)periodUs,
                       (long)jitterSigned,
                       (unsigned long)controlUs,
@@ -293,8 +296,11 @@ static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
                       (unsigned long)g_execTiming.missedTimerReleases,
                       (unsigned long)g_execTiming.lastImuUs,
                       (unsigned long)g_execTiming.lastRcUs,
+                      (unsigned long)g_execTiming.lastAhrsUs,
                       (unsigned long)g_execTiming.lastMotorUs,
-                      (unsigned long)g_execTiming.lastStateUs);
+                      (unsigned long)g_execTiming.lastStateUs,
+                      (unsigned long)g_execTiming.lastLogUs,
+                      (unsigned long)g_lastWifiServiceUs);
     }
 }
 
@@ -357,7 +363,8 @@ struct FlightState {
     float motorFL, motorFR, motorRL, motorRR;
     float pidRollOut, pidPitchOut, pidYawOut;   // true PID outputs for tuning trace
     float motorFLPreSat, motorFRPreSat, motorRLPreSat, motorRRPreSat;
-    uint32_t loopPeriod_us, imuRead_us, rcRead_us, controlUpdate_us, motorWrite_us;
+    uint32_t loopPeriod_us, imuRead_us, rcRead_us, ahrsUpdate_us;
+    uint32_t controlUpdate_us, motorWrite_us, wifiService_us, onboardLogWrite_us;
     int16_t loopJitter_us;
     uint32_t missedLoopCount;
 
@@ -932,8 +939,11 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.loop_jitter_us=s.loopJitter_us;
     out.imu_read_us=s.imuRead_us;
     out.rc_read_us=s.rcRead_us;
+    out.ahrs_update_us=s.ahrsUpdate_us;
     out.control_update_us=s.controlUpdate_us;
     out.motor_write_us=s.motorWrite_us;
+    out.wifi_service_us=s.wifiService_us;
+    out.onboard_log_write_us=s.onboardLogWrite_us;
     out.missed_loop_count=s.missedLoopCount;
     float rpmScale = MOTOR_KV * BATTERY_VOLTAGE;
     out.cmd_rpm_fl=s.motorFL*rpmScale; out.cmd_rpm_fr=s.motorFR*rpmScale;
@@ -1810,6 +1820,7 @@ static void taskControl(void* /*pv*/)
             }
             g_ahrsFilterModeActive = ahrsMode;
 
+            uint32_t ahrsStartUs = micros();
             if (ahrsMode == 1) {
                 mahony.update(ekfIn, dt, att);
             } else if (ahrsMode == 2) {
@@ -1823,6 +1834,7 @@ static void taskControl(void* /*pv*/)
                 att.roll_deg = ekfOut.roll_deg; att.pitch_deg = ekfOut.pitch_deg; att.yaw_deg = ekfOut.yaw_deg;
                 att.q0 = ekfOut.q0; att.q1 = ekfOut.q1; att.q2 = ekfOut.q2; att.q3 = ekfOut.q3;
             }
+            g_execTiming.lastAhrsUs = micros() - ahrsStartUs;
 
             gxf = lpfGx.apply(sf.gx_dps, dt, GYRO_LPF_HZ);
             gyf = lpfGy.apply(sf.gy_dps, dt, GYRO_LPF_HZ);
@@ -1942,8 +1954,11 @@ static void taskControl(void* /*pv*/)
                 g_state.loopJitter_us = (int16_t)constrain((int32_t)periodUs - (int32_t)TARGET_US, -32768, 32767);
                 g_state.imuRead_us = g_execTiming.lastImuUs;
                 g_state.rcRead_us = g_execTiming.lastRcUs;
+                g_state.ahrsUpdate_us = g_execTiming.lastAhrsUs;
                 g_state.controlUpdate_us = controlDoneUs - execStartUs;
                 g_state.motorWrite_us = g_execTiming.lastMotorUs;
+                g_state.wifiService_us = g_lastWifiServiceUs;
+                g_state.onboardLogWrite_us = g_execTiming.lastLogUs;
                 g_state.missedLoopCount = g_execTiming.missedTimerReleases;
                 g_state.rc      = cmd;
                 g_state.angleModeActive = false;
@@ -2397,7 +2412,9 @@ static void taskControl(void* /*pv*/)
             row.gps_sats = g_state.gps.satellites;
             row.gps_hdop = g_state.gps.hdop;
 
+            uint32_t logStartUs = micros();
             flightLogger.push(row);
+            g_execTiming.lastLogUs = micros() - logStartUs;
         }
 
         // ── Publish flight state (incl. true PID outputs) ─────
@@ -2454,8 +2471,11 @@ static void taskControl(void* /*pv*/)
             g_state.loopJitter_us = (int16_t)constrain((int32_t)periodUs - (int32_t)TARGET_US, -32768, 32767);
             g_state.imuRead_us = g_execTiming.lastImuUs;
             g_state.rcRead_us = g_execTiming.lastRcUs;
+            g_state.ahrsUpdate_us = g_execTiming.lastAhrsUs;
             g_state.controlUpdate_us = controlDoneUs - execStartUs;
             g_state.motorWrite_us = g_execTiming.lastMotorUs;
+            g_state.wifiService_us = g_lastWifiServiceUs;
+            g_state.onboardLogWrite_us = g_execTiming.lastLogUs;
             g_state.missedLoopCount = g_execTiming.missedTimerReleases;
             g_state.angleModeActive = (cmd.mode == FlightMode::ANGLE);
             g_state.acroModeActive = (cmd.mode == FlightMode::ACRO);
@@ -2778,7 +2798,9 @@ static void taskWiFi(void* /*pv*/)
     telemetryWiFi.begin("ESP32-DRONE", "12345678");
 
     for (;;) {
+        uint32_t wifiStartUs = micros();
         telemetryWiFi.update();
+        g_lastWifiServiceUs = micros() - wifiStartUs;
         // Give Core 0 idle time. 10 ms still supports 10–50 Hz GCS polling
         // but avoids pegging Core 0 when Wi-Fi + RC are active.
         vTaskDelay(pdMS_TO_TICKS(10));
