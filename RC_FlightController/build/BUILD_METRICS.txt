@@ -33,14 +33,14 @@ Firmware identity embedded in this build:
 FW_NAME: RC_FlightController
 FW_VERSION: V5.2.0
 FW_SOURCE_BRANCH: master
-FW_SOURCE_COMMIT: 43ac3718872d
+FW_SOURCE_COMMIT: dbfbe9c404eb
 FW_SOURCE_DIRTY: 0
-FW_BUILD_ID: 20260626T201800Z-master-43ac3718872d
-FW_BUILD_TIME_ISO: 2026-06-26T20:18:00Z
+FW_BUILD_ID: 20260626T203307Z-master-dbfbe9c404eb
+FW_BUILD_TIME_ISO: 2026-06-26T20:33:07Z
 
 Binary SHA256:
-RC_FlightController.ino.bin: 7519394f6704c4211e6b3ecce01bebe2b8cd26c72c2530bb74cb9c25ed081428
-RC_FlightController.ino.merged.bin: 27e435246e181bd20765a7873a681e077d6e27a3dad8a607d0af5fb890ec407d
+RC_FlightController.ino.bin: 3b0a441030712390d140f779ace031b20c0eda2875de9ae58f598866dee93b61
+RC_FlightController.ino.merged.bin: 188d4e79dac87e876ade623f140cffcab11336ba3058dd27bdd440cc0d9f0c77
 
 Runtime heap note:
 The flight logger allocates its row buffer from heap during setup().
