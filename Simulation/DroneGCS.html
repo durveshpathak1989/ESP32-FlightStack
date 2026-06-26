@@ -1437,6 +1437,9 @@ function applyJson(j){
   S.rcHz=+j.rcHz||0;S.tick=+j.tick||0;
   S.mode=(j.mode||'UNKNOWN').toUpperCase();S.armed=!!j.armed;
   S.motFL=+j.motFL||0;S.motFR=+j.motFR||0;S.motRL=+j.motRL||0;S.motRR=+j.motRR||0;
+  S.motorFLPreSat=+j.motorFLPreSat||0;S.motorFRPreSat=+j.motorFRPreSat||0;S.motorRLPreSat=+j.motorRLPreSat||0;S.motorRRPreSat=+j.motorRRPreSat||0;
+  S.loopPeriodUs=+j.loopPeriodUs||0;S.loopJitterUs=+j.loopJitterUs||0;S.imuReadUs=+j.imuReadUs||0;S.controlUpdateUs=+j.controlUpdateUs||0;S.motorWriteUs=+j.motorWriteUs||0;
+  S.missedLoopCount=+j.missedLoopCount||0;
   S.rpmFL=+j.rpmFL||0;S.rpmFR=+j.rpmFR||0;S.rpmRL=+j.rpmRL||0;S.rpmRR=+j.rpmRR||0;
   S.cmdRpmFL=+j.cmdRpmFL||S.rpmFL;S.cmdRpmFR=+j.cmdRpmFR||S.rpmFR;S.cmdRpmRL=+j.cmdRpmRL||S.rpmRL;S.cmdRpmRR=+j.cmdRpmRR||S.rpmRR;
   S.actualRpmFL=+j.actualRpmFL||0;S.actualRpmFR=+j.actualRpmFR||0;S.actualRpmRL=+j.actualRpmRL||0;S.actualRpmRR=+j.actualRpmRR||0;S.rpmActualValid=!!j.rpmActualValid;
@@ -1461,6 +1464,7 @@ function applyJson(j){
   S.pitchP=+j.pitchP||0;S.pitchI=+j.pitchI||0;S.pitchD=+j.pitchD||0;
   S.yawP=+j.yawP||0;S.yawI=+j.yawI||0;S.yawD=+j.yawD||0;
   S.pidRollOut=+j.pidRollOut||0;S.pidPitchOut=+j.pidPitchOut||0;S.pidYawOut=+j.pidYawOut||0;
+  S.gyroBiasX=+j.ekfBgxDps||0;S.gyroBiasY=+j.ekfBgyDps||0;S.gyroBiasZ=+j.ekfBgzDps||0;
   S.angleRollIterm=+j.angleRollIterm||0;S.anglePitchIterm=+j.anglePitchIterm||0;
   S.pidResetCount=+j.pidResetCount||0;S.modeTransitionCount=+j.modeTransitionCount||0;
   S.lastModeChangeMs=+j.lastModeChangeMs||0;S.armingTransitionCount=+j.armingTransitionCount||0;S.lastArmChangeMs=+j.lastArmChangeMs||0;
@@ -1488,6 +1492,7 @@ function applyJson(j){
   if(j.mahonyKi!=null){syncI('mKi',j.mahonyKi,5);setText('smKi',fmtGain(j.mahonyKi,5));}
   syncI('ahrsFilterMode',j.ahrsFilterMode,0);syncI('madgwickBeta',j.madgwickBeta,3);
   syncI('notchEnable',j.notchEnable?1:0,0);syncI('notchFreqHz',j.notchFreqHz,2);syncI('notchQ',j.notchQ,2);
+  S.notchEnable=!!j.notchEnable;S.notchFreqHz=+j.notchFreqHz||0;S.notchQ=+j.notchQ||0;
   syncI('ekfAngleQ',j.ekfAngleQ,6);syncI('ekfBiasQ',j.ekfBiasQ,6);syncI('ekfAccelR',j.ekfAccelR,3);syncI('ekfMagR',j.ekfMagR,3);
   syncI('ekfMagYawOffset',j.ekfMagYawOffsetDeg,2);syncI('ekfMagYawSign',j.ekfMagYawSign,0);
   if(j.notchFreqHz!=null)setText('sNotch',(j.notchEnable?'ON ':'OFF ')+Number(j.notchFreqHz).toFixed(0)+'Hz Q'+Number(j.notchQ||0).toFixed(1));
@@ -1882,6 +1887,11 @@ async function pollSpectrum(){
 }
 function renderSpectrumStatus(j){
   if(!j){return;}
+  S.dominantVibeFreqHz=+j.peakGyroHz||0;
+  S.dominantVibeMag=+j.peakGyroMag||0;
+  S.notchEnable=!!j.notchEnable;
+  S.notchFreqHz=+j.notchFreqHz||0;
+  S.notchQ=+j.notchQ||0;
   setText('spReady',j.ok?'YES':('NO '+(j.samples||0)+'/'+(j.needed||128)));
   setText('spSamples',(j.samples||0).toString());
   setText('spHz',j.sampleHz?Number(j.sampleHz).toFixed(1)+' Hz':'—');

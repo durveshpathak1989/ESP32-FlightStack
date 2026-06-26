@@ -356,6 +356,10 @@ struct FlightState {
     bool  cpuValid;
     float motorFL, motorFR, motorRL, motorRR;
     float pidRollOut, pidPitchOut, pidYawOut;   // true PID outputs for tuning trace
+    float motorFLPreSat, motorFRPreSat, motorRLPreSat, motorRRPreSat;
+    uint32_t loopPeriod_us, imuRead_us, rcRead_us, controlUpdate_us, motorWrite_us;
+    int16_t loopJitter_us;
+    uint32_t missedLoopCount;
 
     // Extended flight-log / telemetry debug fields
     float rawAx_g, rawAy_g, rawAz_g;
@@ -919,8 +923,18 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.throttle=s.rc.throttle; out.rc_roll=s.rc.roll;
     out.rc_pitch=s.rc.pitch;    out.rc_yaw=s.rc.yaw;
     out.rc_hz=rcReceiver.getFrameRate();
+    out.battery_voltage_v=BATTERY_VOLTAGE;
     out.motor_fl=s.motorFL; out.motor_fr=s.motorFR;
     out.motor_rl=s.motorRL; out.motor_rr=s.motorRR;
+    out.motor_fl_pre_sat=s.motorFLPreSat; out.motor_fr_pre_sat=s.motorFRPreSat;
+    out.motor_rl_pre_sat=s.motorRLPreSat; out.motor_rr_pre_sat=s.motorRRPreSat;
+    out.loop_period_us=s.loopPeriod_us;
+    out.loop_jitter_us=s.loopJitter_us;
+    out.imu_read_us=s.imuRead_us;
+    out.rc_read_us=s.rcRead_us;
+    out.control_update_us=s.controlUpdate_us;
+    out.motor_write_us=s.motorWrite_us;
+    out.missed_loop_count=s.missedLoopCount;
     float rpmScale = MOTOR_KV * BATTERY_VOLTAGE;
     out.cmd_rpm_fl=s.motorFL*rpmScale; out.cmd_rpm_fr=s.motorFR*rpmScale;
     out.cmd_rpm_rl=s.motorRL*rpmScale; out.cmd_rpm_rr=s.motorRR*rpmScale;
@@ -1922,7 +1936,15 @@ static void taskControl(void* /*pv*/)
             if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
                 g_state.armed   = false;
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
+                g_state.motorFLPreSat = g_state.motorFRPreSat = g_state.motorRLPreSat = g_state.motorRRPreSat = 0;
                 g_state.pidRollOut = g_state.pidPitchOut = g_state.pidYawOut = 0;
+                g_state.loopPeriod_us = periodUs;
+                g_state.loopJitter_us = (int16_t)constrain((int32_t)periodUs - (int32_t)TARGET_US, -32768, 32767);
+                g_state.imuRead_us = g_execTiming.lastImuUs;
+                g_state.rcRead_us = g_execTiming.lastRcUs;
+                g_state.controlUpdate_us = controlDoneUs - execStartUs;
+                g_state.motorWrite_us = g_execTiming.lastMotorUs;
+                g_state.missedLoopCount = g_execTiming.missedTimerReleases;
                 g_state.rc      = cmd;
                 g_state.angleModeActive = false;
                 g_state.acroModeActive = false;
@@ -2425,7 +2447,16 @@ static void taskControl(void* /*pv*/)
             }
             g_state.motorFL=fl; g_state.motorFR=fr;
             g_state.motorRL=rl; g_state.motorRR=rr;
+            g_state.motorFLPreSat=flPre; g_state.motorFRPreSat=frPre;
+            g_state.motorRLPreSat=rlPre; g_state.motorRRPreSat=rrPre;
             g_state.pidRollOut=rO; g_state.pidPitchOut=pO; g_state.pidYawOut=yO;
+            g_state.loopPeriod_us = periodUs;
+            g_state.loopJitter_us = (int16_t)constrain((int32_t)periodUs - (int32_t)TARGET_US, -32768, 32767);
+            g_state.imuRead_us = g_execTiming.lastImuUs;
+            g_state.rcRead_us = g_execTiming.lastRcUs;
+            g_state.controlUpdate_us = controlDoneUs - execStartUs;
+            g_state.motorWrite_us = g_execTiming.lastMotorUs;
+            g_state.missedLoopCount = g_execTiming.missedTimerReleases;
             g_state.angleModeActive = (cmd.mode == FlightMode::ANGLE);
             g_state.acroModeActive = (cmd.mode == FlightMode::ACRO);
             g_state.modeSwitchRaw_us = cmd.raw[RC_CH_AUX2];
