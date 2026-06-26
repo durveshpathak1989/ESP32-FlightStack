@@ -114,7 +114,7 @@ static constexpr float TUNE_THROTTLE_EXPO              = 0.70f;
 static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
 static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
 static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
-static constexpr float TUNE_MOTOR_MAX                  = 0.80f;
+static constexpr float TUNE_MOTOR_MAX                  = 1.00f;
 static constexpr float TUNE_THROTTLE_CUT               = 0.03f;
 static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 
