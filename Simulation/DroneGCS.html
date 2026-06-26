@@ -684,6 +684,15 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
       <div id="calStage">— Waiting for connection —</div>
       <div id="calLog"></div>
     </div>
+    <div class="panel" style="width:420px;max-width:42vw;display:flex;flex-direction:column;gap:8px">
+      <div class="panel-title">FIRMWARE IDENTITY</div>
+      <div class="data-row"><span class="dn">Name</span><span class="dv" id="fwName">—</span></div>
+      <div class="data-row"><span class="dn">Version</span><span class="dv" id="fwVersion">—</span></div>
+      <div class="data-row"><span class="dn">Source</span><span class="dv" id="fwSource">—</span></div>
+      <div class="data-row"><span class="dn">Build ID</span><span class="dv" id="fwBuildId">—</span></div>
+      <div class="data-row"><span class="dn">Build Time</span><span class="dv" id="fwBuildTime">—</span></div>
+      <div class="data-row"><span class="dn">Tree</span><span class="dv" id="fwDirty">—</span></div>
+    </div>
   </div>
 </section>
 
@@ -1019,6 +1028,7 @@ function saveConfig(){
   // Update live WiFi URLs
   wifiUrl2 = 'http://'+CFG.wifiIp+'/telemetry';
   tuneUrl2  = 'http://'+CFG.wifiIp+'/tune';
+  identityUrl2 = 'http://'+CFG.wifiIp+'/identity';
   // Update poll rate if wifi is active
   if(wifiOn){stopWifi();toggleWifi();}
   try{localStorage.setItem('droneGcsConfig',JSON.stringify(CFG));}catch(e){}
@@ -1085,6 +1095,7 @@ function resetConfig(){
 // Dynamic URL refs (updated when config saved)
 let wifiUrl2='http://192.168.4.1/telemetry';
 let tuneUrl2='http://192.168.4.1/tune';
+let identityUrl2='http://192.168.4.1/identity';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const S={
@@ -1395,12 +1406,37 @@ async function toggleWifi(){
   if(wifiOn){stopWifi();return;}
   wifiOn=true;setConn(true,'WIFI');wifiLogSeq=0;
   addCalLog('[GS] Wi-Fi connected','lBOOT');
+  await pollIdentity();
   await pollWifi();await pollWifiLog();
   wifiTimer=setInterval(pollWifi,Math.max(50,+CFG.pollMs||100));wifiLogTimer=setInterval(pollWifiLog,500);
 }
 function stopWifi(){
   wifiOn=false;if(wifiTimer){clearInterval(wifiTimer);wifiTimer=null;}if(wifiLogTimer){clearInterval(wifiLogTimer);wifiLogTimer=null;}
   document.getElementById('btnWifi').classList.remove('on');if(!connected)setConn(false);addCalLog('[GS] Wi-Fi stopped','lRC');
+}
+async function pollIdentity(){
+  try{
+    const r=await fetch(identityUrl2,{cache:'no-store'});
+    const j=await r.json();
+    if(!j.ok)throw new Error(j.error||'bad identity');
+    setText('fwName',j.name||'—');
+    setText('fwVersion',j.version||'—');
+    const shortCommit=(j.sourceCommit||'').slice(0,12);
+    setText('fwSource',(j.sourceBranch||'unknown')+' '+(shortCommit||'unknown'));
+    setText('fwBuildId',j.buildId||'—');
+    setText('fwBuildTime',j.buildTime||'—');
+    const dirty=document.getElementById('fwDirty');
+    if(dirty){dirty.textContent=j.sourceDirty?'DIRTY':'CLEAN';dirty.className='dv '+(j.sourceDirty?'warn':'ok');}
+    addCalLog('[FW] '+(j.name||'firmware')+' '+(j.version||'')+' '+(j.sourceBranch||'unknown')+' '+(shortCommit||'unknown')+(j.sourceDirty?' dirty':' clean'),'lBOOT');
+  }catch(e){
+    setText('fwName','identity unavailable');
+    setText('fwVersion','—');
+    setText('fwSource','—');
+    setText('fwBuildId','—');
+    setText('fwBuildTime','—');
+    setText('fwDirty','—');
+    addCalLog('[FW][WARN] Identity unavailable: '+e.message,'lWARN');
+  }
 }
 async function pollWifi(){
   if(!wifiOn)return;

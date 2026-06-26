@@ -63,6 +63,7 @@
 #include "src/Submodules/ESP32Core/CPUUtilization.h"
 #include "src/Submodules/GPS/GPSSensor.h"
 #include "src/Submodules/Logger/Logger.h"
+#include "FirmwareBuildInfo.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -807,6 +808,22 @@ static String provideTimingJson()
     j += F(",\"violations\":");     j += String(violations);
     j += F(",\"violation_rate_pct\":"); j += String(violationRatePct, 3);
     j += F(",\"buf_samples\":");    j += String(n);
+    j += '}';
+    return j;
+}
+
+static String provideIdentityJson()
+{
+    String j;
+    j.reserve(260);
+    j += F("{\"ok\":true");
+    j += F(",\"name\":\"");         j += FW_NAME;             j += '"';
+    j += F(",\"version\":\"");      j += FW_VERSION;          j += '"';
+    j += F(",\"sourceBranch\":\""); j += FW_SOURCE_BRANCH;    j += '"';
+    j += F(",\"sourceCommit\":\""); j += FW_SOURCE_COMMIT;    j += '"';
+    j += F(",\"sourceDirty\":");    j += FW_SOURCE_DIRTY ? F("true") : F("false");
+    j += F(",\"buildId\":\"");      j += FW_BUILD_ID;         j += '"';
+    j += F(",\"buildTime\":\"");    j += FW_BUILD_TIME_ISO;   j += '"';
     j += '}';
     return j;
 }
@@ -2836,6 +2853,7 @@ static void taskWiFi(void* /*pv*/)
     telemetryWiFi.setTimingCsvProvider(provideTimingCsv);
     telemetryWiFi.setTimingResetHandler(resetTimingStats);
     telemetryWiFi.setSpectrumProvider(provideSpectrumJson);
+    telemetryWiFi.setIdentityProvider(provideIdentityJson);
 
 // High-speed flight log (chunked streaming — no giant String)
     telemetryWiFi.setFlightLogCountProvider(flightLogCount);
