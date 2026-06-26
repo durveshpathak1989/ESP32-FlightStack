@@ -276,7 +276,10 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 
 /* ── CONFIG TAB ── */
 #tab-config{display:none}
-#tab-config.active{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;overflow-y:auto}
+#tab-config.active{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-content:start;overflow-y:auto}
+#tab-config.active>div{min-height:0;max-height:100%;overflow-y:auto;padding-right:2px}
+#tab-config.active>div::-webkit-scrollbar{width:4px}
+#tab-config.active>div::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
 .cfg-section{margin-bottom:10px}
 .cfg-section:last-child{margin-bottom:0}
 .cfg-row{display:grid;grid-template-columns:1fr 110px;align-items:center;gap:8px;
