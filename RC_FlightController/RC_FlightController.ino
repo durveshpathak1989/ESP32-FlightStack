@@ -698,9 +698,50 @@ static void applyTuningToObjects()
 // ─────────────────────────────────────────────────────────────
 static void calLog(const char* msg)  { telemetryWiFi.pushLog(msg); }
 static void calLogf(const char* fmt, ...) {
-    char buf[160];
+    char buf[WIFI_LOG_LINE_LEN];
     va_list args; va_start(args,fmt); vsnprintf(buf,sizeof(buf),fmt,args); va_end(args);
     telemetryWiFi.pushLog(buf);
+}
+
+static const char* calModeName(CalibrationMode mode)
+{
+    switch (mode) {
+        case CalibrationMode::ESC:            return "ESC";
+        case CalibrationMode::GYRO_BIAS:      return "GYRO_BIAS";
+        case CalibrationMode::ACCEL_6_FACE:   return "ACCEL_6_FACE";
+        case CalibrationMode::MAG_MINMAX:     return "MAG_MINMAX";
+        case CalibrationMode::IMU_ALL_GUIDED: return "IMU_ALL_GUIDED";
+        case CalibrationMode::NONE:
+        default:                              return "NONE";
+    }
+}
+
+static const char* calStateName(CalibrationState state)
+{
+    switch (state) {
+        case CalibrationState::REQUESTED:              return "REQUESTED";
+        case CalibrationState::WAITING_FOR_SAFE:       return "WAITING_FOR_SAFE";
+        case CalibrationState::WAITING_FOR_STILLNESS:  return "WAITING_FOR_STILLNESS";
+        case CalibrationState::WAITING_FOR_USER_STEP:  return "WAITING_FOR_USER_STEP";
+        case CalibrationState::COLLECTING:             return "COLLECTING";
+        case CalibrationState::COMPUTING:              return "COMPUTING";
+        case CalibrationState::SAVING:                 return "SAVING";
+        case CalibrationState::DONE:                   return "DONE";
+        case CalibrationState::FAILED:                 return "FAILED";
+        case CalibrationState::CANCELLED:              return "CANCELLED";
+        case CalibrationState::IDLE:
+        default:                                       return "IDLE";
+    }
+}
+
+static const char* calSourceName(CalibrationSource source)
+{
+    switch (source) {
+        case CalibrationSource::WEB: return "WEB";
+        case CalibrationSource::RC:  return "RC";
+        case CalibrationSource::NONE:
+        default:                     return "NONE";
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2581,14 +2622,21 @@ static void taskSerial(void* /*pv*/)
             lastCalState = calStatus.state;
             lastCalPrintMs = millis();
 
-            DBG_PRINTF("[CAL-MGR] run=%lu state=%u active=%d safe=%d confirm=%d progress=%.2f msg=%s\n",
+            calLogf("[CAL-MGR] run=%lu mode=%s src=%s state=%s active=%d safe=%d confirm=%d progress=%.0f%% msg=%s",
+                    (unsigned long)calStatus.runId,
+                    calModeName(calStatus.mode),
+                    calSourceName(calStatus.source),
+                    calStateName(calStatus.state),
+                    calStatus.active ? 1 : 0,
+                    calStatus.safeToRun ? 1 : 0,
+                    calStatus.requiresUserConfirm ? 1 : 0,
+                    (double)(calStatus.progress * 100.0f),
+                    calStatus.message);
+            if (calStatus.error[0]) {
+                calLogf("[CAL-MGR][ERROR] run=%lu %s",
                         (unsigned long)calStatus.runId,
-                        (unsigned)calStatus.state,
-                        calStatus.active ? 1 : 0,
-                        calStatus.safeToRun ? 1 : 0,
-                        calStatus.requiresUserConfirm ? 1 : 0,
-                        calStatus.progress,
-                        calStatus.message);
+                        calStatus.error);
+            }
         }
 
         // Handle inbound Serial commands (non-blocking)

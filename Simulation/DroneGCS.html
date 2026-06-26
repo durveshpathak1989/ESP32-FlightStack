@@ -1413,9 +1413,10 @@ async function pollWifiLog(){
     const j=await r.json();if(!j.ok)return;wifiLogSeq=j.nextSeq;
     if(j.lines&&j.lines.length){j.lines.forEach(entry=>{
       const line=entry.text;
-      const cls=line.startsWith('[CAL]')?'lCAL':line.startsWith('[BOOT]')?'lBOOT':/^\[RC\]|^\[iBUS\]/.test(line)?'lRC':line.startsWith('[TUNE]')?'lTUNE':/^\[GPS\]/.test(line)?'lCAL':/^\[IMU\]|^\[NVS\]/.test(line)?'lIMU':/WARN|FAIL|FATAL|ERROR/i.test(line)?'lWARN':/^\[/.test(line)?'lBOOT':'lOTHER';
+      const isCalLine=line.startsWith('[CAL]')||line.startsWith('[CAL-MGR]');
+      const cls=isCalLine?'lCAL':line.startsWith('[BOOT]')?'lBOOT':/^\[RC\]|^\[iBUS\]/.test(line)?'lRC':line.startsWith('[TUNE]')?'lTUNE':/^\[GPS\]/.test(line)?'lCAL':/^\[IMU\]|^\[NVS\]/.test(line)?'lIMU':/WARN|FAIL|FATAL|ERROR/i.test(line)?'lWARN':/^\[/.test(line)?'lBOOT':'lOTHER';
       addCalLog(line,cls);
-      if(line.startsWith('[CAL]')){const el=document.getElementById('calStage');el.textContent=line.replace('[CAL]','').trim();el.style.color=line.includes('✓')?'var(--green)':line.includes('GYRO')?'var(--orange)':line.includes('ACCEL')?'var(--cyan)':'var(--cyan)';}
+      if(isCalLine){const el=document.getElementById('calStage');el.textContent=line.replace('[CAL-MGR]','').replace('[CAL]','').trim();el.style.color=line.includes('DONE')||line.includes('COMPLETE')||line.includes('✓')?'var(--green)':line.includes('GYRO')?'var(--orange)':line.includes('ACCEL')?'var(--cyan)':'var(--cyan)';}
     });}
   }catch(e){}
 }
@@ -1524,9 +1525,10 @@ function syncI(id,val,dp){if(val==null)return;const el=document.getElementById(i
 
 function processLine(raw){
   const line=raw.trim();if(!line)return;
-  const cls=line.startsWith('[CAL]')?'lCAL':line.startsWith('[BOOT]')?'lBOOT':/^\[RC\]|^\[iBUS\]/.test(line)?'lRC':line.startsWith('[TUNE]')?'lTUNE':/^\[GPS\]/.test(line)?'lCAL':/^\[IMU\]|^\[NVS\]/.test(line)?'lIMU':/WARN|FAIL|FATAL|Timeout|ERROR/i.test(line)?'lWARN':/^\[/.test(line)?'lBOOT':/^[╔╚╠║╗╝╣═─]/.test(line)?'lCAL':/\|\s*R=/.test(line)?'lTELEM':'lOTHER';
+  const isCalLine=line.startsWith('[CAL]')||line.startsWith('[CAL-MGR]');
+  const cls=isCalLine?'lCAL':line.startsWith('[BOOT]')?'lBOOT':/^\[RC\]|^\[iBUS\]/.test(line)?'lRC':line.startsWith('[TUNE]')?'lTUNE':/^\[GPS\]/.test(line)?'lCAL':/^\[IMU\]|^\[NVS\]/.test(line)?'lIMU':/WARN|FAIL|FATAL|Timeout|ERROR/i.test(line)?'lWARN':/^\[/.test(line)?'lBOOT':/^[╔╚╠║╗╝╣═─]/.test(line)?'lCAL':/\|\s*R=/.test(line)?'lTELEM':'lOTHER';
   addCalLog(line,cls);
-  if(line.startsWith('[CAL]')){const el=document.getElementById('calStage');el.textContent=line.replace('[CAL]','').trim();}
+  if(isCalLine){const el=document.getElementById('calStage');el.textContent=line.replace('[CAL-MGR]','').replace('[CAL]','').trim();}
   const gm=line.match(/\[GPS\]\s+Fix\s+Lat=([\-\d.]+)\s+Lon=([\-\d.]+)\s+Alt=([\d.]+)m\s+Sats=(\d+)\s+HDOP=([\d.]+)\s+Speed=([\d.]+)km\/h\s+UTC=(\d+):(\d+):(\d+)/);
   if(gm){S.gpsValid=true;S.gpsLat=+gm[1];S.gpsLon=+gm[2];S.gpsAlt=+gm[3];S.gpsSats=+gm[4];S.gpsHdop=+gm[5];S.gpsSpd=+gm[6];S.gpsH=+gm[7];S.gpsM=+gm[8];S.gpsSec=+gm[9];S.gpsFix=1;}
   const ngm=line.match(/\[GPS\]\s+No fix\s+Sats=(\d+)/);
