@@ -72,13 +72,15 @@ html,body{height:100%;background:var(--bg);color:var(--t2);font-family:var(--ui)
 
 /* ── Content Area ── */
 #content{overflow:hidden;position:relative}
-.tab-panel{display:none;height:100%;padding:12px;gap:10px;animation:tabFade .18s ease}
+.tab-panel{display:none;height:100%;min-height:0;padding:12px;gap:10px;animation:tabFade .18s ease;overflow-y:auto;overflow-x:hidden}
 .tab-panel.active{display:flex}
+.tab-panel::-webkit-scrollbar,.panel::-webkit-scrollbar{width:4px}
+.tab-panel::-webkit-scrollbar-thumb,.panel::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px}
 @keyframes tabFade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── Panels ── */
 .panel{background:var(--bg2);border:1px solid rgba(255,255,255,.07);border-radius:12px;
-       padding:14px;display:flex;flex-direction:column;gap:7px;overflow:hidden}
+       padding:14px;display:flex;flex-direction:column;gap:7px;min-height:0;overflow:hidden}
 .panel-title{font-size:10px;letter-spacing:2px;color:var(--t3);text-transform:uppercase;flex-shrink:0}
 .sec-title{font-size:10px;letter-spacing:1.5px;color:var(--blue);text-transform:uppercase;
            margin-top:4px;padding-bottom:4px;border-bottom:1px solid var(--sep);flex-shrink:0}
@@ -209,7 +211,8 @@ select{background:var(--bg3);color:var(--t2);border:1px solid var(--sep);border-
 
 /* ── TUNE TAB ── */
 #tab-tune{display:none}
-#tab-tune.active{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+#tab-tune.active{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-content:start}
+#tab-tune.active .panel{max-height:100%;overflow-y:auto}
 .tune-row{display:grid;grid-template-columns:70px 1fr 42px;align-items:center;gap:6px;
           padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)}
 .tune-row span{color:var(--t3);font-size:12px}
@@ -608,7 +611,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Up Rate</span><input class="tval" id="thrUpRate" value="0.700"><button class="tapply" onclick="sendSingle('throttle_up_rate_per_sec','thrUpRate')">SET</button></div>
     <div class="tune-row"><span>Down Rate</span><input class="tval" id="thrDownRate" value="1.000"><button class="tapply" onclick="sendSingle('throttle_down_rate_per_sec','thrDownRate')">SET</button></div>
     <div class="tune-row"><span>Idle</span><input class="tval" id="motorIdle" value="0.080"><button class="tapply" onclick="sendSingle('motor_idle','motorIdle')">SET</button></div>
-    <div class="tune-row"><span>Motor Max</span><input class="tval" id="motorMax" value="0.900"><button class="tapply" onclick="sendSingle('motor_max','motorMax')">SET</button></div>
+    <div class="tune-row"><span>Motor Max</span><input class="tval" id="motorMax" value="1.000"><button class="tapply" onclick="sendSingle('motor_max','motorMax')">SET</button></div>
     <div class="tune-row"><span>Cut</span><input class="tval" id="thrCut" value="0.030"><button class="tapply" onclick="sendSingle('throttle_cut','thrCut')">SET</button></div>
     <div class="tune-row"><span>Idle Ramp</span><input class="tval" id="idleRampEnd" value="0.150"><button class="tapply" onclick="sendSingle('idle_ramp_end','idleRampEnd')">SET</button></div>
   </div>
@@ -916,7 +919,7 @@ const CFG_DEFAULTS = {
   maxAngle:10, maxRoll:40, maxPitch:40, maxYaw:20, hover:0.45, iLimit:50,
   rollOutLimit:0.900, pitchOutLimit:0.900, yawOutLimit:0.900,
   throttleExpo:0.70, throttleUpRate:0.70, throttleDownRate:1.00,
-  motorIdle:0.08, motorMax:0.90, throttleCut:0.03, idleRampEnd:0.15,
+  motorIdle:0.08, motorMax:1.00, throttleCut:0.03, idleRampEnd:0.15,
   yawDeadband:0.02,
   deadband:30, armThr:1700, calThr:1700, failsafe:500, thrMin:1000, thrMax:2000,
   mahonyKp:2.0, mahonyKi:0.005, frate:500,
