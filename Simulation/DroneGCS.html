@@ -596,15 +596,15 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Max Angle</span><input class="tval" id="limMaxAngle" value="10.0"><button class="tapply" onclick="sendSingle('max_angle_deg','limMaxAngle')">SET</button></div>
     <div class="tune-row"><span>Max Rate</span><input class="tval" id="limMaxRate" value="40.0"><button class="tapply" onclick="sendSingle('max_rate_dps','limMaxRate')">SET</button></div>
     <div class="tune-row"><span>Yaw Max</span><input class="tval" id="yawMaxRate" value="20.0"><button class="tapply" onclick="sendSingle('yaw_max_rate_dps','yawMaxRate')">SET</button></div>
-    <div class="tune-row"><span>Yaw DB</span><input class="tval" id="yawDeadband" value="0.050"><button class="tapply" onclick="sendSingle('yaw_deadband','yawDeadband')">SET</button></div>
+    <div class="tune-row"><span>Yaw DB</span><input class="tval" id="yawDeadband" value="0.02000"><button class="tapply" onclick="sendSingle('yaw_deadband','yawDeadband')">SET</button></div>
 
     <div class="sec-title">PID OUTPUT AUTHORITY</div>
-    <div class="tune-row"><span>Roll Lim</span><input class="tval" id="outRollLim" value="0.500"><button class="tapply" onclick="sendSingle('roll_output_limit','outRollLim')">SET</button></div>
-    <div class="tune-row"><span>Pitch Lim</span><input class="tval" id="outPitchLim" value="0.500"><button class="tapply" onclick="sendSingle('pitch_output_limit','outPitchLim')">SET</button></div>
-    <div class="tune-row"><span>Yaw Lim</span><input class="tval" id="outYawLim" value="0.200"><button class="tapply" onclick="sendSingle('yaw_output_limit','outYawLim')">SET</button></div>
+    <div class="tune-row"><span>Roll Lim</span><input class="tval" id="outRollLim" value="0.9000"><button class="tapply" onclick="sendSingle('roll_output_limit','outRollLim')">SET</button></div>
+    <div class="tune-row"><span>Pitch Lim</span><input class="tval" id="outPitchLim" value="0.9000"><button class="tapply" onclick="sendSingle('pitch_output_limit','outPitchLim')">SET</button></div>
+    <div class="tune-row"><span>Yaw Lim</span><input class="tval" id="outYawLim" value="0.9000"><button class="tapply" onclick="sendSingle('yaw_output_limit','outYawLim')">SET</button></div>
 
     <div class="sec-title">THROTTLE SHAPING</div>
-    <div class="tune-row"><span>Expo</span><input class="tval" id="thrExpo" value="0.600"><button class="tapply" onclick="sendSingle('throttle_expo','thrExpo')">SET</button></div>
+    <div class="tune-row"><span>Expo</span><input class="tval" id="thrExpo" value="0.7000"><button class="tapply" onclick="sendSingle('throttle_expo','thrExpo')">SET</button></div>
     <div class="tune-row"><span>Up Rate</span><input class="tval" id="thrUpRate" value="0.700"><button class="tapply" onclick="sendSingle('throttle_up_rate_per_sec','thrUpRate')">SET</button></div>
     <div class="tune-row"><span>Down Rate</span><input class="tval" id="thrDownRate" value="1.000"><button class="tapply" onclick="sendSingle('throttle_down_rate_per_sec','thrDownRate')">SET</button></div>
     <div class="tune-row"><span>Idle</span><input class="tval" id="motorIdle" value="0.080"><button class="tapply" onclick="sendSingle('motor_idle','motorIdle')">SET</button></div>
@@ -904,11 +904,11 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 const CFG_DEFAULTS = {
   kv:920, cells:4, cellV:3.7, mah:3000, poles:14,
   propDiam:5.0, propPitch:4.5, weight:650,
-  maxAngle:25, maxRoll:150, maxPitch:150, maxYaw:90, hover:0.45, iLimit:50,
-  rollOutLimit:0.500, pitchOutLimit:0.500, yawOutLimit:0.200,
-  throttleExpo:0.60, throttleUpRate:0.70, throttleDownRate:1.00,
+  maxAngle:10, maxRoll:40, maxPitch:40, maxYaw:20, hover:0.45, iLimit:50,
+  rollOutLimit:0.900, pitchOutLimit:0.900, yawOutLimit:0.900,
+  throttleExpo:0.70, throttleUpRate:0.70, throttleDownRate:1.00,
   motorIdle:0.08, motorMax:0.90, throttleCut:0.03, idleRampEnd:0.15,
-  yawDeadband:0.05,
+  yawDeadband:0.02,
   deadband:30, armThr:1700, calThr:1700, failsafe:500, thrMin:1000, thrMax:2000,
   mahonyKp:2.0, mahonyKi:0.005, frate:500,
   notchEnable:1, notchFreqHz:107.65, notchQ:10.0,
