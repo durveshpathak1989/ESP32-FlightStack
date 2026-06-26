@@ -1200,15 +1200,15 @@ function renderGps(){
 }
 
 // ─── CSV Logger ───────────────────────────────────────────────────────────────
-let logging=false,logRows=[],logRunId=0,logSampleIndex=0;
+let logging=false,logRows=[],logRunId=0,logSampleIndex=0,logPrevMagNormCalc=null;
 const LOG_COLUMNS=[
   'logRunId','sampleIndex','timeMs','timeUs',
   'armed','flightMode','modeId','angleModeActive','acroModeActive','failsafeActive',
   'rcValid','rcFrameRate_Hz','rcFailsafeCount',
   'rcCh1_us','rcCh2_us','rcCh3_us','rcCh4_us','rcCh5_us','rcCh6_us','rcCh7_us','rcCh8_us','rcCh9_us','rcCh10_us',
   'cmdRoll_norm','cmdPitch_norm','cmdYaw_norm','cmdThrottle_norm',
-  'ax_g','ay_g','az_g','gx_dps','gy_dps','gz_dps','mx_uT','my_uT','mz_uT','imuTemp_C','accelNorm_g','gyroNorm_dps','magNorm_uT','magValid',
-  'roll_deg','pitch_deg','yaw_deg','q0','q1','q2','q3','accelRoll_deg','accelPitch_deg','gyroRoll_deg','gyroPitch_deg','magHeading_deg',
+  'ax_g','ay_g','az_g','gx_dps','gy_dps','gz_dps','mx_uT','my_uT','mz_uT','imuTemp_C','accelNorm_g','gyroNorm_dps','magNorm_uT','magValid','mag_heading_calc_deg','mag_norm_calc_uT','mag_delta_uT','mag_trusted',
+  'roll_deg','pitch_deg','yaw_deg','yaw_signed_deg','q0','q1','q2','q3','accelRoll_deg','accelPitch_deg','gyroRoll_deg','gyroPitch_deg','magHeading_deg',
   'targetRollAngle_deg','targetPitchAngle_deg','targetYaw_deg','targetRollRate_dps','targetPitchRate_dps','targetYawRate_dps',
   'actualRollRate_dps','actualPitchRate_dps','actualYawRate_dps',
   'rollAngleError_deg','pitchAngleError_deg','yawAngleError_deg','rollRateError_dps','pitchRateError_dps','yawRateError_dps',
@@ -1232,10 +1232,12 @@ const modeId=m=>m==='ANGLE'?1:m==='ACRO'?2:m==='FAILSAFE'?3:0;
 const logNum=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
 const logFixed=(v,d)=>logNum(v).toFixed(d);
 const logBool=v=>v?1:0;
+const wrapDeg180=v=>{let n=logNum(v);while(n>180)n-=360;while(n<=-180)n+=360;return n;};
+const wrapDeg360=v=>{let n=logNum(v)%360;if(n<0)n+=360;return n;};
 function toggleLog(){
   logging=!logging;
   const btn=document.getElementById('btnLog'),dlBtn=document.getElementById('btnDL');
-  if(logging){logRunId=Date.now();logSampleIndex=0;logRows=[LOG_HEADER];btn.textContent='⏹ STOP';btn.classList.add('on');dlBtn.style.display='none';addCalLog('[LOG] Logging started','lTUNE');}
+  if(logging){logRunId=Date.now();logSampleIndex=0;logPrevMagNormCalc=null;logRows=[LOG_HEADER];btn.textContent='⏹ STOP';btn.classList.add('on');dlBtn.style.display='none';addCalLog('[LOG] Logging started','lTUNE');}
   else{btn.textContent='⏺ LOG';btn.classList.remove('on');if(logRows.length>1)dlBtn.style.display='';addCalLog(`[LOG] Stopped — ${logRows.length-1} rows`,'lTUNE');}
   setText('logCount',`${Math.max(0,logRows.length-1)} rows logged`);
 }
@@ -1244,6 +1246,10 @@ function appendLogRow(){
   const nowMs=Date.now(), nowUs=Math.round(performance.now()*1000);
   const accelNorm=Math.hypot(logNum(S.ax),logNum(S.ay),logNum(S.az));
   const gyroNorm=Math.hypot(logNum(S.gx),logNum(S.gy),logNum(S.gz));
+  const magNormCalc=Math.hypot(logNum(S.mx),logNum(S.my),logNum(S.mz));
+  const magDelta=(logPrevMagNormCalc==null)?0:Math.abs(magNormCalc-logPrevMagNormCalc);
+  const magHeadingCalc=wrapDeg360(Math.atan2(logNum(S.my),logNum(S.mx))*180/Math.PI);
+  const yawSigned=wrapDeg180(S.yaw);
   const satAny=!!(S.motorSaturated||S.rollOutputLimited||S.pitchOutputLimited||S.yawOutputLimited);
   const r=[
     logRunId,logSampleIndex++,nowMs,nowUs,
@@ -1251,8 +1257,8 @@ function appendLogRow(){
     logBool(S.rcValid),logFixed(S.rcHz,1),S.rcFailsafeCount||0,
     S.rcCh1Us||0,S.rcCh2Us||0,S.rcCh3Us||0,S.rcCh4Us||0,S.auxTune1RawUs||0,S.auxTune2RawUs||0,S.armSwitchRawUs||0,S.modeSwitchRawUs||0,S.rcCh9Us||0,S.rcCh10Us||0,
     logFixed(S.rcRoll,4),logFixed(S.rcPitch,4),logFixed(S.rcYaw,4),logFixed(S.thr,4),
-    logFixed(S.ax,5),logFixed(S.ay,5),logFixed(S.az,5),logFixed(S.gx,4),logFixed(S.gy,4),logFixed(S.gz,4),logFixed(S.mx,3),logFixed(S.my,3),logFixed(S.mz,3),logFixed(S.imuTempC,2),accelNorm.toFixed(5),gyroNorm.toFixed(4),logFixed(S.magNormUt,3),logBool(S.magValid),
-    logFixed(S.roll,3),logFixed(S.pitch,3),logFixed(S.yaw,3),logFixed(S.q0,6),logFixed(S.q1,6),logFixed(S.q2,6),logFixed(S.q3,6),logFixed(S.accelRollDeg,3),logFixed(S.accelPitchDeg,3),logFixed(S.gyroRollDeg,3),logFixed(S.gyroPitchDeg,3),logFixed(S.magHeadingDeg,3),
+    logFixed(S.ax,5),logFixed(S.ay,5),logFixed(S.az,5),logFixed(S.gx,4),logFixed(S.gy,4),logFixed(S.gz,4),logFixed(S.mx,3),logFixed(S.my,3),logFixed(S.mz,3),logFixed(S.imuTempC,2),accelNorm.toFixed(5),gyroNorm.toFixed(4),logFixed(S.magNormUt,3),logBool(S.magValid),magHeadingCalc.toFixed(3),magNormCalc.toFixed(3),magDelta.toFixed(3),logBool(S.magTrusted),
+    logFixed(S.roll,3),logFixed(S.pitch,3),logFixed(S.yaw,3),yawSigned.toFixed(3),logFixed(S.q0,6),logFixed(S.q1,6),logFixed(S.q2,6),logFixed(S.q3,6),logFixed(S.accelRollDeg,3),logFixed(S.accelPitchDeg,3),logFixed(S.gyroRollDeg,3),logFixed(S.gyroPitchDeg,3),logFixed(S.magHeadingDeg,3),
     logFixed(S.targetRollDeg,3),logFixed(S.targetPitchDeg,3),logFixed(S.targetYawDeg,3),logFixed(S.targetRollRateDps,3),logFixed(S.targetPitchRateDps,3),logFixed(S.targetYawRateDps,3),
     logFixed(S.actualRollRateDps,3),logFixed(S.actualPitchRateDps,3),logFixed(S.actualYawRateDps,3),
     logFixed(S.rollAngleErrorDeg,3),logFixed(S.pitchAngleErrorDeg,3),logFixed(S.yawErrorDeg,3),logFixed(S.rollRateErrorDps,3),logFixed(S.pitchRateErrorDps,3),logFixed(S.yawRateErrorDps,3),
@@ -1271,7 +1277,7 @@ function appendLogRow(){
     logBool(S.calibrationValid),logFixed(S.calibrationQuality,3),
     logFixed(S.wifiTelemetryRateHz,1),S.wifiDropCount||0,logBool(S.onboardLoggingActive),S.onboardLogDropCount||0,S.onboardLogFileSizeBytes||0
   ].join(',');
-  logRows.push(r);setText('logCount',`${logRows.length-1} rows logged`);
+  logRows.push(r);logPrevMagNormCalc=magNormCalc;setText('logCount',`${logRows.length-1} rows logged`);
 }
 function downloadLog(){
   if(logRows.length<2){alert('No data.');return;}
@@ -1432,7 +1438,7 @@ function applyJson(j){
   S.gx=+j.gx||0;S.gy=+j.gy||0;S.gz=+j.gz||0;
   S.mx=+j.mx||0;S.my=+j.my||0;S.mz=+j.mz||0;
   S.imuTempC=+j.imuTempC||0;S.magNormUt=+j.magNormUt||0;
-  S.imuValid=!!j.imuValid;S.magValid=!!j.magValid;S.ahrsFilter=j.ahrsFilter||'EKF';S.ahrsFilterMode=+j.ahrsFilterMode||0;
+  S.imuValid=!!j.imuValid;S.magValid=!!j.magValid;S.magTrusted=!!j.ekfMagUsed;S.ahrsFilter=j.ahrsFilter||'EKF';S.ahrsFilterMode=+j.ahrsFilterMode||0;
   S.thr=+j.thr||0;S.rcRoll=+j.rcRoll||0;S.rcPitch=+j.rcPitch||0;S.rcYaw=+j.rcYaw||0;
   S.rcHz=+j.rcHz||0;S.tick=+j.tick||0;
   S.mode=(j.mode||'UNKNOWN').toUpperCase();S.armed=!!j.armed;
