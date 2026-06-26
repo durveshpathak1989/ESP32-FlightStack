@@ -102,7 +102,7 @@
 
 // ── Pilot command limits ────────────────────────────────────
 static constexpr float TUNE_MAX_ANGLE_DEG = 10.0f;
-static constexpr float TUNE_MAX_RATE_DPS  = 30.0f;
+static constexpr float TUNE_MAX_RATE_DPS  = 40.0f;
 
 // ── PID output authority limits before motor mixing ─────────
 static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.900f;
@@ -144,8 +144,8 @@ static constexpr float TUNE_YAW_MAX_RATE_DPS = 20.0f;   // cap on commanded yaw 
 // ── Motor vibration notch filter ────────────────────────────
 // Runs before EKF and before rate PID. Keep center below 0.45*sample rate.
 static constexpr bool  TUNE_NOTCH_ENABLE    = true;
-static constexpr float TUNE_NOTCH_FREQ_HZ   = 90.0f;   // start point; tune from motor log/FFT
-static constexpr float TUNE_NOTCH_Q         = 8.0f;    // higher = narrower notch
+static constexpr float TUNE_NOTCH_FREQ_HZ   = 107.65f; // start point; tune from motor log/FFT
+static constexpr float TUNE_NOTCH_Q         = 10.0f;   // higher = narrower notch
 static constexpr float NOTCH_SAMPLE_HZ      = 400.0f;  // control loop sample rate
 // ── Dynamic FFT-driven notch tracking ───────────────────────
 // Start conservative. The notch should track slowly, not chase noise.
