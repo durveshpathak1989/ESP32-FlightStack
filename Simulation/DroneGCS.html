@@ -1158,7 +1158,7 @@ function switchTab(name){
   if(name==='ota') updateOtaUi();
   if(name==='sensors') drawImuPlot();
   if(name==='motors') drawRpmGauges();
-  if(name==='spectrum') { pollSpectrum(); drawSpectrumPlot(); }
+  if(name==='spectrum') { pollSpectrum(true); drawSpectrumPlot(); }
 }
 
 // ─── GPS / Leaflet ────────────────────────────────────────────────────────────
@@ -1927,9 +1927,15 @@ function drawRpmGauges(){
 
 
 // ─── Frequency Spectrum ─────────────────────────────────────────────────────
-let spectrumData=null, spectrumTimer=null;
-async function pollSpectrum(){
+const SPECTRUM_POLL_DISARMED_MS=500;
+const SPECTRUM_POLL_ARMED_MS=2000;
+let spectrumData=null, spectrumTimer=null, spectrumLastPollMs=0;
+function spectrumPollIntervalMs(){return S.armed?SPECTRUM_POLL_ARMED_MS:SPECTRUM_POLL_DISARMED_MS;}
+async function pollSpectrum(force=false){
   if(activeTab!=='spectrum')return;
+  const now=Date.now();
+  if(!force&&now-spectrumLastPollMs<spectrumPollIntervalMs())return;
+  spectrumLastPollMs=now;
   try{
     const ip=(CFG.wifiIp||'192.168.4.1');
     const r=await fetch('http://'+ip+'/spectrum',{cache:'no-store'});
@@ -1977,7 +1983,7 @@ function copySpectrumPeakToNotch(){
   const el=document.getElementById('notchFreqHz');if(el)el.value=hz.toFixed(1);
   postTune({notch_enable:true,notch_freq_hz:hz,notch_q:parseFloat(document.getElementById('notchQ')?.value||'8')});
 }
-setInterval(()=>{if(activeTab==='spectrum')pollSpectrum();},500);
+setInterval(()=>{if(activeTab==='spectrum')pollSpectrum();},SPECTRUM_POLL_DISARMED_MS);
 
 // ─── Main Render ──────────────────────────────────────────────────────────────
 const modeStyle={
