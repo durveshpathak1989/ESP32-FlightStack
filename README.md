@@ -1,6 +1,6 @@
-# ESP32 - QuadStack
+# ESP32-FlightStack
 
-ESP32 QuadStack is an open-source quadcopter flight-control stack for DIY drones, embedded-systems research, and low-cost UAV experimentation.
+ESP32-FlightStack is an open-source quadcopter flight-control stack for DIY drones, embedded-systems research, and low-cost UAV experimentation.
 
 A custom quadcopter flight controller built around the **Adafruit HUZZAH32 / ESP32-WROOM-32E**, written in Arduino C++ on top of FreeRTOS. The project targets both stable flight and rigorous embedded-systems research: real-time scheduling, sensor fusion, Wi-Fi telemetry, onboard logging, runtime PID tuning, autonomous calibration, and over-the-air firmware updates, all on a $10 microcontroller.
 

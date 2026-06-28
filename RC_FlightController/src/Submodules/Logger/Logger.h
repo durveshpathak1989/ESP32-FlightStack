@@ -3,7 +3,7 @@
  * Use: High-speed diagnostic flight logger for EKF, target tracking,
  *      PID terms, motor saturation, sensor quality, timing, and Paper A data.
  * Version: 1.0.0
- * Baseline: Test_Quad firmware v5.0.0
+ * Baseline: ESP32-FlightStack firmware v5.0.0
  */
 
 #pragma once

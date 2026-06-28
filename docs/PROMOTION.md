@@ -1,10 +1,10 @@
-# ESP32 - QuadStack Promotion Kit
+# ESP32-FlightStack Promotion Kit
 
 Use this file when setting GitHub metadata, sharing the project, or posting release updates.
 
 ## Short Description
 
-ESP32 QuadStack is an open-source ESP32 quadcopter flight-control stack with IMU sensor fusion, cascaded PID stabilization, motor mixing, telemetry, OTA updates, logging, calibration, and a browser-based ground station.
+ESP32-FlightStack is an open-source ESP32 quadcopter flight-control stack with IMU sensor fusion, cascaded PID stabilization, motor mixing, telemetry, OTA updates, logging, calibration, and a browser-based ground station.
 
 ## GitHub Topics
 
@@ -51,11 +51,11 @@ An ESP32-based quadcopter flight-control stack for makers and embedded developer
 
 ## Longer Pitch
 
-ESP32 QuadStack turns a low-cost ESP32 board into a serious quadcopter research platform. It combines a 400 Hz FreeRTOS control loop, MPU-9250 IMU support, EKF/Mahony/Madgwick attitude estimation, cascaded PID control, ESC motor mixing, Wi-Fi telemetry, runtime tuning, onboard CSV logging, sensor calibration, OTA firmware upload, and a browser-based ground station.
+ESP32-FlightStack turns a low-cost ESP32 board into a serious quadcopter research platform. It combines a 400 Hz FreeRTOS control loop, MPU-9250 IMU support, EKF/Mahony/Madgwick attitude estimation, cascaded PID control, ESC motor mixing, Wi-Fi telemetry, runtime tuning, onboard CSV logging, sensor calibration, OTA firmware upload, and a browser-based ground station.
 
 ## Social Post
 
-I am building ESP32 QuadStack, an open-source quadcopter flight-control stack for DIY drones and embedded-systems research. It includes sensor fusion, cascaded PID stabilization, motor mixing, telemetry, OTA updates, onboard logging, calibration, and a browser-based ground station, all running on an ESP32.
+I am building ESP32-FlightStack, an open-source quadcopter flight-control stack for DIY drones and embedded-systems research. It includes sensor fusion, cascaded PID stabilization, motor mixing, telemetry, OTA updates, onboard logging, calibration, and a browser-based ground station, all running on an ESP32.
 
 ## Communities To Share With
 
@@ -68,7 +68,7 @@ I am building ESP32 QuadStack, an open-source quadcopter flight-control stack fo
 
 ## Suggested GitHub Metadata
 
-Repository name: `ESP32-QuadStack`
+Repository name: `ESP32-FlightStack`
 
 Description:
 
