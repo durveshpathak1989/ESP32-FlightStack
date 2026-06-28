@@ -2,6 +2,9 @@
 bin/
 bin-debug/
 bin-release/
+RC_FlightController/build/**/*.elf
+RC_FlightController/build/**/*.map
+RC_FlightController/build/esp32.esp32.esp32/
 [Oo]bj/ # FlashDevelop obj
 [Bb]in/ # FlashDevelop bin
 

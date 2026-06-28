@@ -1,64 +1,69 @@
 # RC_FlightController Build Notes
 
-This folder contains the compiled firmware files for the stability branch.
+This folder contains compiled firmware artifacts for ESP32-FlightStack.
 
-Last regenerated: 2026-06-23
+Last regenerated: 2026-06-28
 
-## Main Firmware File
+## Build Variants
 
-Use this file for normal OTA upload:
+| Folder | Verbose flag | Purpose |
+| --- | --- | --- |
+| `bin_release/` | `VERBOSE_ON=0` | Normal OTA/release firmware. |
+| `bin_debug/` | `VERBOSE_ON=1` | Debug firmware with verbose diagnostics enabled. |
+
+The root `RC_FlightController.ino.bin` and `RC_FlightController.ino.merged.bin` files mirror the release build for compatibility with the existing OTA workflow.
+
+## Main OTA Files
+
+Release:
 
 ```text
-RC_FlightController.ino.bin
+bin_release/RC_FlightController.ino.bin
 ```
 
-## Generated Files
+Debug:
 
-| File | What it is for |
-| --- | --- |
-| `RC_FlightController.ino.bin` | Main firmware binary for OTA upload. |
-| `RC_FlightController.ino.merged.bin` | Full flash image that includes firmware plus boot/partition data. |
-| `RC_FlightController.ino.bootloader.bin` | ESP32 bootloader image. |
-| `RC_FlightController.ino.partitions.bin` | ESP32 partition table image. |
-| `BUILD_METRICS.txt` | Flash/RAM numbers from the compile. |
+```text
+bin_debug/RC_FlightController.ino.bin
+```
 
 ## Build Metrics
 
-Normal build:
+| Variant | Program storage | Flash max | RAM globals | RAM max | Free RAM | OTA `.bin` size |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Release (`VERBOSE_ON=0`) | 1,082,443 bytes | 1,966,080 bytes | 66,420 bytes | 327,680 bytes | 261,260 bytes | 1,082,592 bytes |
+| Debug (`VERBOSE_ON=1`) | 1,093,639 bytes | 1,966,080 bytes | 66,420 bytes | 327,680 bytes | 261,260 bytes | 1,093,792 bytes |
 
-| Metric | Value |
-| --- | ---: |
-| Flash used | 1,095,887 bytes |
-| Flash maximum | 1,966,080 bytes |
-| Flash utilization | 55% |
-| RAM used by global variables | 98,036 bytes |
-| RAM maximum | 327,680 bytes |
-| RAM utilization | 29% |
-| Free RAM for local variables | 229,644 bytes |
+## Firmware Identity
 
-Quiet build check with `VERBOSE_ON=0`:
+```text
+FW_NAME: RC_FlightController
+FW_VERSION: V5.2.0
+FW_SOURCE_BRANCH: master
+FW_SOURCE_COMMIT: b9c6755b65f2
+FW_SOURCE_DIRTY: 0
+FW_BUILD_ID: 20260628T153606Z-master-b9c6755b65f2
+FW_BUILD_TIME_ISO: 2026-06-28T15:36:06Z
+```
 
-| Metric | Value |
-| --- | ---: |
-| Flash used | 1,084,583 bytes |
-| Flash maximum | 1,966,080 bytes |
-| Flash utilization | 55% |
-| RAM used by global variables | 98,028 bytes |
-| RAM maximum | 327,680 bytes |
-| RAM utilization | 29% |
-| Free RAM for local variables | 229,652 bytes |
+## SHA256
 
-Core 0 / Core 1 CPU utilization:
+Release:
 
-| Metric | Build value |
-| --- | --- |
-| Core 0 utilization | Not available at build time |
-| Core 1 utilization | Not available at build time |
+```text
+bin_release/RC_FlightController.ino.bin            7F13E6BFC41612A4CEA585205E12C0C9020382D84A9752B240413D187DDD1906
+bin_release/RC_FlightController.ino.merged.bin     9FD7F5DD5A16D67BD6C200F6EE1E76B6CDCB3D5EABEA11C2D0916F2CB64D0A08
+bin_release/RC_FlightController.ino.bootloader.bin F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
+bin_release/RC_FlightController.ino.partitions.bin 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
+```
+
+Debug:
+
+```text
+bin_debug/RC_FlightController.ino.bin            A25D88C6C76609855C0748755B9A83A2EAF2D4D6DAEDD01151C466C8A89AF874
+bin_debug/RC_FlightController.ino.merged.bin     59908AAB9CBC913D1781C26495A280693862254E72B3C7678B9A6CE221B03569
+bin_debug/RC_FlightController.ino.bootloader.bin F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
+bin_debug/RC_FlightController.ino.partitions.bin 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
+```
 
 Core utilization is measured only while the ESP32 is running. The firmware sends it through telemetry as `cpu_core0_pct`, `cpu_core1_pct`, and `cpu_valid`.
-
-## Build Command
-
-```bash
-arduino-cli compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --output-dir build .
-```

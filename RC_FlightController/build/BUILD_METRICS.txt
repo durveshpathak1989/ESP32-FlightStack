@@ -1,46 +1,65 @@
 RC_FlightController build metrics
 
-Last regenerated: 2026-06-26
+Last regenerated: 2026-06-28
+Arduino CLI: C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe
+Arduino CLI version: 1.5.1
+Board FQBN:
+esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default
 
-Build command:
-arduino-cli compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --libraries /Users/durveshpathak/Documents/Codex/2026-06-23/github-plugin-github-openai-curated-remote-2/work/RC_FlightController/Submodules --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=0 --output-dir build .
+Release build command:
+arduino-cli compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=0 --output-dir build\bin_release .
 
-Generated artifacts:
-RC_FlightController.ino.bin
-RC_FlightController.ino.bootloader.bin
-RC_FlightController.ino.merged.bin
-RC_FlightController.ino.partitions.bin
+Debug build command:
+arduino-cli compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=1 --output-dir build\bin_debug .
 
-Program storage / flash:
-Used:    1,082,523 bytes
-Maximum: 1,966,080 bytes
+Generated artifact folders:
+build\bin_release   VERBOSE_ON=0, normal OTA/release use
+build\bin_debug     VERBOSE_ON=1, verbose diagnostics enabled
+
+The root build\RC_FlightController.ino.bin and build\RC_FlightController.ino.merged.bin files mirror the release build.
+
+Release build metrics (VERBOSE_ON=0):
+Program storage used: 1,082,443 bytes
+Program storage maximum: 1,966,080 bytes
 Flash utilization: 55%
-
-Dynamic memory / RAM:
-Used by global variables: 66,420 bytes
-Maximum:                  327,680 bytes
-Free for local variables: 261,260 bytes
-RAM utilization:          20%
-
-Quiet VERBOSE_ON=0 verification:
-Program storage used: 1,082,523 bytes out of 1,966,080 bytes
-Flash utilization: 55%
-Global variables used: 66,420 bytes out of 327,680 bytes
+Global variables used: 66,420 bytes
+Dynamic memory maximum: 327,680 bytes
 RAM utilization: 20%
 Free RAM for local variables: 261,260 bytes
+OTA binary size: 1,082,592 bytes
+Merged flash image size: 4,194,304 bytes
 
-Firmware identity embedded in this build:
+Debug build metrics (VERBOSE_ON=1):
+Program storage used: 1,093,639 bytes
+Program storage maximum: 1,966,080 bytes
+Flash utilization: 55%
+Global variables used: 66,420 bytes
+Dynamic memory maximum: 327,680 bytes
+RAM utilization: 20%
+Free RAM for local variables: 261,260 bytes
+OTA binary size: 1,093,792 bytes
+Merged flash image size: 4,194,304 bytes
+
+Firmware identity embedded in both builds:
 FW_NAME: RC_FlightController
 FW_VERSION: V5.2.0
 FW_SOURCE_BRANCH: master
-FW_SOURCE_COMMIT: 2598f56385c3
+FW_SOURCE_COMMIT: b9c6755b65f2
 FW_SOURCE_DIRTY: 0
-FW_BUILD_ID: 20260626T211909Z-master-2598f56385c3
-FW_BUILD_TIME_ISO: 2026-06-26T21:19:09Z
+FW_BUILD_ID: 20260628T153606Z-master-b9c6755b65f2
+FW_BUILD_TIME_ISO: 2026-06-28T15:36:06Z
 
-Binary SHA256:
-RC_FlightController.ino.bin: a3f26d9d54a894417f45e135610d74b9ad17175a93cd3058e392405d41ad5c4e
-RC_FlightController.ino.merged.bin: f9ab095fa824e3833b5358c8a4225df38ad05dcef244d08ff6d2e52d06eec6ad
+Release SHA256 (VERBOSE_ON=0):
+build\bin_release\RC_FlightController.ino.bin: 7F13E6BFC41612A4CEA585205E12C0C9020382D84A9752B240413D187DDD1906
+build\bin_release\RC_FlightController.ino.merged.bin: 9FD7F5DD5A16D67BD6C200F6EE1E76B6CDCB3D5EABEA11C2D0916F2CB64D0A08
+build\bin_release\RC_FlightController.ino.bootloader.bin: F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
+build\bin_release\RC_FlightController.ino.partitions.bin: 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
+
+Debug SHA256 (VERBOSE_ON=1):
+build\bin_debug\RC_FlightController.ino.bin: A25D88C6C76609855C0748755B9A83A2EAF2D4D6DAEDD01151C466C8A89AF874
+build\bin_debug\RC_FlightController.ino.merged.bin: 59908AAB9CBC913D1781C26495A280693862254E72B3C7678B9A6CE221B03569
+build\bin_debug\RC_FlightController.ino.bootloader.bin: F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
+build\bin_debug\RC_FlightController.ino.partitions.bin: 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
 
 Runtime heap note:
 The flight logger allocates its row buffer from heap during setup().
