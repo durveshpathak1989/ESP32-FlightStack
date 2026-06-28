@@ -1,10 +1,16 @@
-# ESP32 Quadcopter Flight Controller
+# ESP32 - QuadStack
+
+ESP32 QuadStack is an open-source quadcopter flight-control stack for DIY drones, embedded-systems research, and low-cost UAV experimentation.
 
 A custom quadcopter flight controller built around the **Adafruit HUZZAH32 / ESP32-WROOM-32E**, written in Arduino C++ on top of FreeRTOS. The project targets both stable flight and rigorous embedded-systems research: real-time scheduling, sensor fusion, Wi-Fi telemetry, onboard logging, runtime PID tuning, autonomous calibration, and over-the-air firmware updates, all on a $10 microcontroller.
 
 **Firmware version:** v5.0.0  
 **Control loop:** 400 Hz, `esp_timer`-driven, pinned to Core 1  
 **AHRS default:** Attitude EKF (switchable at runtime to Mahony or Madgwick)
+
+**Good GitHub topics:** `esp32`, `quadcopter`, `drone`, `uav`, `flight-controller`, `flight-control`, `embedded-c`, `esp-idf`, `arduino`, `freertos`, `pid-controller`, `imu`, `sensor-fusion`, `attitude-estimation`, `mpu9250`, `bmp280`, `madgwick-filter`, `motor-control`, `esc`
+
+**Search keywords:** ESP32 drone library, ESP32 quadcopter flight controller, open-source drone stack, DIY quadcopter firmware, embedded drone control, IMU sensor fusion, PID stabilization, ESP32 UAV framework
 
 ---
 
