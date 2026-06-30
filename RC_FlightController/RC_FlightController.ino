@@ -2711,7 +2711,7 @@ static void taskSerial(void* /*pv*/)
                           "OFF R=%+5.2f P=%+5.2f Y=%+5.2f | "
                           "MOT %.2f %.2f %.2f %.2f | "
                           "BMP %.1fC %.1fhPa %.1fm | "
-                          "ToF %s %.3fm %lums | "
+                          "ToF %s %.3fm obj=%u %lums | "
                           "GPS %s Sats=%d | "
                           "Mag:%s Est:%s mKp=%.2f\n",
                           (unsigned long)tick, ms,
@@ -2722,6 +2722,7 @@ static void taskSerial(void* /*pv*/)
                           s.bmpTemp_c, s.bmpPressure_hpa, s.bmpAltitude_m,
                           s.tofValid ? "OK" : (s.tofReady ? "---" : "OFF"),
                           s.tofDistance_m,
+                          (unsigned int)s.tofObjectCount,
                           (unsigned long)((s.tofAge_ms == UINT32_MAX) ? 0 : s.tofAge_ms),
                           s.gps.valid ? "FIX" : "---", s.gps.satellites,
                           imu.isMagConnected() ? "9DOF" : "6DOF",
