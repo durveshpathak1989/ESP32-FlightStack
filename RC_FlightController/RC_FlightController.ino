@@ -55,7 +55,7 @@
 #include "src/Submodules/WiFiTelemetry/TelemetryWiFi.h"
 #include "src/Submodules/BMP280/BMP280Sensor.h"
 #include "src/Submodules/EKF/AttitudeEKF.h"
-#include "src/Submodules/ToF/ToFSensor.h"
+#include "src/Submodules/ToF/FlightToF_VL53L4CX.h"
 #include "src/Submodules/NotchFilter/NotchFilter.h"
 #include "src/Submodules/FFT/SpectrumAnalyzer.h"
 #include "src/Submodules/Madgwick/MadgwickAHRS.h"
@@ -100,6 +100,13 @@
 #define JITTER_VIOLATION_US    100     // threshold: counts as a violation
 #define GYRO_LPF_HZ           50.0f    // lower = smoother but more lag
 #define RC_LPF_HZ             50.0f    // stick setpoint smoothing
+
+static constexpr uint8_t  TOF_ST_ADDRESS            = 0x12;
+static constexpr uint32_t TOF_I2C_HZ                = 400000;
+static constexpr uint32_t TOF_TIMING_BUDGET_US      = 20000;
+static constexpr uint32_t TOF_INTER_MEASUREMENT_MS  = 25;
+static constexpr uint32_t TOF_TASK_PERIOD_MS        = 25;      // 40 Hz poll, matches 25 ms ranging cadence
+static constexpr uint32_t TOF_STALE_MS              = 200;
 
 // ── Pilot command limits ────────────────────────────────────
 static constexpr float TUNE_MAX_ANGLE_DEG = 10.0f;
@@ -327,6 +334,7 @@ AttitudeEKF attitudeEKF;
 MadgwickAHRS madgwickAHRS;
 NotchFilter notchAx, notchAy, notchAz;
 NotchFilter notchGx, notchGy, notchGz;
+static FlightToF_VL53L4CX tofSensor(Wire);
 static float    g_dynamicNotchHz = TUNE_NOTCH_FREQ_HZ;
 static bool     g_dynamicNotchTracking = false;
 static uint32_t g_lastDynamicNotchUpdateMs = 0;
@@ -359,6 +367,17 @@ struct FlightState {
     float imuTemp_c;
     float bmpTemp_c, bmpPressure_hpa, bmpAltitude_m;
     bool  bmpValid;
+    float tofDistance_m;
+    uint16_t tofDistance_mm;
+    uint8_t tofRangeStatus;
+    uint8_t tofObjectCount;
+    uint8_t tofStreamCount;
+    float tofSignalMcps;
+    float tofAmbientMcps;
+    uint32_t tofAge_ms;
+    uint32_t tofLastUpdate_ms;
+    bool  tofReady;
+    bool  tofValid;
     float cpuCore0_pct, cpuCore1_pct;
     bool  cpuValid;
     float motorFL, motorFR, motorRL, motorRR;
@@ -417,6 +436,7 @@ struct FlightState {
 };
 static FlightState       g_state;
 static SemaphoreHandle_t g_flightMutex;
+static SemaphoreHandle_t g_i2cMutex;
 
 static volatile uint32_t g_pidResetCount = 0;
 static volatile uint32_t g_modeTransitionCount = 0;
@@ -523,6 +543,7 @@ static TaskHandle_t hTaskRC     = nullptr;
 static TaskHandle_t hTaskSerial = nullptr;
 static TaskHandle_t hTaskWiFi   = nullptr;
 static TaskHandle_t hTaskBMP    = nullptr;
+static TaskHandle_t hTaskToF    = nullptr;
 static TaskHandle_t hTaskCPU    = nullptr;
 static TaskHandle_t hTaskGPS    = nullptr;
 
@@ -2690,6 +2711,7 @@ static void taskSerial(void* /*pv*/)
                           "OFF R=%+5.2f P=%+5.2f Y=%+5.2f | "
                           "MOT %.2f %.2f %.2f %.2f | "
                           "BMP %.1fC %.1fhPa %.1fm | "
+                          "ToF %s %.3fm %lums | "
                           "GPS %s Sats=%d | "
                           "Mag:%s Est:%s mKp=%.2f\n",
                           (unsigned long)tick, ms,
@@ -2698,6 +2720,9 @@ static void taskSerial(void* /*pv*/)
                           s.roll_offset_deg, s.pitch_offset_deg, s.yaw_offset_deg,
                           s.motorFL, s.motorFR, s.motorRL, s.motorRR,
                           s.bmpTemp_c, s.bmpPressure_hpa, s.bmpAltitude_m,
+                          s.tofValid ? "OK" : (s.tofReady ? "---" : "OFF"),
+                          s.tofDistance_m,
+                          (unsigned long)((s.tofAge_ms == UINT32_MAX) ? 0 : s.tofAge_ms),
                           s.gps.valid ? "FIX" : "---", s.gps.satellites,
                           imu.isMagConnected() ? "9DOF" : "6DOF",
                           (s.ahrsFilterMode == 1) ? "Mahony" : ((s.ahrsFilterMode == 2) ? "Madgwick" : "EKF"),
@@ -2739,6 +2764,45 @@ static void taskSerial(void* /*pv*/)
 }
 
 // ─────────────────────────────────────────────────────────────
+//  taskToF — Core 0, priority 1, 40 Hz
+// ─────────────────────────────────────────────────────────────
+static void taskToF(void* /*pv*/)
+{
+    const TickType_t period = pdMS_TO_TICKS(TOF_TASK_PERIOD_MS);
+    TickType_t lastWake = xTaskGetTickCount();
+
+    for (;;) {
+        bool ready = tofSensor.isReady();
+        if (ready && xSemaphoreTake(g_i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            tofSensor.update();
+            ready = tofSensor.isReady();
+            xSemaphoreGive(g_i2cMutex);
+        }
+
+        FlightToFReading r = tofSensor.reading();
+        uint32_t ageMs = ready ? tofSensor.ageMs() : UINT32_MAX;
+        bool valid = ready && r.valid && (ageMs <= TOF_STALE_MS);
+
+        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+            g_state.tofReady         = ready;
+            g_state.tofValid         = valid;
+            g_state.tofDistance_mm   = r.distanceMm;
+            g_state.tofDistance_m    = r.distanceMm * 0.001f;
+            g_state.tofRangeStatus   = r.rangeStatus;
+            g_state.tofObjectCount   = r.objectCount;
+            g_state.tofStreamCount   = r.streamCount;
+            g_state.tofSignalMcps    = r.signalMcps;
+            g_state.tofAmbientMcps   = r.ambientMcps;
+            g_state.tofAge_ms        = ageMs;
+            g_state.tofLastUpdate_ms = r.lastUpdateMs;
+            xSemaphoreGive(g_flightMutex);
+        }
+
+        vTaskDelayUntil(&lastWake, period);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
 //  taskBMP — Core 0, priority 1, 20 Hz
 // ─────────────────────────────────────────────────────────────
 static void taskBMP(void* /*pv*/)
@@ -2751,7 +2815,16 @@ static void taskBMP(void* /*pv*/)
 
     for (;;) {
         BMP280Data b;
-        if (bmp280.read(b)) {
+        bool haveBmpSample = false;
+        bool bmpReadOk = false;
+
+        if (xSemaphoreTake(g_i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            bmpReadOk = bmp280.read(b);
+            haveBmpSample = true;
+            xSemaphoreGive(g_i2cMutex);
+        }
+
+        if (bmpReadOk) {
             uint32_t nowMsBmp = millis();
             float bmpVz = 0.0f;
             if (b.valid && bmpVzInit && nowMsBmp > prevBmpMs) {
@@ -2768,7 +2841,7 @@ static void taskBMP(void* /*pv*/)
                 g_state.bmpValid       = b.valid;
                 xSemaphoreGive(g_flightMutex);
             }
-        } else {
+        } else if (haveBmpSample) {
             if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
                 g_state.bmpValid = false;
                 g_state.bmpVerticalSpeed_mps = 0.0f;
@@ -2884,9 +2957,11 @@ void setup()
     g_flightMutex = xSemaphoreCreateMutex();
     g_tuneMutex   = xSemaphoreCreateMutex();
     g_timingMutex = xSemaphoreCreateMutex();
+    g_i2cMutex    = xSemaphoreCreateMutex();
     configASSERT(g_flightMutex);
     configASSERT(g_tuneMutex);
     configASSERT(g_timingMutex);
+    configASSERT(g_i2cMutex);
     if (!flightLogger.begin()) {
         DBG_PRINTLN(F("[BOOT][WARN] FlightLogger allocation failed; /flightlog/csv disabled."));
     }
@@ -2925,8 +3000,17 @@ void setup()
         ? DBG_PRINTLN(F("OK")) : DBG_PRINTLN(F("not found."));
 
     DBG_PRINT(F("[BOOT] VL53L4CX ToF... "));
-    tofSensor.begin(PIN_BMP_SDA, PIN_BMP_SCL, 400000)
-        ? DBG_PRINTLN(F("OK")) : DBG_PRINTLN(F("disabled/not found."));
+    Wire.setClock(TOF_I2C_HZ);
+    bool tofOk = tofSensor.begin(TOF_ST_ADDRESS,
+                                 FlightToF_VL53L4CX::DISTANCE_MEDIUM,
+                                 TOF_TIMING_BUDGET_US,
+                                 TOF_INTER_MEASUREMENT_MS);
+    g_state.tofReady = tofOk;
+    if (tofOk) {
+        DBG_PRINTLN(F("OK"));
+    } else {
+        DBG_PRINTLN(F("disabled/not found."));
+    }
 
     DBG_PRINT(F("[BOOT] CPU monitor... "));
     cpuUtilization.begin(1000)
@@ -2952,6 +3036,7 @@ void setup()
     xTaskCreatePinnedToCore(taskSerial,  "Serial", 4096,  nullptr, 1, &hTaskSerial,  0);
     xTaskCreatePinnedToCore(taskWiFi,    "WiFi",   12288, nullptr, 1, &hTaskWiFi,    0);
     xTaskCreatePinnedToCore(taskBMP,     "BMP280", 3072,  nullptr, 1, &hTaskBMP,     0);
+    xTaskCreatePinnedToCore(taskToF,     "ToF",    4096,  nullptr, 1, &hTaskToF,     0);
     xTaskCreatePinnedToCore(taskCPU,     "CPU",    3072,  nullptr, 1, &hTaskCPU,     0);
     xTaskCreatePinnedToCore(taskGPS,     "GPS",    4096,  nullptr, 1, &hTaskGPS,     0);
     xTaskCreatePinnedToCore(taskControl, "Ctrl",   10240, nullptr, 5, &hTaskControl, 1);
