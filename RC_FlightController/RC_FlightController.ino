@@ -55,7 +55,7 @@
 #include "src/Submodules/WiFiTelemetry/TelemetryWiFi.h"
 #include "src/Submodules/BMP280/BMP280Sensor.h"
 #include "src/Submodules/EKF/AttitudeEKF.h"
-#include "src/Submodules/ToF/ToFSensor.h"
+#include "src/Submodules/ToF/FlightToF_VL53L4CX.h"
 #include "src/Submodules/NotchFilter/NotchFilter.h"
 #include "src/Submodules/FFT/SpectrumAnalyzer.h"
 #include "src/Submodules/Madgwick/MadgwickAHRS.h"
