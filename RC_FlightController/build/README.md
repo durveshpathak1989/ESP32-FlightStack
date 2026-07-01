@@ -2,7 +2,7 @@
 
 This folder contains compiled firmware artifacts for ESP32-FlightStack.
 
-Last regenerated: 2026-06-28
+Last regenerated: 2026-07-01
 
 ## Build Variants
 
@@ -31,19 +31,19 @@ bin_debug/RC_FlightController.ino.bin
 
 | Variant | Program storage | Flash max | RAM globals | RAM max | Free RAM | OTA `.bin` size |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Release (`VERBOSE_ON=0`) | 1,082,443 bytes | 1,966,080 bytes | 66,420 bytes | 327,680 bytes | 261,260 bytes | 1,082,592 bytes |
-| Debug (`VERBOSE_ON=1`) | 1,093,639 bytes | 1,966,080 bytes | 66,420 bytes | 327,680 bytes | 261,260 bytes | 1,093,792 bytes |
+| Release (`VERBOSE_ON=0`) | 1,127,419 bytes | 1,966,080 bytes | 76,028 bytes | 327,680 bytes | 251,652 bytes | 1,127,568 bytes |
+| Debug (`VERBOSE_ON=1`) | 1,138,395 bytes | 1,966,080 bytes | 76,028 bytes | 327,680 bytes | 251,652 bytes | 1,138,544 bytes |
 
 ## Firmware Identity
 
 ```text
 FW_NAME: RC_FlightController
-FW_VERSION: V5.2.0
+FW_VERSION: V5.4.0-6-g416381b
 FW_SOURCE_BRANCH: master
-FW_SOURCE_COMMIT: 6ca42c1e3b25
+FW_SOURCE_COMMIT: 416381b47066
 FW_SOURCE_DIRTY: 0
-FW_BUILD_ID: 20260628T155741Z-master-6ca42c1e3b25
-FW_BUILD_TIME_ISO: 2026-06-28T15:57:41Z
+FW_BUILD_ID: 20260701T012259Z-master-416381b47066
+FW_BUILD_TIME_ISO: 2026-07-01T01:22:59Z
 ```
 
 ## SHA256
@@ -51,8 +51,8 @@ FW_BUILD_TIME_ISO: 2026-06-28T15:57:41Z
 Release:
 
 ```text
-bin_release/RC_FlightController.ino.bin            094F50F676E7F541636157516FEB8CA7A843FA36C9AEFF6714D64733770E3258
-bin_release/RC_FlightController.ino.merged.bin     11962B703946AB5DB50712AB5672005AA35689CD7BC595E538A59FB12CFCD641
+bin_release/RC_FlightController.ino.bin            46EDBE64E766454220E0291541DA5F3870B1CC6C672DBA920FCE6A77EBADC57E
+bin_release/RC_FlightController.ino.merged.bin     B5683B6E39ECF5B6910E121EC29BE0A337AF71E260CB19AC60AE74DF14617135
 bin_release/RC_FlightController.ino.bootloader.bin F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
 bin_release/RC_FlightController.ino.partitions.bin 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
 ```
@@ -60,8 +60,8 @@ bin_release/RC_FlightController.ino.partitions.bin 0A8B5720E7B77FF11F1462458C3A5
 Debug:
 
 ```text
-bin_debug/RC_FlightController.ino.bin            41EDEA5ED8DA264464AB01D853F7BE94B8BFD30F18E1330B1991AD06582B2A1A
-bin_debug/RC_FlightController.ino.merged.bin     BC7F5628687DDF111C7BB1895C70D32328C70ACB217D7C9ECCD2A996C00A0302
+bin_debug/RC_FlightController.ino.bin            8AFBC90FD0719F193CA04E5AE15F8CED94F92E159C58C23F780386BA85AB8C7E
+bin_debug/RC_FlightController.ino.merged.bin     BEB0257F74CB820918582AB2233438EE4FAA1D0E3F59FF615A6A261ED6E3BB73
 bin_debug/RC_FlightController.ino.bootloader.bin F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
 bin_debug/RC_FlightController.ino.partitions.bin 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
 ```
