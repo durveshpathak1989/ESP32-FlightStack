@@ -2338,36 +2338,15 @@ static void taskControl(void* /*pv*/)
             fl = fr = rl = rr = 0.0f;
         }
 
-        // phaseStartUs = micros();
-        // writeMotors(fl, fr, rl, rr);
-        // g_motorOutputsActive = true;
-        // g_execTiming.lastMotorUs = micros() - phaseStartUs;
-        // uint32_t controlDoneUs = micros();
-
-                // ── Motor PWM update rate limiter ───────────────────────────
-        // Control loop still runs at 400 Hz.
-        // ESC/motor PWM writes run at 200 Hz to avoid blocking every cycle.
-        static uint32_t lastMotorWriteUs = 0;
+        // ── Motor PWM update ───────────────────────────────────
+        // Runs every 400 Hz control cycle so motor output tracks PID immediately.
         static uint32_t motorWriteCount = 0;
-        static uint32_t motorSkipCount = 0;
         static uint32_t lastMotorRatePrintMs = 0;
 
-        constexpr uint32_t MOTOR_UPDATE_PERIOD_US = 5000; // 200 Hz
-
-        bool motorWriteDue =
-            (lastMotorWriteUs == 0) ||
-            ((uint32_t)(nowUs - lastMotorWriteUs) >= MOTOR_UPDATE_PERIOD_US);
-
         phaseStartUs = micros();
-
-        if (motorWriteDue) {
-            writeMotors(fl, fr, rl, rr);
-            g_motorOutputsActive = true;
-            lastMotorWriteUs = nowUs;
-            motorWriteCount++;
-        } else {
-            motorSkipCount++;
-        }
+        writeMotors(fl, fr, rl, rr);
+        g_motorOutputsActive = true;
+        motorWriteCount++;
 
         g_execTiming.lastMotorUs = micros() - phaseStartUs;
 
@@ -2376,17 +2355,14 @@ static void taskControl(void* /*pv*/)
             if (motorRateNowMs - lastMotorRatePrintMs >= 1000) {
                 lastMotorRatePrintMs = motorRateNowMs;
 
-                DBG_PRINTF("[MOTOR_RATE] target=200Hz writes=%lu skips=%lu lastMotorUs=%lu\n",
+                DBG_PRINTF("[MOTOR_RATE] target=400Hz writes=%lu lastMotorUs=%lu\n",
                               (unsigned long)motorWriteCount,
-                              (unsigned long)motorSkipCount,
                               (unsigned long)g_execTiming.lastMotorUs);
 
                 motorWriteCount = 0;
-                motorSkipCount = 0;
             }
         } else {
             motorWriteCount = 0;
-            motorSkipCount = 0;
         }
 
         uint32_t controlDoneUs = micros();
