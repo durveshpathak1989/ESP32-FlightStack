@@ -625,14 +625,17 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Kp</span><input class="tval" id="rKp" value="0.04000"><button class="tapply" onclick="sendSingle('pid_roll_kp','rKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="rKi" value="0.00000000"><button class="tapply" onclick="sendSingle('pid_roll_ki','rKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="rKd" value="0.00001500"><button class="tapply" onclick="sendSingle('pid_roll_kd','rKd')">SET</button></div>
+    <div class="tune-row"><span>FF</span><input class="tval" id="rFf" value="0.001000"><button class="tapply" onclick="sendSingle('pid_roll_ff','rFf')">SET</button></div>
     <div class="sec-title">RATE PID — PITCH</div>
     <div class="tune-row"><span>Kp</span><input class="tval" id="pKp" value="0.06000"><button class="tapply" onclick="sendSingle('pid_pitch_kp','pKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="pKi" value="0.00000000"><button class="tapply" onclick="sendSingle('pid_pitch_ki','pKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="pKd" value="0.00001500"><button class="tapply" onclick="sendSingle('pid_pitch_kd','pKd')">SET</button></div>
+    <div class="tune-row"><span>FF</span><input class="tval" id="pFf" value="0.001000"><button class="tapply" onclick="sendSingle('pid_pitch_ff','pFf')">SET</button></div>
     <div class="sec-title">RATE PID — YAW</div>
     <div class="tune-row"><span>Kp</span><input class="tval" id="yKp" value="0.005000"><button class="tapply" onclick="sendSingle('pid_yaw_kp','yKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="yKi" value="0.0000000"><button class="tapply" onclick="sendSingle('pid_yaw_ki','yKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="yKd" value="0.0000000"><button class="tapply" onclick="sendSingle('pid_yaw_kd','yKd')">SET</button></div>
+    <div class="tune-row"><span>FF</span><input class="tval" id="yFf" value="0.001000"><button class="tapply" onclick="sendSingle('pid_yaw_ff','yFf')">SET</button></div>
     <div class="sec-title" style="margin-top:12px">ATTITUDE FILTER · MAHONY / EKF</div>
     <div class="tune-row"><span>Filter</span><select class="tval" id="ahrsFilterMode"><option value="0">EKF</option><option value="1">Mahony</option><option value="2">Madgwick</option></select><button class="tapply" onclick="sendFilterMode()">SET</button></div>
     <div class="tune-row"><span>mKp</span><input class="tval" id="mKp" value="1.0000"><button class="tapply" onclick="sendSingle('mahony_kp','mKp')">SET</button></div>
@@ -1533,6 +1536,7 @@ function applyJson(j){
   syncI('rKp',j.pidRollKp,4);syncI('rKi',j.pidRollKi,5);syncI('rKd',j.pidRollKd,4);
   syncI('pKp',j.pidPitchKp,4);syncI('pKi',j.pidPitchKi,5);syncI('pKd',j.pidPitchKd,4);
   syncI('yKp',j.pidYawKp,4);syncI('yKi',j.pidYawKi,5);syncI('yKd',j.pidYawKd,4);
+  syncI('rFf',j.pidRollFf,6);syncI('pFf',j.pidPitchFf,6);syncI('yFf',j.pidYawFf,6);
   syncI('arKp',j.pidAngleRollKp,3);syncI('arKi',j.pidAngleRollKi,5);syncI('arKd',j.pidAngleRollKd,5);
   syncI('apKp',j.pidAnglePitchKp,3);syncI('apKi',j.pidAnglePitchKi,5);syncI('apKd',j.pidAnglePitchKd,5);
   syncI('ayKp',j.pidAngleYawKp,3);
@@ -1677,6 +1681,7 @@ async function sendAllGains(){
     pid_roll_kp:'rKp',pid_roll_ki:'rKi',pid_roll_kd:'rKd',
     pid_pitch_kp:'pKp',pid_pitch_ki:'pKi',pid_pitch_kd:'pKd',
     pid_yaw_kp:'yKp',pid_yaw_ki:'yKi',pid_yaw_kd:'yKd',
+    pid_roll_ff:'rFf',pid_pitch_ff:'pFf',pid_yaw_ff:'yFf',
     pid_angle_roll_kp:'arKp',pid_angle_roll_ki:'arKi',pid_angle_roll_kd:'arKd',
     pid_angle_pitch_kp:'apKp',pid_angle_pitch_ki:'apKi',pid_angle_pitch_kd:'apKd',
     pid_angle_yaw_kp:'ayKp',
