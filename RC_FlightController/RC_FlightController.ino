@@ -131,12 +131,15 @@ static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 static constexpr float TUNE_RATE_ROLL_KP   = 0.04000f;
 static constexpr float TUNE_RATE_ROLL_KI   = 0.0000000f;
 static constexpr float TUNE_RATE_ROLL_KD   = 0.0000150f;
+static constexpr float TUNE_RATE_ROLL_FF   = 0.00100f;
 static constexpr float TUNE_RATE_PITCH_KP  = 0.06000f;
 static constexpr float TUNE_RATE_PITCH_KI  = 0.0000000f;
 static constexpr float TUNE_RATE_PITCH_KD  = 0.0000150f;
+static constexpr float TUNE_RATE_PITCH_FF  = 0.00100f;
 static constexpr float TUNE_RATE_YAW_KP    = 0.00500f;
 static constexpr float TUNE_RATE_YAW_KI    = 0.0000000f;
 static constexpr float TUNE_RATE_YAW_KD    = 0.0000000f;
+static constexpr float TUNE_RATE_YAW_FF    = 0.00100f;
 // Outer Loop
 static constexpr float TUNE_ANGLE_ROLL_KP  = 1.00f;
 static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
@@ -565,6 +568,8 @@ static void controlTimerCallback(void* /*arg*/)
 // ─────────────────────────────────────────────────────────────
 struct PID {
     float kp, ki, kd, integral=0, prevError=0, iLimit=50.0f;
+    float prevMeasurement=0.0f;
+    bool hasPrevMeasurement=false;
     float lastP=0.0f, lastI=0.0f, lastD=0.0f, lastOut=0.0f;
 
     PID(float p,float i,float d,float il=50.0f):kp(p),ki(i),kd(d),iLimit(il){}
@@ -580,8 +585,24 @@ struct PID {
         return lastOut;
     }
 
+    float updateDOnMeasurement(float err, float measurement, float dt){
+        integral=constrain(integral+err*dt,-iLimit,iLimit);
+        float measurementRate = 0.0f;
+        if (hasPrevMeasurement && dt > 0.000001f) {
+            measurementRate = (measurement - prevMeasurement) / dt;
+        }
+        prevError=err;
+        prevMeasurement=measurement;
+        hasPrevMeasurement=true;
+        lastP = kp * err;
+        lastI = ki * integral;
+        lastD = -kd * measurementRate;
+        lastOut = lastP + lastI + lastD;
+        return lastOut;
+    }
+
     void reset(){
-        integral=0; prevError=0;
+        integral=0; prevError=0; prevMeasurement=0.0f; hasPrevMeasurement=false;
         lastP=lastI=lastD=lastOut=0.0f;
     }
 };
@@ -2169,6 +2190,7 @@ static void taskControl(void* /*pv*/)
         float targetRollRateDps = 0.0f, targetPitchRateDps = 0.0f, targetYawRateDps = 0.0f;
         float angleErrRollDeg = 0.0f, angleErrPitchDeg = 0.0f, yawErrDeg = 0.0f;
         float rateErrRollDps = 0.0f, rateErrPitchDps = 0.0f, rateErrYawDps = 0.0f;
+        float rateRollFf = 0.0f, ratePitchFf = 0.0f, rateYawFf = 0.0f;
 
         float rollCmd  = lpfSpRoll .apply(cmd.roll,  dt, RC_LPF_HZ);
         float pitchCmd = lpfSpPitch.apply(cmd.pitch, dt, RC_LPF_HZ);
@@ -2183,15 +2205,19 @@ static void taskControl(void* /*pv*/)
             targetPitchRateDps = pidAnglePitch.update(angleErrPitchDeg, dt);
             rateErrRollDps = targetRollRateDps - gx;
             rateErrPitchDps = targetPitchRateDps - gy;
-            rO = pidRateRoll.update(rateErrRollDps, dt);
-            pO = pidRatePitch.update(rateErrPitchDps, dt);
+            rateRollFf = TUNE_RATE_ROLL_FF * targetRollRateDps;
+            ratePitchFf = TUNE_RATE_PITCH_FF * targetPitchRateDps;
+            rO = rateRollFf + pidRateRoll.updateDOnMeasurement(rateErrRollDps, gx, dt);
+            pO = ratePitchFf + pidRatePitch.updateDOnMeasurement(rateErrPitchDps, gy, dt);
         } else {   // ACRO
             targetRollRateDps = rollCmd * MAX_RATE_DPS;
             targetPitchRateDps = pitchCmd * MAX_PITCH_RATE_DPS;
             rateErrRollDps = targetRollRateDps - gx;
             rateErrPitchDps = targetPitchRateDps - gy;
-            rO = pidRateRoll.update(rateErrRollDps, dt);
-            pO = pidRatePitch.update(rateErrPitchDps, dt);
+            rateRollFf = TUNE_RATE_ROLL_FF * targetRollRateDps;
+            ratePitchFf = TUNE_RATE_PITCH_FF * targetPitchRateDps;
+            rO = rateRollFf + pidRateRoll.updateDOnMeasurement(rateErrRollDps, gx, dt);
+            pO = ratePitchFf + pidRatePitch.updateDOnMeasurement(rateErrPitchDps, gy, dt);
         }
 
         // Yaw: heading-hold when stick centered, rate when moving.
@@ -2206,13 +2232,15 @@ static void taskControl(void* /*pv*/)
             targetYawRateDps = pidAngleYaw.update(yawErrDeg, dt);
             targetYawRateDps = constrain(targetYawRateDps, -tune.yaw_max_rate_dps, tune.yaw_max_rate_dps);
             rateErrYawDps = targetYawRateDps - gz;
-            yO = pidRateYaw.update(rateErrYawDps, dt);
+            rateYawFf = TUNE_RATE_YAW_FF * targetYawRateDps;
+            yO = rateYawFf + pidRateYaw.updateDOnMeasurement(rateErrYawDps, gz, dt);
         } else {
             g_yawHoldActive = false;
             targetYawDeg = yawCtrlDeg;
             targetYawRateDps = -yawCmd * tune.yaw_max_rate_dps;
             rateErrYawDps = targetYawRateDps - gz;
-            yO = pidRateYaw.update(rateErrYawDps, dt);
+            rateYawFf = TUNE_RATE_YAW_FF * targetYawRateDps;
+            yO = rateYawFf + pidRateYaw.updateDOnMeasurement(rateErrYawDps, gz, dt);
         }
 
         const bool rollOutputLimited = (rO > tune.roll_output_limit) || (rO < -tune.roll_output_limit);
