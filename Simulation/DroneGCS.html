@@ -606,8 +606,8 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Yaw DB</span><input class="tval" id="yawDeadband" value="0.02000"><button class="tapply" onclick="sendSingle('yaw_deadband','yawDeadband')">SET</button></div>
 
     <div class="sec-title">PID OUTPUT AUTHORITY</div>
-    <div class="tune-row"><span>Roll Lim</span><input class="tval" id="outRollLim" value="0.0800"><button class="tapply" onclick="sendSingle('roll_output_limit','outRollLim')">SET</button></div>
-    <div class="tune-row"><span>Pitch Lim</span><input class="tval" id="outPitchLim" value="0.0800"><button class="tapply" onclick="sendSingle('pitch_output_limit','outPitchLim')">SET</button></div>
+    <div class="tune-row"><span>Roll Lim</span><input class="tval" id="outRollLim" value="0.1000"><button class="tapply" onclick="sendSingle('roll_output_limit','outRollLim')">SET</button></div>
+    <div class="tune-row"><span>Pitch Lim</span><input class="tval" id="outPitchLim" value="0.1000"><button class="tapply" onclick="sendSingle('pitch_output_limit','outPitchLim')">SET</button></div>
     <div class="tune-row"><span>Yaw Lim</span><input class="tval" id="outYawLim" value="0.1000"><button class="tapply" onclick="sendSingle('yaw_output_limit','outYawLim')">SET</button></div>
 
     <div class="sec-title">THROTTLE SHAPING</div>
@@ -921,7 +921,7 @@ const CFG_DEFAULTS = {
   kv:920, cells:4, cellV:3.7, mah:3000, poles:14,
   propDiam:5.0, propPitch:4.5, weight:650,
   maxAngle:5, maxRoll:70, maxPitch:70, maxYaw:20, hover:0.45, iLimit:50,
-  rollOutLimit:0.080, pitchOutLimit:0.080, yawOutLimit:0.100,
+  rollOutLimit:0.100, pitchOutLimit:0.100, yawOutLimit:0.100,
   throttleExpo:0.90, throttleUpRate:0.70, throttleDownRate:1.00,
   motorIdle:0.08, motorMax:1.00, throttleCut:0.03, idleRampEnd:0.15,
   yawDeadband:0.02,

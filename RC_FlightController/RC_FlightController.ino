@@ -99,7 +99,7 @@
 #define TIMING_TARGET_US      2500     // nominal control period (400 Hz = 2500 µs)
 #define JITTER_VIOLATION_US    100     // threshold: counts as a violation
 #define GYRO_LPF_HZ           50.0f    // lower = smoother but more lag
-#define RC_LPF_HZ             50.0f    // stick setpoint smoothing
+#define RC_LPF_HZ             70.0f    // stick setpoint smoothing
 
 static constexpr uint8_t  TOF_ST_ADDRESS            = 0x12;
 static constexpr uint32_t TOF_I2C_HZ                = 400000;
@@ -113,8 +113,8 @@ static constexpr float TUNE_MAX_ANGLE_DEG = 5.0f;
 static constexpr float TUNE_MAX_RATE_DPS  = 70.0f;
 
 // ── PID output authority limits before motor mixing ─────────
-static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.080f;
-static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.080f;
+static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.100f;
+static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.100f;
 static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.100f;
 
 // ── Throttle shaping + motor output limits ──────────────────
