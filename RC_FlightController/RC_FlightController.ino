@@ -109,16 +109,16 @@ static constexpr uint32_t TOF_TASK_PERIOD_MS        = 25;      // 40 Hz poll, ma
 static constexpr uint32_t TOF_STALE_MS              = 200;
 
 // ── Pilot command limits ────────────────────────────────────
-static constexpr float TUNE_MAX_ANGLE_DEG = 10.0f;
-static constexpr float TUNE_MAX_RATE_DPS  = 40.0f;
+static constexpr float TUNE_MAX_ANGLE_DEG = 5.0f;
+static constexpr float TUNE_MAX_RATE_DPS  = 70.0f;
 
 // ── PID output authority limits before motor mixing ─────────
-static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.900f;
-static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.900f;
-static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.900f;
+static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.080f;
+static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.080f;
+static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.100f;
 
 // ── Throttle shaping + motor output limits ──────────────────
-static constexpr float TUNE_THROTTLE_EXPO              = 0.70f;
+static constexpr float TUNE_THROTTLE_EXPO              = 0.90f;
 static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
 static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
 static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
@@ -128,15 +128,15 @@ static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 
 // ── Initial PID gains loaded at boot ────────────────────────
 // Inner Loop
-static constexpr float TUNE_RATE_ROLL_KP   = 0.00150f;
-static constexpr float TUNE_RATE_ROLL_KI   = 0.0000100f;
-static constexpr float TUNE_RATE_ROLL_KD   = 0.0000015f;
-static constexpr float TUNE_RATE_PITCH_KP  = 0.00150f;
-static constexpr float TUNE_RATE_PITCH_KI  = 0.0000100f;
-static constexpr float TUNE_RATE_PITCH_KD  = 0.0000015f;
+static constexpr float TUNE_RATE_ROLL_KP   = 0.04000f;
+static constexpr float TUNE_RATE_ROLL_KI   = 0.0000000f;
+static constexpr float TUNE_RATE_ROLL_KD   = 0.0000150f;
+static constexpr float TUNE_RATE_PITCH_KP  = 0.06000f;
+static constexpr float TUNE_RATE_PITCH_KI  = 0.0000000f;
+static constexpr float TUNE_RATE_PITCH_KD  = 0.0000150f;
 static constexpr float TUNE_RATE_YAW_KP    = 0.00500f;
-static constexpr float TUNE_RATE_YAW_KI    = 0.0001000f;
-static constexpr float TUNE_RATE_YAW_KD    = 0.0000010f;
+static constexpr float TUNE_RATE_YAW_KI    = 0.0000000f;
+static constexpr float TUNE_RATE_YAW_KD    = 0.0000000f;
 // Outer Loop
 static constexpr float TUNE_ANGLE_ROLL_KP  = 1.00f;
 static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
@@ -152,7 +152,7 @@ static constexpr float TUNE_YAW_MAX_RATE_DPS = 20.0f;   // cap on commanded yaw 
 // ── Motor vibration notch filter ────────────────────────────
 // Runs before EKF and before rate PID. Keep center below 0.45*sample rate.
 static constexpr bool  TUNE_NOTCH_ENABLE    = true;
-static constexpr float TUNE_NOTCH_FREQ_HZ   = 107.65f; // start point; tune from motor log/FFT
+static constexpr float TUNE_NOTCH_FREQ_HZ   = 66.36f;  // start point; tune from motor log/FFT
 static constexpr float TUNE_NOTCH_Q         = 10.0f;   // higher = narrower notch
 static constexpr float NOTCH_SAMPLE_HZ      = 400.0f;  // control loop sample rate
 // ── Dynamic FFT-driven notch tracking ───────────────────────
