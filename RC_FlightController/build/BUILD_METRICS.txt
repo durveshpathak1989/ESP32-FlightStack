@@ -1,6 +1,6 @@
 RC_FlightController build metrics
 
-Last regenerated: 2026-07-01T02:19:51Z
+Last regenerated: 2026-07-01T02:29:56Z
 Arduino CLI: /Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli
 Arduino CLI version: 1.5.1 (commit 01f3d4f2b, 2026-06-05T10:21:41Z)
 Board FQBN:
@@ -19,51 +19,51 @@ build\bin_debug     VERBOSE_ON=1, verbose diagnostics enabled
 The root build\RC_FlightController.ino.bin and build\RC_FlightController.ino.merged.bin files mirror the release build.
 
 Release build metrics (VERBOSE_ON=0):
-Program storage used: 1,127,967 bytes
+Program storage used: 1,127,899 bytes
+Program storage maximum: 1,966,080 bytes
+Flash utilization: 57%
+Global variables used: 76,076 bytes
+Dynamic memory maximum: 327,680 bytes
+RAM utilization: 23%
+Free RAM for local variables: 251,604 bytes
+OTA binary size: 1,128,048 bytes
+Merged flash image size: 4,194,304 bytes
+
+Debug build metrics (VERBOSE_ON=1):
+Program storage used: 1,138,867 bytes
 Program storage maximum: 1,966,080 bytes
 Flash utilization: 57%
 Global variables used: 76,084 bytes
 Dynamic memory maximum: 327,680 bytes
 RAM utilization: 23%
 Free RAM for local variables: 251,596 bytes
-OTA binary size: 1,128,112 bytes
-Merged flash image size: 4,194,304 bytes
-
-Debug build metrics (VERBOSE_ON=1):
-Program storage used: 1,138,927 bytes
-Program storage maximum: 1,966,080 bytes
-Flash utilization: 57%
-Global variables used: 76,092 bytes
-Dynamic memory maximum: 327,680 bytes
-RAM utilization: 23%
-Free RAM for local variables: 251,588 bytes
-OTA binary size: 1,139,072 bytes
+OTA binary size: 1,139,008 bytes
 Merged flash image size: 4,194,304 bytes
 
 Firmware identity embedded in both builds:
 FW_NAME: RC_FlightController
-FW_VERSION: V5.4.0-12-g27f79ba
+FW_VERSION: V5.4.0-14-g14ecc4a
 FW_SOURCE_BRANCH: master
-FW_SOURCE_COMMIT: 27f79badeefb
+FW_SOURCE_COMMIT: 14ecc4a25a83
 FW_SOURCE_DIRTY: 0
-FW_BUILD_ID: 20260701T021951Z-master-27f79badeefb
-FW_BUILD_TIME_ISO: 2026-07-01T02:19:51Z
+FW_BUILD_ID: 20260701T022956Z-master-14ecc4a25a83
+FW_BUILD_TIME_ISO: 2026-07-01T02:29:56Z
 
 Release SHA256 (VERBOSE_ON=0):
-build/bin_release/RC_FlightController.ino.bin: A827B0BE1F4E022194A0AE865D955865A3DD7E85AB058E514112EA731DFA479C
-build/bin_release/RC_FlightController.ino.merged.bin: 888AD1F138511B7FACD234485872B96B267392DB45F9707E31033D9715D58B90
+build/bin_release/RC_FlightController.ino.bin: BD694320718E990DC286B28CCD39B4A237094879117B79FC244FFE3DB2EC568C
+build/bin_release/RC_FlightController.ino.merged.bin: 2351241C5BC8836A72CE5F85CC956FEC1C63C415C45351640D600574CD82080C
 build/bin_release/RC_FlightController.ino.bootloader.bin: F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
 build/bin_release/RC_FlightController.ino.partitions.bin: 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
 
 Debug SHA256 (VERBOSE_ON=1):
-build/bin_debug/RC_FlightController.ino.bin: D5A653C4F64AC52C47BA0A178523AA5FDFE5CC65B912732E44992DD4CCB95939
-build/bin_debug/RC_FlightController.ino.merged.bin: A5C8C2592604E2BAD1F375514C8AED07111017EED86144CCFD7FCE2B35C9E9F0
+build/bin_debug/RC_FlightController.ino.bin: 5C68CFFF289E64085FAE18E1F021EC03D78193E9C1542A65B73178E5A5E57254
+build/bin_debug/RC_FlightController.ino.merged.bin: 314FABB661EBBF7BEBD4B483C0CC609081D7CA6964BBE4241FDB86868380E157
 build/bin_debug/RC_FlightController.ino.bootloader.bin: F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
 build/bin_debug/RC_FlightController.ino.partitions.bin: 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
 
 Root release mirror SHA256:
-build/RC_FlightController.ino.bin: A827B0BE1F4E022194A0AE865D955865A3DD7E85AB058E514112EA731DFA479C
-build/RC_FlightController.ino.merged.bin: 888AD1F138511B7FACD234485872B96B267392DB45F9707E31033D9715D58B90
+build/RC_FlightController.ino.bin: BD694320718E990DC286B28CCD39B4A237094879117B79FC244FFE3DB2EC568C
+build/RC_FlightController.ino.merged.bin: 2351241C5BC8836A72CE5F85CC956FEC1C63C415C45351640D600574CD82080C
 
 Debug flash result:
 Not flashed after this rebuild. The latest generated debug binary is build\bin_debug\RC_FlightController.ino.bin.
