@@ -109,6 +109,26 @@ struct LoggerRow {
     float rate_yaw_d;
     float rate_yaw_out;
 
+    // Active controller and LQI diagnostics. Existing PID columns stay intact.
+    uint8_t controller_mode; // 0=PID, 1=LQI
+    uint8_t lqi_active;
+    uint8_t lqi_output_limited;
+    float lqi_roll_out;
+    float lqi_pitch_out;
+    float lqi_yaw_out;
+    float lqi_roll_angle_term;
+    float lqi_roll_rate_term;
+    float lqi_roll_i_term;
+    float lqi_pitch_angle_term;
+    float lqi_pitch_rate_term;
+    float lqi_pitch_i_term;
+    float lqi_yaw_angle_term;
+    float lqi_yaw_rate_term;
+    float lqi_yaw_i_term;
+    float lqi_roll_integrator;
+    float lqi_pitch_integrator;
+    float lqi_yaw_integrator;
+
     // Mixer / actuator authority
     float motor_fl_pre;
     float motor_fr_pre;

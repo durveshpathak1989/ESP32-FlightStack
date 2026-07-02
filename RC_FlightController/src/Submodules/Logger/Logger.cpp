@@ -89,6 +89,8 @@ String Logger::csvHeader() const {
              "angleRollErr,anglePitchErr,yawErr,rateRollErr,ratePitchErr,rateYawErr,"
              "angleRollP,angleRollI,angleRollD,angleRollOut,anglePitchP,anglePitchI,anglePitchD,anglePitchOut,angleYawP,angleYawI,angleYawD,angleYawOut,"
              "rateRollP,rateRollI,rateRollD,rateRollOut,ratePitchP,ratePitchI,ratePitchD,ratePitchOut,rateYawP,rateYawI,rateYawD,rateYawOut,"
+             "controllerMode,lqiActive,lqiOutputLimited,lqiRollOut,lqiPitchOut,lqiYawOut,"
+             "lqiRollAngle,lqiRollRate,lqiRollI,lqiPitchAngle,lqiPitchRate,lqiPitchI,lqiYawAngle,lqiYawRate,lqiYawI,lqiRollIntegrator,lqiPitchIntegrator,lqiYawIntegrator,"
              "motorFLPre,motorFRPre,motorRLPre,motorRRPre,motFL,motFR,motRL,motRR,motorDiagA,motorDiagB,motorDiagDiff,"
              "rpmFL,rpmFR,rpmRL,rpmRR,rpmDiagA,rpmDiagB,rpmDiagDiff,batteryV,cpu0,cpu1,notchFreqHz,notchQ,notchEnable,bmpAltM,bmpVzMps,gpsValid,gpsSats,gpsHdop\n");
 }
@@ -132,6 +134,12 @@ String Logger::csvRow(uint16_t chronologicalIndex) const {
     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
+    s += ','; s += String(r.controller_mode); s += ','; s += String(r.lqi_active); s += ','; s += String(r.lqi_output_limited);
+    _appendFloat(s,r.lqi_roll_out,6); _appendFloat(s,r.lqi_pitch_out,6); _appendFloat(s,r.lqi_yaw_out,6);
+    _appendFloat(s,r.lqi_roll_angle_term,6); _appendFloat(s,r.lqi_roll_rate_term,6); _appendFloat(s,r.lqi_roll_i_term,6);
+    _appendFloat(s,r.lqi_pitch_angle_term,6); _appendFloat(s,r.lqi_pitch_rate_term,6); _appendFloat(s,r.lqi_pitch_i_term,6);
+    _appendFloat(s,r.lqi_yaw_angle_term,6); _appendFloat(s,r.lqi_yaw_rate_term,6); _appendFloat(s,r.lqi_yaw_i_term,6);
+    _appendFloat(s,r.lqi_roll_integrator,6); _appendFloat(s,r.lqi_pitch_integrator,6); _appendFloat(s,r.lqi_yaw_integrator,6);
 
     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);

@@ -389,6 +389,8 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="data-row"><span class="dn">Age</span><span class="dv" id="sAge">—</span></div>
     <div class="data-row"><span class="dn">Parser</span><span class="dv" id="sParse">—</span></div>
     <div class="data-row"><span class="dn">Logger</span><span class="dv" id="logCount">0 rows logged</span></div>
+    <div class="data-row"><span class="dn">Controller</span><span class="dv" id="sCtrl">PID</span></div>
+    <div class="data-row"><span class="dn">LQI Out</span><span class="dv" id="sLqiOut">—</span></div>
   </div>
 
   <div class="panel" id="p-att">
@@ -610,6 +612,9 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Pitch Lim</span><input class="tval" id="outPitchLim" value="0.1000"><button class="tapply" onclick="sendSingle('pitch_output_limit','outPitchLim')">SET</button></div>
     <div class="tune-row"><span>Yaw Lim</span><input class="tval" id="outYawLim" value="0.1000"><button class="tapply" onclick="sendSingle('yaw_output_limit','outYawLim')">SET</button></div>
 
+    <div class="sec-title">CONTROLLER MODE</div>
+    <div class="tune-row"><span>Mode</span><select class="tval" id="controllerMode"><option value="0">PID</option><option value="1">LQI</option></select><button class="tapply" onclick="sendControllerMode()">SET</button></div>
+
     <div class="sec-title">THROTTLE SHAPING</div>
     <div class="tune-row"><span>Expo</span><input class="tval" id="thrExpo" value="0.9000"><button class="tapply" onclick="sendSingle('throttle_expo','thrExpo')">SET</button></div>
     <div class="tune-row"><span>Up Rate</span><input class="tval" id="thrUpRate" value="0.700"><button class="tapply" onclick="sendSingle('throttle_up_rate_per_sec','thrUpRate')">SET</button></div>
@@ -665,6 +670,20 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="sec-title">YAW HEADING HOLD</div>
     <div class="tune-row"><span>Kp</span><input class="tval" id="ayKp" value="2.000"><button class="tapply" onclick="sendSingle('pid_angle_yaw_kp','ayKp')">SET</button></div>
 
+    <div class="sec-title" style="margin-top:12px">LQI GAINS</div>
+    <div class="tune-row"><span>Roll Kangle</span><input class="tval" id="lqiRollKAngle" value="0.0200"><button class="tapply" onclick="sendSingle('lqi_roll_k_angle','lqiRollKAngle')">SET</button></div>
+    <div class="tune-row"><span>Roll Krate</span><input class="tval" id="lqiRollKRate" value="0.0040"><button class="tapply" onclick="sendSingle('lqi_roll_k_rate','lqiRollKRate')">SET</button></div>
+    <div class="tune-row"><span>Roll Ki</span><input class="tval" id="lqiRollKInt" value="0.0000"><button class="tapply" onclick="sendSingle('lqi_roll_k_int','lqiRollKInt')">SET</button></div>
+    <div class="tune-row"><span>Pitch Kangle</span><input class="tval" id="lqiPitchKAngle" value="0.0200"><button class="tapply" onclick="sendSingle('lqi_pitch_k_angle','lqiPitchKAngle')">SET</button></div>
+    <div class="tune-row"><span>Pitch Krate</span><input class="tval" id="lqiPitchKRate" value="0.0040"><button class="tapply" onclick="sendSingle('lqi_pitch_k_rate','lqiPitchKRate')">SET</button></div>
+    <div class="tune-row"><span>Pitch Ki</span><input class="tval" id="lqiPitchKInt" value="0.0000"><button class="tapply" onclick="sendSingle('lqi_pitch_k_int','lqiPitchKInt')">SET</button></div>
+    <div class="tune-row"><span>Yaw Kangle</span><input class="tval" id="lqiYawKAngle" value="0.0100"><button class="tapply" onclick="sendSingle('lqi_yaw_k_angle','lqiYawKAngle')">SET</button></div>
+    <div class="tune-row"><span>Yaw Krate</span><input class="tval" id="lqiYawKRate" value="0.0020"><button class="tapply" onclick="sendSingle('lqi_yaw_k_rate','lqiYawKRate')">SET</button></div>
+    <div class="tune-row"><span>Yaw Ki</span><input class="tval" id="lqiYawKInt" value="0.0000"><button class="tapply" onclick="sendSingle('lqi_yaw_k_int','lqiYawKInt')">SET</button></div>
+    <div class="tune-row"><span>I Limit</span><input class="tval" id="lqiILimit" value="0.200"><button class="tapply" onclick="sendSingle('lqi_i_limit','lqiILimit')">SET</button></div>
+    <div class="tune-row"><span>Roll Lim</span><input class="tval" id="lqiRollOutputLimit" value="0.100"><button class="tapply" onclick="sendSingle('lqi_roll_output_limit','lqiRollOutputLimit')">SET</button></div>
+    <div class="tune-row"><span>Pitch Lim</span><input class="tval" id="lqiPitchOutputLimit" value="0.100"><button class="tapply" onclick="sendSingle('lqi_pitch_output_limit','lqiPitchOutputLimit')">SET</button></div>
+    <div class="tune-row"><span>Yaw Lim</span><input class="tval" id="lqiYawOutputLimit" value="0.100"><button class="tapply" onclick="sendSingle('lqi_yaw_output_limit','lqiYawOutputLimit')">SET</button></div>
 
     <div class="sec-title" style="margin-top:12px">MOTOR VIBRATION NOTCH</div>
     <div class="tune-row"><span>Enable</span><input class="tval" id="notchEnable" value="1"><button class="tapply" onclick="sendSingle('notch_enable','notchEnable')">SET</button></div>
@@ -677,6 +696,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="data-row"><span class="dn">rKp</span><span class="dv" id="srKp">—</span></div>
     <div class="data-row"><span class="dn">Notch</span><span class="dv" id="sNotch">—</span></div>
     <div class="data-row"><span class="dn">EKF R</span><span class="dv" id="sEkfR">—</span></div>
+    <div class="data-row"><span class="dn">Controller</span><span class="dv" id="sCtrlTune">PID</span></div>
     <div id="tuneStatusTune" style="margin-top:8px;font-size:11px;color:var(--t3)">Wi-Fi only · DISARM first</div>
     <button class="apply-all-btn" onclick="sendAllGains()">⬆ APPLY ALL TUNING LEVERS</button>
   </div>
@@ -1121,6 +1141,12 @@ const S={
   maxAngleDeg:0,maxRateDps:0,angleLoopEnabled:false,rateLoopEnabled:false,targetYawDeg:0,
   actualRollRateDps:0,actualPitchRateDps:0,actualYawRateDps:0,
   angleRollP:0,angleRollI:0,angleRollD:0,anglePitchP:0,anglePitchI:0,anglePitchD:0,
+  controllerMode:0,controllerName:'PID',lqiActive:false,lqiOutputLimited:false,
+  lqiRollOut:0,lqiPitchOut:0,lqiYawOut:0,
+  lqiRollAngleTerm:0,lqiRollRateTerm:0,lqiRollITerm:0,
+  lqiPitchAngleTerm:0,lqiPitchRateTerm:0,lqiPitchITerm:0,
+  lqiYawAngleTerm:0,lqiYawRateTerm:0,lqiYawITerm:0,
+  lqiRollIntegrator:0,lqiPitchIntegrator:0,lqiYawIntegrator:0,
   angleRollIterm:0,anglePitchIterm:0,pidResetCount:0,modeTransitionCount:0,lastModeChangeMs:0,
   armingTransitionCount:0,lastArmChangeMs:0,throttleLow:false,controlAuthorityRemaining:0,
   rollOutputLimited:false,pitchOutputLimited:false,yawOutputLimited:false,rateOutputLimited:false,
@@ -1239,6 +1265,9 @@ const LOG_COLUMNS=[
   'angleRollP','angleRollI','angleRollD','anglePitchP','anglePitchI','anglePitchD',
   'rollP','rollI','rollD','pitchP','pitchI','pitchD','yawP','yawI','yawD',
   'rollCorrection','pitchCorrection','yawCorrection',
+  'controllerMode','controllerName','lqiActive','lqiOutputLimited','lqiRollOut','lqiPitchOut','lqiYawOut',
+  'lqiRollAngle','lqiRollRate','lqiRollI','lqiPitchAngle','lqiPitchRate','lqiPitchI','lqiYawAngle','lqiYawRate','lqiYawI',
+  'lqiRollIntegrator','lqiPitchIntegrator','lqiYawIntegrator',
   'baseThrottle','mixRoll','mixPitch','mixYaw',
   'motorFL_preSat','motorFR_preSat','motorRL_preSat','motorRR_preSat',
   'motorFL_postSat','motorFR_postSat','motorRL_postSat','motorRR_postSat',
@@ -1289,6 +1318,9 @@ function appendLogRow(){
     logFixed(S.angleRollP,8),logFixed(S.angleRollI,8),logFixed(S.angleRollD,8),logFixed(S.anglePitchP,8),logFixed(S.anglePitchI,8),logFixed(S.anglePitchD,8),
     logFixed(S.rollP,8),logFixed(S.rollI,8),logFixed(S.rollD,8),logFixed(S.pitchP,8),logFixed(S.pitchI,8),logFixed(S.pitchD,8),logFixed(S.yawP,8),logFixed(S.yawI,8),logFixed(S.yawD,8),
     logFixed(S.pidRollOut,6),logFixed(S.pidPitchOut,6),logFixed(S.pidYawOut,6),
+    S.controllerMode||0,S.controllerName||'PID',logBool(S.lqiActive),logBool(S.lqiOutputLimited),logFixed(S.lqiRollOut,6),logFixed(S.lqiPitchOut,6),logFixed(S.lqiYawOut,6),
+    logFixed(S.lqiRollAngleTerm,8),logFixed(S.lqiRollRateTerm,8),logFixed(S.lqiRollITerm,8),logFixed(S.lqiPitchAngleTerm,8),logFixed(S.lqiPitchRateTerm,8),logFixed(S.lqiPitchITerm,8),logFixed(S.lqiYawAngleTerm,8),logFixed(S.lqiYawRateTerm,8),logFixed(S.lqiYawITerm,8),
+    logFixed(S.lqiRollIntegrator,8),logFixed(S.lqiPitchIntegrator,8),logFixed(S.lqiYawIntegrator,8),
     logFixed(S.thr,4),logFixed(S.pidRollOut,6),logFixed(S.pidPitchOut,6),logFixed(S.pidYawOut,6),
     logFixed(S.motorFLPreSat,4),logFixed(S.motorFRPreSat,4),logFixed(S.motorRLPreSat,4),logFixed(S.motorRRPreSat,4),
     logFixed(S.motFL,4),logFixed(S.motFR,4),logFixed(S.motRL,4),logFixed(S.motRR,4),
@@ -1522,6 +1554,15 @@ function applyJson(j){
   S.pitchP=+j.pitchP||0;S.pitchI=+j.pitchI||0;S.pitchD=+j.pitchD||0;
   S.yawP=+j.yawP||0;S.yawI=+j.yawI||0;S.yawD=+j.yawD||0;
   S.pidRollOut=+j.pidRollOut||0;S.pidPitchOut=+j.pidPitchOut||0;S.pidYawOut=+j.pidYawOut||0;
+  S.controllerMode=(j.controllerMode!=null)?+j.controllerMode:(+j.controller_mode||0);
+  S.controllerName=j.controllerName||j.controller_name||(S.controllerMode===1?'LQI':'PID');
+  S.lqiActive=!!j.lqiActive;
+  S.lqiRollOut=+j.lqiRollOut||0;S.lqiPitchOut=+j.lqiPitchOut||0;S.lqiYawOut=+j.lqiYawOut||0;
+  S.lqiRollAngleTerm=+j.lqiRollAngleTerm||0;S.lqiRollRateTerm=+j.lqiRollRateTerm||0;S.lqiRollITerm=+j.lqiRollITerm||0;
+  S.lqiPitchAngleTerm=+j.lqiPitchAngleTerm||0;S.lqiPitchRateTerm=+j.lqiPitchRateTerm||0;S.lqiPitchITerm=+j.lqiPitchITerm||0;
+  S.lqiYawAngleTerm=+j.lqiYawAngleTerm||0;S.lqiYawRateTerm=+j.lqiYawRateTerm||0;S.lqiYawITerm=+j.lqiYawITerm||0;
+  S.lqiRollIntegrator=+j.lqiRollIntegrator||0;S.lqiPitchIntegrator=+j.lqiPitchIntegrator||0;S.lqiYawIntegrator=+j.lqiYawIntegrator||0;
+  S.lqiOutputLimited=!!j.lqiOutputLimited;
   S.gyroBiasX=+j.ekfBgxDps||0;S.gyroBiasY=+j.ekfBgyDps||0;S.gyroBiasZ=+j.ekfBgzDps||0;
   S.angleRollIterm=+j.angleRollIterm||0;S.anglePitchIterm=+j.anglePitchIterm||0;
   S.pidResetCount=+j.pidResetCount||0;S.modeTransitionCount=+j.modeTransitionCount||0;
@@ -1544,6 +1585,11 @@ function applyJson(j){
   syncI('arKp',j.pidAngleRollKp,3);syncI('arKi',j.pidAngleRollKi,5);syncI('arKd',j.pidAngleRollKd,5);
   syncI('apKp',j.pidAnglePitchKp,3);syncI('apKi',j.pidAnglePitchKi,5);syncI('apKd',j.pidAnglePitchKd,5);
   syncI('ayKp',j.pidAngleYawKp,3);
+  syncI('controllerMode',S.controllerMode,0);
+  syncI('lqiRollKAngle',j.lqiRollKAngle,5);syncI('lqiRollKRate',j.lqiRollKRate,5);syncI('lqiRollKInt',j.lqiRollKInt,5);
+  syncI('lqiPitchKAngle',j.lqiPitchKAngle,5);syncI('lqiPitchKRate',j.lqiPitchKRate,5);syncI('lqiPitchKInt',j.lqiPitchKInt,5);
+  syncI('lqiYawKAngle',j.lqiYawKAngle,5);syncI('lqiYawKRate',j.lqiYawKRate,5);syncI('lqiYawKInt',j.lqiYawKInt,5);
+  syncI('lqiILimit',j.lqiILimit,3);syncI('lqiRollOutputLimit',j.lqiRollOutputLimit,3);syncI('lqiPitchOutputLimit',j.lqiPitchOutputLimit,3);syncI('lqiYawOutputLimit',j.lqiYawOutputLimit,3);
   syncI('limMaxAngle',j.maxAngleDeg,2);syncI('limMaxRate',j.maxRateDps,2);syncI('yawMaxRate',j.yawMaxRateDps,2);syncI('yawDeadband',j.yawDeadband,3);
   syncI('outRollLim',j.rollOutputLimit,3);syncI('outPitchLim',j.pitchOutputLimit,3);syncI('outYawLim',j.yawOutputLimit,3);
   syncI('thrExpo',j.throttleExpo,3);syncI('thrUpRate',j.throttleUpRatePerSec,3);syncI('thrDownRate',j.throttleDownRatePerSec,3);
@@ -1558,6 +1604,7 @@ function applyJson(j){
   if(j.notchFreqHz!=null)setText('sNotch',(j.notchEnable?'ON ':'OFF ')+Number(j.notchFreqHz).toFixed(0)+'Hz Q'+Number(j.notchQ||0).toFixed(1));
   if(j.ekfAccelR!=null)setText('sEkfR','A '+Number(j.ekfAccelR).toFixed(3)+' M '+Number(j.ekfMagR||0).toFixed(3));
   if(j.pidRollKp!=null)setText('srKp',fmtGain(j.pidRollKp,4));
+  setText('sCtrlTune',S.controllerName+(S.lqiOutputLimited?' LIM':''));
   lastTelemMs=Date.now();appendLogRow();pushHist();postTelemetryToAiLearner();render();
 }
 // Magnitude-aware gain formatter: keeps significant figures for very small
@@ -1676,10 +1723,12 @@ function toggleFlySim(){
 async function sendSingle(key,inputId){const val=parseFloat(document.getElementById(inputId).value);if(isNaN(val))return;await postTune({[key]:val});}
 async function sendSingleBool01(key,inputId){const val=parseFloat(document.getElementById(inputId).value);await postTune({[key]:!!val});}
 async function sendFilterMode(){const v=parseInt(document.getElementById('ahrsFilterMode').value,10);await postTune({ahrs_filter_mode:v});}
+async function sendControllerMode(){const v=parseInt(document.getElementById('controllerMode').value,10);await postTune({controller_mode:v});}
 async function sendAllGains(){
   const map={
     max_angle_deg:'limMaxAngle',max_rate_dps:'limMaxRate',yaw_max_rate_dps:'yawMaxRate',yaw_deadband:'yawDeadband',
     roll_output_limit:'outRollLim',pitch_output_limit:'outPitchLim',yaw_output_limit:'outYawLim',
+    controller_mode:'controllerMode',
     throttle_expo:'thrExpo',throttle_up_rate_per_sec:'thrUpRate',throttle_down_rate_per_sec:'thrDownRate',
     motor_idle:'motorIdle',motor_max:'motorMax',throttle_cut:'thrCut',idle_ramp_end:'idleRampEnd',
     pid_roll_kp:'rKp',pid_roll_ki:'rKi',pid_roll_kd:'rKd',
@@ -1690,6 +1739,10 @@ async function sendAllGains(){
     pid_angle_roll_kp:'arKp',pid_angle_roll_ki:'arKi',pid_angle_roll_kd:'arKd',
     pid_angle_pitch_kp:'apKp',pid_angle_pitch_ki:'apKi',pid_angle_pitch_kd:'apKd',
     pid_angle_yaw_kp:'ayKp',
+    lqi_roll_k_angle:'lqiRollKAngle',lqi_roll_k_rate:'lqiRollKRate',lqi_roll_k_int:'lqiRollKInt',
+    lqi_pitch_k_angle:'lqiPitchKAngle',lqi_pitch_k_rate:'lqiPitchKRate',lqi_pitch_k_int:'lqiPitchKInt',
+    lqi_yaw_k_angle:'lqiYawKAngle',lqi_yaw_k_rate:'lqiYawKRate',lqi_yaw_k_int:'lqiYawKInt',
+    lqi_i_limit:'lqiILimit',lqi_roll_output_limit:'lqiRollOutputLimit',lqi_pitch_output_limit:'lqiPitchOutputLimit',lqi_yaw_output_limit:'lqiYawOutputLimit',
     ahrs_filter_mode:'ahrsFilterMode', mahony_kp:'mKp', mahony_ki:'mKi', madgwick_beta:'madgwickBeta',
     notch_enable:'notchEnable', notch_freq_hz:'notchFreqHz', notch_q:'notchQ',
     ekf_angle_q:'ekfAngleQ', ekf_bias_q:'ekfBiasQ', ekf_accel_r:'ekfAccelR', ekf_mag_r:'ekfMagR',
@@ -2034,6 +2087,8 @@ function render(){
   drawAI(S.roll,S.pitch);drawCompass(S.yaw);
   drawStick('sL',S.rcYaw,S.thr*2-1);drawStick('sR',S.rcRoll,S.rcPitch);
   setText('stk',S.tick);setText('shz',S.rcHz.toFixed(0)+' Hz');
+  setText('sCtrl',(S.controllerName||'PID')+(S.lqiOutputLimited?' LIM':''));
+  setText('sLqiOut',S.lqiActive?`${S.lqiRollOut.toFixed(4)} / ${S.lqiPitchOut.toFixed(4)} / ${S.lqiYawOut.toFixed(4)}`:'—');
   setHealth('hImu','IMU',S.imuValid);setHealth('hMag','MAG',S.magValid);setHealth('hBmp','BMP',S.bmpValid);setHealth('hCpu','CPU',isFinite(S.cpu0)&&isFinite(S.cpu1)&&S.cpu0<95&&S.cpu1<95);
   // Sensor cards
   setText('sc-gx',fmt(S.gx,2));setText('sc-gy',fmt(S.gy,2));setText('sc-gz',fmt(S.gz,2));

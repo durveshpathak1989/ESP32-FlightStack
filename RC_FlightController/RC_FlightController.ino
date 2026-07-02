@@ -58,6 +58,7 @@
 #include "src/Submodules/ToF/FlightToF_VL53L4CX.h"
 #include "src/Submodules/NotchFilter/NotchFilter.h"
 #include "src/Submodules/FFT/SpectrumAnalyzer.h"
+#include "src/Submodules/LQI/LQIController.h"
 #include "src/Submodules/Madgwick/MadgwickAHRS.h"
 #include "src/Submodules/MahonyAHRS/MahonyAHRS.h"
 #include "src/Submodules/ESP32Core/CPUUtilization.h"
@@ -117,6 +118,11 @@ static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.100f;
 static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.100f;
 static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.100f;
 
+enum class ControllerMode : uint8_t {
+    PID = 0,
+    LQI = 1
+};
+
 // ── Throttle shaping + motor output limits ──────────────────
 static constexpr float TUNE_THROTTLE_EXPO              = 0.90f;
 static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
@@ -154,6 +160,22 @@ static constexpr float TUNE_ANGLE_PITCH_KD = 0.000100f;
 static constexpr float TUNE_ANGLE_YAW_KP     = 2.00f;   // heading-hold Kp (tune up if soft)
 static constexpr float TUNE_YAW_DEADBAND     = 0.02f;   // |yaw stick| below this = hold
 static constexpr float TUNE_YAW_MAX_RATE_DPS = 20.0f;   // cap on commanded yaw rate
+
+// ── Optional LQI attitude controller, disabled by default ─────
+static constexpr float TUNE_CONTROLLER_MODE = 0.0f; // 0=PID, 1=LQI
+static constexpr float TUNE_LQI_ROLL_K_ANGLE  = 0.020f;
+static constexpr float TUNE_LQI_ROLL_K_RATE   = 0.004f;
+static constexpr float TUNE_LQI_ROLL_K_INT    = 0.000f;
+static constexpr float TUNE_LQI_PITCH_K_ANGLE = 0.020f;
+static constexpr float TUNE_LQI_PITCH_K_RATE  = 0.004f;
+static constexpr float TUNE_LQI_PITCH_K_INT   = 0.000f;
+static constexpr float TUNE_LQI_YAW_K_ANGLE   = 0.010f;
+static constexpr float TUNE_LQI_YAW_K_RATE    = 0.002f;
+static constexpr float TUNE_LQI_YAW_K_INT     = 0.000f;
+static constexpr float TUNE_LQI_I_LIMIT       = 0.20f;
+static constexpr float TUNE_LQI_OUTPUT_LIMIT_ROLL  = TUNE_ROLL_OUTPUT_LIMIT;
+static constexpr float TUNE_LQI_OUTPUT_LIMIT_PITCH = TUNE_PITCH_OUTPUT_LIMIT;
+static constexpr float TUNE_LQI_OUTPUT_LIMIT_YAW   = TUNE_YAW_OUTPUT_LIMIT;
 
 // ── Motor vibration notch filter ────────────────────────────
 // Runs before EKF and before rate PID. Keep center below 0.45*sample rate.
@@ -388,6 +410,14 @@ struct FlightState {
     bool  cpuValid;
     float motorFL, motorFR, motorRL, motorRR;
     float pidRollOut, pidPitchOut, pidYawOut;   // true PID outputs for tuning trace
+    uint8_t controllerMode;
+    bool  lqiActive;
+    float lqiRollOut, lqiPitchOut, lqiYawOut;
+    float lqiRollAngleTerm, lqiRollRateTerm, lqiRollITerm;
+    float lqiPitchAngleTerm, lqiPitchRateTerm, lqiPitchITerm;
+    float lqiYawAngleTerm, lqiYawRateTerm, lqiYawITerm;
+    float lqiRollIntegrator, lqiPitchIntegrator, lqiYawIntegrator;
+    bool  lqiOutputLimited;
     float motorFLPreSat, motorFRPreSat, motorRLPreSat, motorRRPreSat;
     uint32_t loopPeriod_us, imuRead_us, rcRead_us, ahrsUpdate_us;
     uint32_t controlUpdate_us, motorWrite_us, wifiService_us, onboardLogWrite_us;
@@ -474,6 +504,16 @@ struct TuningState {
     float roll_output_limit;
     float pitch_output_limit;
     float yaw_output_limit;
+
+    // Runtime controller selection and LQI gains
+    float controller_mode;
+    float lqi_roll_k_angle,  lqi_roll_k_rate,  lqi_roll_k_int;
+    float lqi_pitch_k_angle, lqi_pitch_k_rate, lqi_pitch_k_int;
+    float lqi_yaw_k_angle,   lqi_yaw_k_rate,   lqi_yaw_k_int;
+    float lqi_i_limit;
+    float lqi_roll_output_limit;
+    float lqi_pitch_output_limit;
+    float lqi_yaw_output_limit;
 
     // Throttle shaping + motor output limits
     float throttle_expo;
@@ -636,6 +676,29 @@ static PID pidAngleRoll (TUNE_ANGLE_ROLL_KP,  TUNE_ANGLE_ROLL_KI,  TUNE_ANGLE_RO
 static PID pidAnglePitch(TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
 // Yaw Control
 static PID pidAngleYaw  (TUNE_ANGLE_YAW_KP,   0.0f,                0.0f);
+static LQIController lqiController;
+
+static ControllerMode controllerModeFromFloat(float v)
+{
+    return (v >= 0.5f) ? ControllerMode::LQI : ControllerMode::PID;
+}
+
+static const char* controllerModeName(ControllerMode mode)
+{
+    return (mode == ControllerMode::LQI) ? "LQI" : "PID";
+}
+
+static void resetPidControllers()
+{
+    pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
+    pidAngleRoll.reset(); pidAnglePitch.reset(); pidAngleYaw.reset();
+}
+
+static void resetAllAttitudeControllers()
+{
+    resetPidControllers();
+    lqiController.reset();
+}
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -650,6 +713,20 @@ static void syncTuningFromObjects()
     g_tuning.roll_output_limit          = TUNE_ROLL_OUTPUT_LIMIT;
     g_tuning.pitch_output_limit         = TUNE_PITCH_OUTPUT_LIMIT;
     g_tuning.yaw_output_limit           = TUNE_YAW_OUTPUT_LIMIT;
+    g_tuning.controller_mode            = TUNE_CONTROLLER_MODE;
+    g_tuning.lqi_roll_k_angle           = TUNE_LQI_ROLL_K_ANGLE;
+    g_tuning.lqi_roll_k_rate            = TUNE_LQI_ROLL_K_RATE;
+    g_tuning.lqi_roll_k_int             = TUNE_LQI_ROLL_K_INT;
+    g_tuning.lqi_pitch_k_angle          = TUNE_LQI_PITCH_K_ANGLE;
+    g_tuning.lqi_pitch_k_rate           = TUNE_LQI_PITCH_K_RATE;
+    g_tuning.lqi_pitch_k_int            = TUNE_LQI_PITCH_K_INT;
+    g_tuning.lqi_yaw_k_angle            = TUNE_LQI_YAW_K_ANGLE;
+    g_tuning.lqi_yaw_k_rate             = TUNE_LQI_YAW_K_RATE;
+    g_tuning.lqi_yaw_k_int              = TUNE_LQI_YAW_K_INT;
+    g_tuning.lqi_i_limit                = TUNE_LQI_I_LIMIT;
+    g_tuning.lqi_roll_output_limit      = TUNE_LQI_OUTPUT_LIMIT_ROLL;
+    g_tuning.lqi_pitch_output_limit     = TUNE_LQI_OUTPUT_LIMIT_PITCH;
+    g_tuning.lqi_yaw_output_limit       = TUNE_LQI_OUTPUT_LIMIT_YAW;
 
     g_tuning.throttle_expo              = TUNE_THROTTLE_EXPO;
     g_tuning.throttle_up_rate_per_sec   = TUNE_THROTTLE_UP_RATE_PER_SEC;
@@ -730,6 +807,24 @@ static void applyTuningToObjectsLocked()
     pidAngleRoll.iLimit    = g_tuning.pid_ilimit;
     pidAnglePitch.iLimit   = g_tuning.pid_ilimit;
     pidAngleYaw.iLimit     = g_tuning.pid_ilimit;
+
+    g_tuning.controller_mode = (controllerModeFromFloat(g_tuning.controller_mode) == ControllerMode::LQI) ? 1.0f : 0.0f;
+    lqiController.setGains(LQIAxis::Roll,
+                           constrain(g_tuning.lqi_roll_k_angle, 0.0f, 10.0f),
+                           constrain(g_tuning.lqi_roll_k_rate, 0.0f, 10.0f),
+                           constrain(g_tuning.lqi_roll_k_int, 0.0f, 10.0f));
+    lqiController.setGains(LQIAxis::Pitch,
+                           constrain(g_tuning.lqi_pitch_k_angle, 0.0f, 10.0f),
+                           constrain(g_tuning.lqi_pitch_k_rate, 0.0f, 10.0f),
+                           constrain(g_tuning.lqi_pitch_k_int, 0.0f, 10.0f));
+    lqiController.setGains(LQIAxis::Yaw,
+                           constrain(g_tuning.lqi_yaw_k_angle, 0.0f, 10.0f),
+                           constrain(g_tuning.lqi_yaw_k_rate, 0.0f, 10.0f),
+                           constrain(g_tuning.lqi_yaw_k_int, 0.0f, 10.0f));
+    lqiController.setIntegratorLimit(constrain(g_tuning.lqi_i_limit, 0.0f, 100.0f));
+    lqiController.setOutputLimits(constrain(g_tuning.lqi_roll_output_limit, 0.0f, g_tuning.roll_output_limit),
+                                  constrain(g_tuning.lqi_pitch_output_limit, 0.0f, g_tuning.pitch_output_limit),
+                                  constrain(g_tuning.lqi_yaw_output_limit, 0.0f, g_tuning.yaw_output_limit));
 
     mahony.setGains(g_tuning.mahony_kp, g_tuning.mahony_ki);
     madgwickAHRS.setBeta(constrain(g_tuning.madgwick_beta, 0.001f, 1.000f));
@@ -1051,6 +1146,26 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.gyro_yaw_deg    = s.gyroYaw_deg;
     out.roll_angle_error_deg  = s.rollAngleError_deg;
     out.pitch_angle_error_deg = s.pitchAngleError_deg;
+    const ControllerMode reportedControllerMode = controllerModeFromFloat(t.controller_mode);
+    out.controller_mode = static_cast<uint8_t>(reportedControllerMode);
+    out.controller_name = controllerModeName(reportedControllerMode);
+    out.lqi_active = (reportedControllerMode == ControllerMode::LQI);
+    out.lqi_roll_out = s.lqiRollOut;
+    out.lqi_pitch_out = s.lqiPitchOut;
+    out.lqi_yaw_out = s.lqiYawOut;
+    out.lqi_roll_angle_term = s.lqiRollAngleTerm;
+    out.lqi_roll_rate_term = s.lqiRollRateTerm;
+    out.lqi_roll_i_term = s.lqiRollITerm;
+    out.lqi_pitch_angle_term = s.lqiPitchAngleTerm;
+    out.lqi_pitch_rate_term = s.lqiPitchRateTerm;
+    out.lqi_pitch_i_term = s.lqiPitchITerm;
+    out.lqi_yaw_angle_term = s.lqiYawAngleTerm;
+    out.lqi_yaw_rate_term = s.lqiYawRateTerm;
+    out.lqi_yaw_i_term = s.lqiYawITerm;
+    out.lqi_roll_integrator = s.lqiRollIntegrator;
+    out.lqi_pitch_integrator = s.lqiPitchIntegrator;
+    out.lqi_yaw_integrator = s.lqiYawIntegrator;
+    out.lqi_output_limited = s.lqiOutputLimited;
     out.pid_roll_out  = s.pidRollOut;
     out.pid_pitch_out = s.pidPitchOut;
     out.pid_yaw_out   = s.pidYawOut;
@@ -1092,6 +1207,20 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.roll_output_limit          = t.roll_output_limit;
     out.pitch_output_limit         = t.pitch_output_limit;
     out.yaw_output_limit           = t.yaw_output_limit;
+    out.controller_mode            = static_cast<uint8_t>(reportedControllerMode);
+    out.lqi_roll_k_angle           = t.lqi_roll_k_angle;
+    out.lqi_roll_k_rate            = t.lqi_roll_k_rate;
+    out.lqi_roll_k_int             = t.lqi_roll_k_int;
+    out.lqi_pitch_k_angle          = t.lqi_pitch_k_angle;
+    out.lqi_pitch_k_rate           = t.lqi_pitch_k_rate;
+    out.lqi_pitch_k_int            = t.lqi_pitch_k_int;
+    out.lqi_yaw_k_angle            = t.lqi_yaw_k_angle;
+    out.lqi_yaw_k_rate             = t.lqi_yaw_k_rate;
+    out.lqi_yaw_k_int              = t.lqi_yaw_k_int;
+    out.lqi_i_limit                = t.lqi_i_limit;
+    out.lqi_roll_output_limit      = t.lqi_roll_output_limit;
+    out.lqi_pitch_output_limit     = t.lqi_pitch_output_limit;
+    out.lqi_yaw_output_limit       = t.lqi_yaw_output_limit;
     out.throttle_expo              = t.throttle_expo;
     out.throttle_up_rate_per_sec   = t.throttle_up_rate_per_sec;
     out.throttle_down_rate_per_sec = t.throttle_down_rate_per_sec;
@@ -1175,6 +1304,20 @@ static bool handleTune(const TunePacket& in)
     if (in.has_roll_output_limit)          g_tuning.roll_output_limit          = constrain(in.roll_output_limit, 0.02f, 1.00f);
     if (in.has_pitch_output_limit)         g_tuning.pitch_output_limit         = constrain(in.pitch_output_limit, 0.02f, 1.00f);
     if (in.has_yaw_output_limit)           g_tuning.yaw_output_limit           = constrain(in.yaw_output_limit, 0.01f, 1.00f);
+    if (in.has_controller_mode)            g_tuning.controller_mode            = (in.controller_mode >= 0.5f) ? 1.0f : 0.0f;
+    if (in.has_lqi_roll_k_angle)           g_tuning.lqi_roll_k_angle           = constrain(in.lqi_roll_k_angle, 0.0f, 10.0f);
+    if (in.has_lqi_roll_k_rate)            g_tuning.lqi_roll_k_rate            = constrain(in.lqi_roll_k_rate, 0.0f, 10.0f);
+    if (in.has_lqi_roll_k_int)             g_tuning.lqi_roll_k_int             = constrain(in.lqi_roll_k_int, 0.0f, 10.0f);
+    if (in.has_lqi_pitch_k_angle)          g_tuning.lqi_pitch_k_angle          = constrain(in.lqi_pitch_k_angle, 0.0f, 10.0f);
+    if (in.has_lqi_pitch_k_rate)           g_tuning.lqi_pitch_k_rate           = constrain(in.lqi_pitch_k_rate, 0.0f, 10.0f);
+    if (in.has_lqi_pitch_k_int)            g_tuning.lqi_pitch_k_int            = constrain(in.lqi_pitch_k_int, 0.0f, 10.0f);
+    if (in.has_lqi_yaw_k_angle)            g_tuning.lqi_yaw_k_angle            = constrain(in.lqi_yaw_k_angle, 0.0f, 10.0f);
+    if (in.has_lqi_yaw_k_rate)             g_tuning.lqi_yaw_k_rate             = constrain(in.lqi_yaw_k_rate, 0.0f, 10.0f);
+    if (in.has_lqi_yaw_k_int)              g_tuning.lqi_yaw_k_int              = constrain(in.lqi_yaw_k_int, 0.0f, 10.0f);
+    if (in.has_lqi_i_limit)                g_tuning.lqi_i_limit                = constrain(in.lqi_i_limit, 0.0f, 100.0f);
+    if (in.has_lqi_roll_output_limit)      g_tuning.lqi_roll_output_limit      = constrain(in.lqi_roll_output_limit, 0.0f, g_tuning.roll_output_limit);
+    if (in.has_lqi_pitch_output_limit)     g_tuning.lqi_pitch_output_limit     = constrain(in.lqi_pitch_output_limit, 0.0f, g_tuning.pitch_output_limit);
+    if (in.has_lqi_yaw_output_limit)       g_tuning.lqi_yaw_output_limit       = constrain(in.lqi_yaw_output_limit, 0.0f, g_tuning.yaw_output_limit);
 
     if (in.has_throttle_expo)              g_tuning.throttle_expo              = constrain(in.throttle_expo, 0.0f, 0.95f);
     if (in.has_throttle_up_rate_per_sec)   g_tuning.throttle_up_rate_per_sec   = constrain(in.throttle_up_rate_per_sec, 0.05f, 10.0f);
@@ -1188,6 +1331,9 @@ static bool handleTune(const TunePacket& in)
     // Keep idle/ramp relationships sane.
     if (g_tuning.motor_idle > g_tuning.motor_max) g_tuning.motor_idle = g_tuning.motor_max;
     if (g_tuning.idle_ramp_end <= g_tuning.throttle_cut) g_tuning.idle_ramp_end = g_tuning.throttle_cut + 0.01f;
+    if (g_tuning.lqi_roll_output_limit > g_tuning.roll_output_limit) g_tuning.lqi_roll_output_limit = g_tuning.roll_output_limit;
+    if (g_tuning.lqi_pitch_output_limit > g_tuning.pitch_output_limit) g_tuning.lqi_pitch_output_limit = g_tuning.pitch_output_limit;
+    if (g_tuning.lqi_yaw_output_limit > g_tuning.yaw_output_limit) g_tuning.lqi_yaw_output_limit = g_tuning.yaw_output_limit;
 
     if (in.has_pid_roll_kp)        g_tuning.pid_roll_kp        = in.pid_roll_kp;
     if (in.has_pid_roll_ki)        g_tuning.pid_roll_ki        = in.pid_roll_ki;
@@ -1778,9 +1924,7 @@ static void taskControl(void* /*pv*/)
     // either 40 ms periods or watchdog resets on this build.
     uint32_t lastUs = 0;
 
-    pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
-    pidAngleRoll.reset(); pidAnglePitch.reset();
-    pidAngleYaw.reset();
+    resetAllAttitudeControllers();
     attitudeEKF.reset();
     g_yawHoldActive = false;
 
@@ -1792,9 +1936,7 @@ static void taskControl(void* /*pv*/)
                 motorsOff();
                 g_motorOutputsActive = false;
             }
-            pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
-            pidAngleRoll.reset(); pidAnglePitch.reset();
-            pidAngleYaw.reset();
+            resetAllAttitudeControllers();
             attitudeEKF.reset();
             g_yawHoldActive = false;
             runAutonomousCalibration();
@@ -1858,13 +2000,7 @@ static void taskControl(void* /*pv*/)
                 g_motorOutputsActive = false;
             }
 
-            pidRateRoll.reset();
-            pidRatePitch.reset();
-            pidRateYaw.reset();
-
-            pidAngleRoll.reset();
-            pidAnglePitch.reset();
-            pidAngleYaw.reset();
+            resetAllAttitudeControllers();
 
             g_yawHoldActive = false;
 
@@ -2070,13 +2206,11 @@ static void taskControl(void* /*pv*/)
             g_execTiming.lastMotorUs = micros() - phaseStartUs;
             uint32_t controlDoneUs = micros();
 
-            pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
-            pidAngleRoll.reset(); pidAnglePitch.reset();
+            resetAllAttitudeControllers();
             lpfGx.reset(); lpfGy.reset(); lpfGz.reset();
             notchAx.reset(); notchAy.reset(); notchAz.reset();
             notchGx.reset(); notchGy.reset(); notchGz.reset();
             lpfSpRoll.reset(); lpfSpPitch.reset(); lpfSpYaw.reset();
-            pidAngleYaw.reset();
             g_yawHoldActive = false;
 
             phaseStartUs = micros();
@@ -2085,6 +2219,13 @@ static void taskControl(void* /*pv*/)
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
                 g_state.motorFLPreSat = g_state.motorFRPreSat = g_state.motorRLPreSat = g_state.motorRRPreSat = 0;
                 g_state.pidRollOut = g_state.pidPitchOut = g_state.pidYawOut = 0;
+                g_state.lqiActive = false;
+                g_state.lqiRollOut = g_state.lqiPitchOut = g_state.lqiYawOut = 0.0f;
+                g_state.lqiRollAngleTerm = g_state.lqiRollRateTerm = g_state.lqiRollITerm = 0.0f;
+                g_state.lqiPitchAngleTerm = g_state.lqiPitchRateTerm = g_state.lqiPitchITerm = 0.0f;
+                g_state.lqiYawAngleTerm = g_state.lqiYawRateTerm = g_state.lqiYawITerm = 0.0f;
+                g_state.lqiRollIntegrator = g_state.lqiPitchIntegrator = g_state.lqiYawIntegrator = 0.0f;
+                g_state.lqiOutputLimited = false;
                 g_state.loopPeriod_us = periodUs;
                 g_state.loopJitter_us = (int16_t)constrain((int32_t)periodUs - (int32_t)TARGET_US, -32768, 32767);
                 g_state.imuRead_us = g_execTiming.lastImuUs;
@@ -2194,6 +2335,20 @@ static void taskControl(void* /*pv*/)
             tune.roll_output_limit          = TUNE_ROLL_OUTPUT_LIMIT;
             tune.pitch_output_limit         = TUNE_PITCH_OUTPUT_LIMIT;
             tune.yaw_output_limit           = TUNE_YAW_OUTPUT_LIMIT;
+            tune.controller_mode            = TUNE_CONTROLLER_MODE;
+            tune.lqi_roll_k_angle           = TUNE_LQI_ROLL_K_ANGLE;
+            tune.lqi_roll_k_rate            = TUNE_LQI_ROLL_K_RATE;
+            tune.lqi_roll_k_int             = TUNE_LQI_ROLL_K_INT;
+            tune.lqi_pitch_k_angle          = TUNE_LQI_PITCH_K_ANGLE;
+            tune.lqi_pitch_k_rate           = TUNE_LQI_PITCH_K_RATE;
+            tune.lqi_pitch_k_int            = TUNE_LQI_PITCH_K_INT;
+            tune.lqi_yaw_k_angle            = TUNE_LQI_YAW_K_ANGLE;
+            tune.lqi_yaw_k_rate             = TUNE_LQI_YAW_K_RATE;
+            tune.lqi_yaw_k_int              = TUNE_LQI_YAW_K_INT;
+            tune.lqi_i_limit                = TUNE_LQI_I_LIMIT;
+            tune.lqi_roll_output_limit      = TUNE_LQI_OUTPUT_LIMIT_ROLL;
+            tune.lqi_pitch_output_limit     = TUNE_LQI_OUTPUT_LIMIT_PITCH;
+            tune.lqi_yaw_output_limit       = TUNE_LQI_OUTPUT_LIMIT_YAW;
             tune.throttle_expo              = TUNE_THROTTLE_EXPO;
             tune.throttle_up_rate_per_sec   = TUNE_THROTTLE_UP_RATE_PER_SEC;
             tune.throttle_down_rate_per_sec = TUNE_THROTTLE_DOWN_RATE_PER_SEC;
@@ -2226,6 +2381,26 @@ static void taskControl(void* /*pv*/)
         const float MAX_ANGLE_DEG      = tune.max_angle_deg;
         const float MAX_RATE_DPS       = tune.max_rate_dps;
         const float MAX_PITCH_RATE_DPS = tune.max_pitch_rate_dps;
+        const ControllerMode controllerMode = controllerModeFromFloat(tune.controller_mode);
+        const bool lqiSelected = (controllerMode == ControllerMode::LQI);
+        static ControllerMode lastControllerMode = ControllerMode::PID;
+        static FlightMode lastControllerFlightMode = FlightMode::DISARMED;
+        static bool lastControllerArmed = false;
+        const bool armedForControl = cmd.valid &&
+                                     cmd.mode != FlightMode::DISARMED &&
+                                     cmd.mode != FlightMode::FAILSAFE;
+        if (controllerMode != lastControllerMode) {
+            lastControllerMode = controllerMode;
+            resetAllAttitudeControllers();
+            g_yawHoldActive = false;
+            g_pidResetCount++;
+        }
+        if (cmd.mode != lastControllerFlightMode || armedForControl != lastControllerArmed) {
+            lastControllerFlightMode = cmd.mode;
+            lastControllerArmed = armedForControl;
+            lqiController.reset();
+        }
+
         float rO=0, pO=0, yO=0;
         float targetRollDeg = 0.0f, targetPitchDeg = 0.0f, targetYawDeg = 0.0f;
         float targetRollRateDps = 0.0f, targetPitchRateDps = 0.0f, targetYawRateDps = 0.0f;
@@ -2236,57 +2411,124 @@ static void taskControl(void* /*pv*/)
         float rollCmd  = lpfSpRoll .apply(cmd.roll,  dt, RC_LPF_HZ);
         float pitchCmd = lpfSpPitch.apply(cmd.pitch, dt, RC_LPF_HZ);
         float yawCmd   = lpfSpYaw  .apply(cmd.yaw,   dt, RC_LPF_HZ);
+        const float thrRawForController = constrain(cmd.throttle, 0.0f, 1.0f);
+        const bool throttleCutActive = (thrRawForController <= tune.throttle_cut);
+        const float DEG_TO_RAD_F = PI / 180.0f;
 
-        if (cmd.mode == FlightMode::ANGLE) {
-            targetRollDeg = rollCmd * MAX_ANGLE_DEG;
-            targetPitchDeg = pitchCmd * MAX_ANGLE_DEG;
-            angleErrRollDeg = targetRollDeg - roll;
-            angleErrPitchDeg = targetPitchDeg - pitch;
-            targetRollRateDps = pidAngleRoll.update(angleErrRollDeg, dt);
-            targetPitchRateDps = pidAnglePitch.update(angleErrPitchDeg, dt);
-            rateErrRollDps = targetRollRateDps - gx;
-            rateErrPitchDps = targetPitchRateDps - gy;
-            rateRollFf = tune.pid_roll_ff * targetRollRateDps;
-            ratePitchFf = tune.pid_pitch_ff * targetPitchRateDps;
-            rO = rateRollFf + pidRateRoll.updateDOnMeasurement(rateErrRollDps, gx, dt, tune.pid_roll_d_lpf_hz);
-            pO = ratePitchFf + pidRatePitch.updateDOnMeasurement(rateErrPitchDps, gy, dt, tune.pid_pitch_d_lpf_hz);
-        } else {   // ACRO
-            targetRollRateDps = rollCmd * MAX_RATE_DPS;
-            targetPitchRateDps = pitchCmd * MAX_PITCH_RATE_DPS;
-            rateErrRollDps = targetRollRateDps - gx;
-            rateErrPitchDps = targetPitchRateDps - gy;
-            rateRollFf = tune.pid_roll_ff * targetRollRateDps;
-            ratePitchFf = tune.pid_pitch_ff * targetPitchRateDps;
-            rO = rateRollFf + pidRateRoll.updateDOnMeasurement(rateErrRollDps, gx, dt, tune.pid_roll_d_lpf_hz);
-            pO = ratePitchFf + pidRatePitch.updateDOnMeasurement(rateErrPitchDps, gy, dt, tune.pid_pitch_d_lpf_hz);
-        }
-
-        // Yaw: heading-hold when stick centered, rate when moving.
-        if (imuOk && fabsf(yawCmd) < tune.yaw_deadband) {
-            if (!g_yawHoldActive) {
-                g_yawSetpoint   = yawCtrlDeg;
-                g_yawHoldActive = true;
-                pidAngleYaw.reset();
+        if (!lqiSelected) {
+            if (cmd.mode == FlightMode::ANGLE) {
+                targetRollDeg = rollCmd * MAX_ANGLE_DEG;
+                targetPitchDeg = pitchCmd * MAX_ANGLE_DEG;
+                angleErrRollDeg = targetRollDeg - roll;
+                angleErrPitchDeg = targetPitchDeg - pitch;
+                targetRollRateDps = pidAngleRoll.update(angleErrRollDeg, dt);
+                targetPitchRateDps = pidAnglePitch.update(angleErrPitchDeg, dt);
+                rateErrRollDps = targetRollRateDps - gx;
+                rateErrPitchDps = targetPitchRateDps - gy;
+                rateRollFf = tune.pid_roll_ff * targetRollRateDps;
+                ratePitchFf = tune.pid_pitch_ff * targetPitchRateDps;
+                rO = rateRollFf + pidRateRoll.updateDOnMeasurement(rateErrRollDps, gx, dt, tune.pid_roll_d_lpf_hz);
+                pO = ratePitchFf + pidRatePitch.updateDOnMeasurement(rateErrPitchDps, gy, dt, tune.pid_pitch_d_lpf_hz);
+            } else {   // ACRO
+                targetRollRateDps = rollCmd * MAX_RATE_DPS;
+                targetPitchRateDps = pitchCmd * MAX_PITCH_RATE_DPS;
+                rateErrRollDps = targetRollRateDps - gx;
+                rateErrPitchDps = targetPitchRateDps - gy;
+                rateRollFf = tune.pid_roll_ff * targetRollRateDps;
+                ratePitchFf = tune.pid_pitch_ff * targetPitchRateDps;
+                rO = rateRollFf + pidRateRoll.updateDOnMeasurement(rateErrRollDps, gx, dt, tune.pid_roll_d_lpf_hz);
+                pO = ratePitchFf + pidRatePitch.updateDOnMeasurement(rateErrPitchDps, gy, dt, tune.pid_pitch_d_lpf_hz);
             }
-            targetYawDeg = g_yawSetpoint;
-            yawErrDeg = wrapDeg180(g_yawSetpoint - yawCtrlDeg);
-            targetYawRateDps = pidAngleYaw.update(yawErrDeg, dt);
-            targetYawRateDps = constrain(targetYawRateDps, -tune.yaw_max_rate_dps, tune.yaw_max_rate_dps);
-            rateErrYawDps = targetYawRateDps - gz;
-            rateYawFf = tune.pid_yaw_ff * targetYawRateDps;
-            yO = rateYawFf + pidRateYaw.updateDOnMeasurement(rateErrYawDps, gz, dt, tune.pid_yaw_d_lpf_hz);
+
+            // Yaw: heading-hold when stick centered, rate when moving.
+            if (imuOk && fabsf(yawCmd) < tune.yaw_deadband) {
+                if (!g_yawHoldActive) {
+                    g_yawSetpoint   = yawCtrlDeg;
+                    g_yawHoldActive = true;
+                    pidAngleYaw.reset();
+                }
+                targetYawDeg = g_yawSetpoint;
+                yawErrDeg = wrapDeg180(g_yawSetpoint - yawCtrlDeg);
+                targetYawRateDps = pidAngleYaw.update(yawErrDeg, dt);
+                targetYawRateDps = constrain(targetYawRateDps, -tune.yaw_max_rate_dps, tune.yaw_max_rate_dps);
+                rateErrYawDps = targetYawRateDps - gz;
+                rateYawFf = tune.pid_yaw_ff * targetYawRateDps;
+                yO = rateYawFf + pidRateYaw.updateDOnMeasurement(rateErrYawDps, gz, dt, tune.pid_yaw_d_lpf_hz);
+            } else {
+                g_yawHoldActive = false;
+                targetYawDeg = yawCtrlDeg;
+                targetYawRateDps = -yawCmd * tune.yaw_max_rate_dps;
+                rateErrYawDps = targetYawRateDps - gz;
+                rateYawFf = tune.pid_yaw_ff * targetYawRateDps;
+                yO = rateYawFf + pidRateYaw.updateDOnMeasurement(rateErrYawDps, gz, dt, tune.pid_yaw_d_lpf_hz);
+            }
         } else {
-            g_yawHoldActive = false;
-            targetYawDeg = yawCtrlDeg;
-            targetYawRateDps = -yawCmd * tune.yaw_max_rate_dps;
-            rateErrYawDps = targetYawRateDps - gz;
-            rateYawFf = tune.pid_yaw_ff * targetYawRateDps;
-            yO = rateYawFf + pidRateYaw.updateDOnMeasurement(rateErrYawDps, gz, dt, tune.pid_yaw_d_lpf_hz);
+            const bool lqiSuppressed = (!imuOk) || throttleCutActive || (!cmd.valid) || (!g_motorOutputsActive);
+            if (lqiSuppressed) {
+                lqiController.reset();
+                g_yawHoldActive = false;
+            } else if (cmd.mode == FlightMode::ANGLE) {
+                targetRollDeg = rollCmd * MAX_ANGLE_DEG;
+                targetPitchDeg = pitchCmd * MAX_ANGLE_DEG;
+                angleErrRollDeg = targetRollDeg - roll;
+                angleErrPitchDeg = targetPitchDeg - pitch;
+                targetRollRateDps = 0.0f;
+                targetPitchRateDps = 0.0f;
+                rateErrRollDps = targetRollRateDps - gx;
+                rateErrPitchDps = targetPitchRateDps - gy;
+                rO = lqiController.updateAngleAxis(LQIAxis::Roll,
+                                                   (roll - targetRollDeg) * DEG_TO_RAD_F,
+                                                   (gx - targetRollRateDps) * DEG_TO_RAD_F,
+                                                   dt);
+                pO = lqiController.updateAngleAxis(LQIAxis::Pitch,
+                                                   (pitch - targetPitchDeg) * DEG_TO_RAD_F,
+                                                   (gy - targetPitchRateDps) * DEG_TO_RAD_F,
+                                                   dt);
+            } else {   // ACRO
+                targetRollRateDps = rollCmd * MAX_RATE_DPS;
+                targetPitchRateDps = pitchCmd * MAX_PITCH_RATE_DPS;
+                rateErrRollDps = targetRollRateDps - gx;
+                rateErrPitchDps = targetPitchRateDps - gy;
+                rO = lqiController.updateRateAxis(LQIAxis::Roll,
+                                                  (gx - targetRollRateDps) * DEG_TO_RAD_F,
+                                                  dt);
+                pO = lqiController.updateRateAxis(LQIAxis::Pitch,
+                                                  (gy - targetPitchRateDps) * DEG_TO_RAD_F,
+                                                  dt);
+            }
+
+            if (!lqiSuppressed) {
+                if (imuOk && fabsf(yawCmd) < tune.yaw_deadband) {
+                    if (!g_yawHoldActive) {
+                        g_yawSetpoint = yawCtrlDeg;
+                        g_yawHoldActive = true;
+                    }
+                    targetYawDeg = g_yawSetpoint;
+                    targetYawRateDps = 0.0f;
+                    yawErrDeg = wrapDeg180(g_yawSetpoint - yawCtrlDeg);
+                    rateErrYawDps = targetYawRateDps - gz;
+                    yO = lqiController.updateAngleAxis(LQIAxis::Yaw,
+                                                       wrapDeg180(yawCtrlDeg - g_yawSetpoint) * DEG_TO_RAD_F,
+                                                       (gz - targetYawRateDps) * DEG_TO_RAD_F,
+                                                       dt);
+                } else {
+                    g_yawHoldActive = false;
+                    targetYawDeg = yawCtrlDeg;
+                    targetYawRateDps = -yawCmd * tune.yaw_max_rate_dps;
+                    rateErrYawDps = targetYawRateDps - gz;
+                    yO = lqiController.updateRateAxis(LQIAxis::Yaw,
+                                                      (gz - targetYawRateDps) * DEG_TO_RAD_F,
+                                                      dt);
+                }
+            }
         }
 
-        const bool rollOutputLimited = (rO > tune.roll_output_limit) || (rO < -tune.roll_output_limit);
-        const bool pitchOutputLimited = (pO > tune.pitch_output_limit) || (pO < -tune.pitch_output_limit);
-        const bool yawOutputLimited = (yO > tune.yaw_output_limit) || (yO < -tune.yaw_output_limit);
+        const bool rollOutputLimited = (rO > tune.roll_output_limit) || (rO < -tune.roll_output_limit) ||
+                                       (lqiSelected && lqiController.outputLimited(LQIAxis::Roll));
+        const bool pitchOutputLimited = (pO > tune.pitch_output_limit) || (pO < -tune.pitch_output_limit) ||
+                                        (lqiSelected && lqiController.outputLimited(LQIAxis::Pitch));
+        const bool yawOutputLimited = (yO > tune.yaw_output_limit) || (yO < -tune.yaw_output_limit) ||
+                                      (lqiSelected && lqiController.outputLimited(LQIAxis::Yaw));
         const bool rateOutputLimited = rollOutputLimited || pitchOutputLimited || yawOutputLimited;
 
         rO = constrain(rO, -tune.roll_output_limit,  tune.roll_output_limit);
@@ -2503,6 +2745,24 @@ static void taskControl(void* /*pv*/)
             row.rate_yaw_i = pidRateYaw.lastI;
             row.rate_yaw_d = pidRateYaw.lastD;
             row.rate_yaw_out = yO;
+            row.controller_mode = static_cast<uint8_t>(controllerMode);
+            row.lqi_active = lqiSelected ? 1 : 0;
+            row.lqi_output_limited = (lqiSelected && lqiController.anyOutputLimited()) ? 1 : 0;
+            row.lqi_roll_out = lqiSelected ? lqiController.lastOutput(LQIAxis::Roll) : 0.0f;
+            row.lqi_pitch_out = lqiSelected ? lqiController.lastOutput(LQIAxis::Pitch) : 0.0f;
+            row.lqi_yaw_out = lqiSelected ? lqiController.lastOutput(LQIAxis::Yaw) : 0.0f;
+            row.lqi_roll_angle_term = lqiSelected ? lqiController.lastAngleContribution(LQIAxis::Roll) : 0.0f;
+            row.lqi_roll_rate_term = lqiSelected ? lqiController.lastRateContribution(LQIAxis::Roll) : 0.0f;
+            row.lqi_roll_i_term = lqiSelected ? lqiController.lastIntegralContribution(LQIAxis::Roll) : 0.0f;
+            row.lqi_pitch_angle_term = lqiSelected ? lqiController.lastAngleContribution(LQIAxis::Pitch) : 0.0f;
+            row.lqi_pitch_rate_term = lqiSelected ? lqiController.lastRateContribution(LQIAxis::Pitch) : 0.0f;
+            row.lqi_pitch_i_term = lqiSelected ? lqiController.lastIntegralContribution(LQIAxis::Pitch) : 0.0f;
+            row.lqi_yaw_angle_term = lqiSelected ? lqiController.lastAngleContribution(LQIAxis::Yaw) : 0.0f;
+            row.lqi_yaw_rate_term = lqiSelected ? lqiController.lastRateContribution(LQIAxis::Yaw) : 0.0f;
+            row.lqi_yaw_i_term = lqiSelected ? lqiController.lastIntegralContribution(LQIAxis::Yaw) : 0.0f;
+            row.lqi_roll_integrator = lqiSelected ? lqiController.integrator(LQIAxis::Roll) : 0.0f;
+            row.lqi_pitch_integrator = lqiSelected ? lqiController.integrator(LQIAxis::Pitch) : 0.0f;
+            row.lqi_yaw_integrator = lqiSelected ? lqiController.integrator(LQIAxis::Yaw) : 0.0f;
 
             row.motor_fl_pre = flPre;
             row.motor_fr_pre = frPre;
@@ -2591,6 +2851,24 @@ static void taskControl(void* /*pv*/)
             g_state.motorFLPreSat=flPre; g_state.motorFRPreSat=frPre;
             g_state.motorRLPreSat=rlPre; g_state.motorRRPreSat=rrPre;
             g_state.pidRollOut=rO; g_state.pidPitchOut=pO; g_state.pidYawOut=yO;
+            g_state.controllerMode = static_cast<uint8_t>(controllerMode);
+            g_state.lqiActive = lqiSelected;
+            g_state.lqiRollOut = lqiSelected ? lqiController.lastOutput(LQIAxis::Roll) : 0.0f;
+            g_state.lqiPitchOut = lqiSelected ? lqiController.lastOutput(LQIAxis::Pitch) : 0.0f;
+            g_state.lqiYawOut = lqiSelected ? lqiController.lastOutput(LQIAxis::Yaw) : 0.0f;
+            g_state.lqiRollAngleTerm = lqiSelected ? lqiController.lastAngleContribution(LQIAxis::Roll) : 0.0f;
+            g_state.lqiRollRateTerm = lqiSelected ? lqiController.lastRateContribution(LQIAxis::Roll) : 0.0f;
+            g_state.lqiRollITerm = lqiSelected ? lqiController.lastIntegralContribution(LQIAxis::Roll) : 0.0f;
+            g_state.lqiPitchAngleTerm = lqiSelected ? lqiController.lastAngleContribution(LQIAxis::Pitch) : 0.0f;
+            g_state.lqiPitchRateTerm = lqiSelected ? lqiController.lastRateContribution(LQIAxis::Pitch) : 0.0f;
+            g_state.lqiPitchITerm = lqiSelected ? lqiController.lastIntegralContribution(LQIAxis::Pitch) : 0.0f;
+            g_state.lqiYawAngleTerm = lqiSelected ? lqiController.lastAngleContribution(LQIAxis::Yaw) : 0.0f;
+            g_state.lqiYawRateTerm = lqiSelected ? lqiController.lastRateContribution(LQIAxis::Yaw) : 0.0f;
+            g_state.lqiYawITerm = lqiSelected ? lqiController.lastIntegralContribution(LQIAxis::Yaw) : 0.0f;
+            g_state.lqiRollIntegrator = lqiSelected ? lqiController.integrator(LQIAxis::Roll) : 0.0f;
+            g_state.lqiPitchIntegrator = lqiSelected ? lqiController.integrator(LQIAxis::Pitch) : 0.0f;
+            g_state.lqiYawIntegrator = lqiSelected ? lqiController.integrator(LQIAxis::Yaw) : 0.0f;
+            g_state.lqiOutputLimited = lqiSelected && lqiController.anyOutputLimited();
             g_state.loopPeriod_us = periodUs;
             g_state.loopJitter_us = (int16_t)constrain((int32_t)periodUs - (int32_t)TARGET_US, -32768, 32767);
             g_state.imuRead_us = g_execTiming.lastImuUs;
