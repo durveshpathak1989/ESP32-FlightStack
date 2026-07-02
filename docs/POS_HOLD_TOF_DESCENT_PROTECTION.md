@@ -4,6 +4,7 @@ This branch adds two safety-oriented features:
 
 - `FlightMode::POS_HOLD`, requested by SWC / CH9 while armed.
 - ToF-based descent protection, active in ANGLE, ACRO, and POS_HOLD when the craft is armed and the ToF range is valid.
+- ANGLE-mode vertical hold using a barometer + ToF height EKF and a conservative vertical PID throttle correction.
 
 ## POS_HOLD Status
 
@@ -71,6 +72,39 @@ Telemetry fields:
 - `posHoldModeActive`
 - `xyHoldAvailable`
 
+## ANGLE Vertical Hold
+
+ANGLE mode now has a vertical hold assist. ACRO remains manual and POS_HOLD remains the current no-XY-sensor shell.
+
+Height estimator:
+
+- The attitude EKF owns a separate 2-state vertical EKF: height and vertical velocity.
+- BMP280 altitude is converted to a relative local height using a startup reference.
+- VL53L4CX ToF range is tilt-compensated with roll/pitch before fusion.
+- Each fresh BMP/ToF sensor sample corrects the EKF once; between samples the EKF predicts from vertical acceleration.
+
+Controller behavior:
+
+- Active only in ANGLE mode.
+- Requires armed flight, valid EKF height, throttle above cut, height above `vertical_hold_min_active_m`, and tilt below `vertical_hold_max_tilt_deg`.
+- Captures the current EKF height when the hold first becomes available.
+- Uses throttle around `vertical_hold_center_throttle` as a climb/descent-rate command.
+- Adds a capped PID throttle correction with `vertical_hold_output_limit`.
+- Resets its integrator when disarmed, failsafe, calibration-blocked, invalid height, too low, or too tilted.
+
+Runtime tuning keys:
+
+- `vertical_hold_enable`
+- `pid_vertical_kp`, `pid_vertical_ki`, `pid_vertical_kd`
+- `vertical_hold_output_limit`
+- `vertical_hold_center_throttle`
+- `vertical_hold_deadband`
+- `vertical_hold_max_climb_rate_mps`
+- `vertical_hold_min_active_m`
+- `vertical_hold_max_tilt_deg`
+- `vertical_hold_d_lpf_hz`
+- `ekf_alt_accel_q`, `ekf_baro_alt_r`, `ekf_tof_alt_r`
+
 ## Compile Checklist
 
 1. Pull latest `master`.
@@ -111,6 +145,13 @@ Telemetry fields:
    - Far above the start distance, boost stays zero.
    - Disarm/failsafe always shuts motors down regardless of ToF.
 
-6. Timing:
+6. ANGLE vertical hold:
+   - ACRO must not report `verticalHoldActive=true`.
+   - ANGLE with invalid BMP/ToF height must report `verticalHoldHeightValid=false` and keep pilot throttle behavior.
+   - ANGLE above `vertical_hold_min_active_m` and below tilt limit should capture the current height as target.
+   - Moving throttle above/below center should slew the target height instead of jumping throttle.
+   - Above `vertical_hold_max_tilt_deg`, `verticalHoldTiltLimited=true` and the vertical PID must reset.
+
+7. Timing:
    - No heavy serial spam in the control path.
    - `/timing` remains stable with ToF connected.

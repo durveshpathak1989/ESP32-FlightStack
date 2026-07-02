@@ -450,6 +450,8 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="data-row"><span class="dn">ToF Range</span><span class="dv" id="vtof">—</span></div>
     <div class="data-row"><span class="dn">ToF Vz</span><span class="dv" id="vtofvz">—</span></div>
     <div class="data-row"><span class="dn">Descent Guard</span><span class="dv" id="vdp">—</span></div>
+    <div class="data-row"><span class="dn">Vert Hold</span><span class="dv" id="vvh">—</span></div>
+    <div class="data-row"><span class="dn">EKF Height</span><span class="dv" id="veh">—</span></div>
     <div class="data-row"><span class="dn">CPU0</span><span class="dv" id="vcpu0">—</span></div><div class="bar-track"><div class="bar-fill" id="bcpu0"></div></div>
     <div class="data-row"><span class="dn">CPU1</span><span class="dv" id="vcpu1">—</span></div><div class="bar-track"><div class="bar-fill" id="bcpu1"></div></div>
 
@@ -623,6 +625,18 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Cut</span><input class="tval" id="thrCut" value="0.030"><button class="tapply" onclick="sendSingle('throttle_cut','thrCut')">SET</button></div>
     <div class="tune-row"><span>Idle Ramp</span><input class="tval" id="idleRampEnd" value="0.150"><button class="tapply" onclick="sendSingle('idle_ramp_end','idleRampEnd')">SET</button></div>
     <div class="tune-row"><span>DP Min m</span><input class="tval" id="descentMinActiveM" value="0.500"><button class="tapply" onclick="sendSingle('descent_protect_min_active_m','descentMinActiveM')">SET</button></div>
+    <div class="sec-title">ANGLE VERTICAL HOLD</div>
+    <div class="tune-row"><span>Enable</span><input class="tval" id="vhEnable" value="1"><button class="tapply" onclick="sendSingleBool01('vertical_hold_enable','vhEnable')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="vhKp" value="0.180"><button class="tapply" onclick="sendSingle('pid_vertical_kp','vhKp')">SET</button></div>
+    <div class="tune-row"><span>Ki</span><input class="tval" id="vhKi" value="0.020"><button class="tapply" onclick="sendSingle('pid_vertical_ki','vhKi')">SET</button></div>
+    <div class="tune-row"><span>Kd</span><input class="tval" id="vhKd" value="0.080"><button class="tapply" onclick="sendSingle('pid_vertical_kd','vhKd')">SET</button></div>
+    <div class="tune-row"><span>Out Lim</span><input class="tval" id="vhOutLim" value="0.150"><button class="tapply" onclick="sendSingle('vertical_hold_output_limit','vhOutLim')">SET</button></div>
+    <div class="tune-row"><span>Center</span><input class="tval" id="vhCenter" value="0.500"><button class="tapply" onclick="sendSingle('vertical_hold_center_throttle','vhCenter')">SET</button></div>
+    <div class="tune-row"><span>Deadband</span><input class="tval" id="vhDeadband" value="0.080"><button class="tapply" onclick="sendSingle('vertical_hold_deadband','vhDeadband')">SET</button></div>
+    <div class="tune-row"><span>Rate m/s</span><input class="tval" id="vhRate" value="0.500"><button class="tapply" onclick="sendSingle('vertical_hold_max_climb_rate_mps','vhRate')">SET</button></div>
+    <div class="tune-row"><span>Min m</span><input class="tval" id="vhMinM" value="0.500"><button class="tapply" onclick="sendSingle('vertical_hold_min_active_m','vhMinM')">SET</button></div>
+    <div class="tune-row"><span>Tilt</span><input class="tval" id="vhTilt" value="25.0"><button class="tapply" onclick="sendSingle('vertical_hold_max_tilt_deg','vhTilt')">SET</button></div>
+    <div class="tune-row"><span>D LPF</span><input class="tval" id="vhDLpf" value="5.0"><button class="tapply" onclick="sendSingle('vertical_hold_d_lpf_hz','vhDLpf')">SET</button></div>
   </div>
 
   <div class="panel">
@@ -655,6 +669,9 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Mag R</span><input class="tval" id="ekfMagR" value="0.200"><button class="tapply" onclick="sendSingle('ekf_mag_r','ekfMagR')">SET</button></div>
     <div class="tune-row"><span>Mag Off</span><input class="tval" id="ekfMagYawOffset" value="0.0"><button class="tapply" onclick="sendSingle('ekf_mag_yaw_offset_deg','ekfMagYawOffset')">SET</button></div>
     <div class="tune-row"><span>Mag Sign</span><input class="tval" id="ekfMagYawSign" value="1"><button class="tapply" onclick="sendSingle('ekf_mag_yaw_sign','ekfMagYawSign')">SET</button></div>
+    <div class="tune-row"><span>Alt Q</span><input class="tval" id="ekfAltQ" value="0.350"><button class="tapply" onclick="sendSingle('ekf_alt_accel_q','ekfAltQ')">SET</button></div>
+    <div class="tune-row"><span>Baro R</span><input class="tval" id="ekfBaroR" value="1.250"><button class="tapply" onclick="sendSingle('ekf_baro_alt_r','ekfBaroR')">SET</button></div>
+    <div class="tune-row"><span>ToF R</span><input class="tval" id="ekfTofR" value="0.025"><button class="tapply" onclick="sendSingle('ekf_tof_alt_r','ekfTofR')">SET</button></div>
 
   </div>
 
@@ -1119,7 +1136,10 @@ let identityUrl2='http://192.168.4.1/identity';
 const S={
   roll:0,pitch:0,yaw:0,rollCtrl:0,pitchCtrl:0,yawCtrl:0,rollOffset:0,pitchOffset:0,yawOffset:0,ax:0,ay:0,az:0,gx:0,gy:0,gz:0,
   mx:0,my:0,mz:0,imuValid:false,magValid:false,ahrsFilter:'EKF',ahrsFilterMode:0,rpmActualValid:false,cmdRpmFL:0,cmdRpmFR:0,cmdRpmRL:0,cmdRpmRR:0,actualRpmFL:0,actualRpmFR:0,actualRpmRL:0,actualRpmRR:0,
-  thr:0,rawThrottle:0,protectedThrottle:0,descentThrottleBoost:0,descentProtectMinActiveM:0.50,descentProtectActive:false,rcRoll:0,rcPitch:0,rcYaw:0,rcHz:0,
+  thr:0,rawThrottle:0,protectedThrottle:0,descentThrottleBoost:0,descentProtectMinActiveM:0.50,descentProtectActive:false,
+  verticalHoldAvailable:false,verticalHoldActive:false,verticalHoldHeightValid:false,verticalHoldTiltLimited:false,
+  verticalHoldTargetM:0,verticalHoldHeightM:0,verticalHoldVelocityMps:0,verticalHoldErrorM:0,verticalHoldThrottleAdjust:0,verticalHoldPilotRateMps:0,
+  ekfHeightM:0,ekfVerticalVelocityMps:0,ekfHeightValid:false,rcRoll:0,rcPitch:0,rcYaw:0,rcHz:0,
   motFL:0,motFR:0,motRL:0,motRR:0,rpmFL:0,rpmFR:0,rpmRL:0,rpmRR:0,
   mode:'UNKNOWN',armed:false,tick:0,
   angleModeActive:false,acroModeActive:false,posHoldModeActive:false,posHoldRequested:false,swcHigh:false,xyHoldAvailable:false,posHoldStatus:'INACTIVE',modeSwitchRawUs:0,armSwitchRawUs:0,auxTune1RawUs:0,auxTune2RawUs:0,
@@ -1236,7 +1256,7 @@ const LOG_COLUMNS=[
   'armed','flightMode','modeId','angleModeActive','acroModeActive','posHoldModeActive','posHoldRequested','xyHoldAvailable','failsafeActive',
   'rcValid','rcFrameRate_Hz','rcFailsafeCount',
   'rcCh1_us','rcCh2_us','rcCh3_us','rcCh4_us','rcCh5_us','rcCh6_us','rcCh7_us','rcCh8_us','rcCh9_us','rcCh10_us',
-  'cmdRoll_norm','cmdPitch_norm','cmdYaw_norm','cmdThrottle_norm','rawThrottle_norm','protectedThrottle_norm','descentThrottleBoost','descentProtectActive','tofValid','tofStale','tofDistance_m','tofVelocity_mps',
+  'cmdRoll_norm','cmdPitch_norm','cmdYaw_norm','cmdThrottle_norm','rawThrottle_norm','protectedThrottle_norm','descentThrottleBoost','descentProtectActive','verticalHoldActive','verticalHoldAvailable','verticalHoldTarget_m','verticalHoldHeight_m','verticalHoldError_m','verticalHoldAdjust','ekfHeightValid','ekfHeight_m','ekfVz_mps','tofValid','tofStale','tofDistance_m','tofVelocity_mps',
   'ax_g','ay_g','az_g','gx_dps','gy_dps','gz_dps','mx_uT','my_uT','mz_uT','imuTemp_C','accelNorm_g','gyroNorm_dps','magNorm_uT','magValid','mag_heading_calc_deg','mag_norm_calc_uT','mag_delta_uT','mag_trusted',
   'roll_deg','pitch_deg','yaw_deg','yaw_signed_deg','q0','q1','q2','q3','accelRoll_deg','accelPitch_deg','gyroRoll_deg','gyroPitch_deg','magHeading_deg',
   'targetRollAngle_deg','targetPitchAngle_deg','targetYaw_deg','targetRollRate_dps','targetPitchRate_dps','targetYawRate_dps',
@@ -1286,7 +1306,7 @@ function appendLogRow(){
     logBool(S.armed),S.mode,modeId(S.mode),logBool(S.angleModeActive),logBool(S.acroModeActive),logBool(S.posHoldModeActive),logBool(S.posHoldRequested),logBool(S.xyHoldAvailable),logBool(S.mode==='FAILSAFE'),
     logBool(S.rcValid),logFixed(S.rcHz,1),S.rcFailsafeCount||0,
     S.rcCh1Us||0,S.rcCh2Us||0,S.rcCh3Us||0,S.rcCh4Us||0,S.auxTune1RawUs||0,S.auxTune2RawUs||0,S.armSwitchRawUs||0,S.modeSwitchRawUs||0,S.rcCh9Us||0,S.rcCh10Us||0,
-    logFixed(S.rcRoll,4),logFixed(S.rcPitch,4),logFixed(S.rcYaw,4),logFixed(S.thr,4),logFixed(S.rawThrottle,4),logFixed(S.protectedThrottle,4),logFixed(S.descentThrottleBoost,4),logBool(S.descentProtectActive),logBool(S.tofValid),logBool(S.tofStale),logFixed(S.tofDistance,4),logFixed(S.tofVelocity,4),
+    logFixed(S.rcRoll,4),logFixed(S.rcPitch,4),logFixed(S.rcYaw,4),logFixed(S.thr,4),logFixed(S.rawThrottle,4),logFixed(S.protectedThrottle,4),logFixed(S.descentThrottleBoost,4),logBool(S.descentProtectActive),logBool(S.verticalHoldActive),logBool(S.verticalHoldAvailable),logFixed(S.verticalHoldTargetM,4),logFixed(S.verticalHoldHeightM,4),logFixed(S.verticalHoldErrorM,4),logFixed(S.verticalHoldThrottleAdjust,4),logBool(S.ekfHeightValid),logFixed(S.ekfHeightM,4),logFixed(S.ekfVerticalVelocityMps,4),logBool(S.tofValid),logBool(S.tofStale),logFixed(S.tofDistance,4),logFixed(S.tofVelocity,4),
     logFixed(S.ax,5),logFixed(S.ay,5),logFixed(S.az,5),logFixed(S.gx,4),logFixed(S.gy,4),logFixed(S.gz,4),logFixed(S.mx,3),logFixed(S.my,3),logFixed(S.mz,3),logFixed(S.imuTempC,2),accelNorm.toFixed(5),gyroNorm.toFixed(4),logFixed(S.magNormUt,3),logBool(S.magValid),magHeadingCalc.toFixed(3),magNormCalc.toFixed(3),magDelta.toFixed(3),logBool(S.magTrusted),
     logFixed(S.roll,3),logFixed(S.pitch,3),logFixed(S.yaw,3),yawSigned.toFixed(3),logFixed(S.q0,6),logFixed(S.q1,6),logFixed(S.q2,6),logFixed(S.q3,6),logFixed(S.accelRollDeg,3),logFixed(S.accelPitchDeg,3),logFixed(S.gyroRollDeg,3),logFixed(S.gyroPitchDeg,3),logFixed(S.magHeadingDeg,3),
     logFixed(S.targetRollDeg,3),logFixed(S.targetPitchDeg,3),logFixed(S.targetYawDeg,3),logFixed(S.targetRollRateDps,3),logFixed(S.targetPitchRateDps,3),logFixed(S.targetYawRateDps,3),
@@ -1496,7 +1516,10 @@ function applyJson(j){
   S.mx=+j.mx||0;S.my=+j.my||0;S.mz=+j.mz||0;
   S.imuTempC=+j.imuTempC||0;S.magNormUt=+j.magNormUt||0;
   S.imuValid=!!j.imuValid;S.magValid=!!j.magValid;S.magTrusted=!!j.ekfMagUsed;S.ahrsFilter=j.ahrsFilter||'EKF';S.ahrsFilterMode=+j.ahrsFilterMode||0;
-  S.thr=+j.thr||0;S.rawThrottle=+j.rawThrottle||S.thr;S.protectedThrottle=+j.protectedThrottle||0;S.descentThrottleBoost=+j.descentThrottleBoost||0;S.descentProtectMinActiveM=+j.descentProtectMinActiveM||0.50;S.descentProtectActive=!!j.descentProtectActive;S.rcRoll=+j.rcRoll||0;S.rcPitch=+j.rcPitch||0;S.rcYaw=+j.rcYaw||0;
+  S.thr=+j.thr||0;S.rawThrottle=+j.rawThrottle||S.thr;S.protectedThrottle=+j.protectedThrottle||0;S.descentThrottleBoost=+j.descentThrottleBoost||0;S.descentProtectMinActiveM=+j.descentProtectMinActiveM||0.50;S.descentProtectActive=!!j.descentProtectActive;
+  S.verticalHoldAvailable=!!j.verticalHoldAvailable;S.verticalHoldActive=!!j.verticalHoldActive;S.verticalHoldHeightValid=!!j.verticalHoldHeightValid;S.verticalHoldTiltLimited=!!j.verticalHoldTiltLimited;
+  S.verticalHoldTargetM=+j.verticalHoldTargetM||0;S.verticalHoldHeightM=+j.verticalHoldHeightM||0;S.verticalHoldVelocityMps=+j.verticalHoldVelocityMps||0;S.verticalHoldErrorM=+j.verticalHoldErrorM||0;S.verticalHoldThrottleAdjust=+j.verticalHoldThrottleAdjust||0;S.verticalHoldPilotRateMps=+j.verticalHoldPilotRateMps||0;
+  S.ekfHeightM=+j.ekfHeightM||0;S.ekfVerticalVelocityMps=+j.ekfVerticalVelocityMps||0;S.ekfHeightValid=!!j.ekfHeightValid;S.rcRoll=+j.rcRoll||0;S.rcPitch=+j.rcPitch||0;S.rcYaw=+j.rcYaw||0;
   S.rcHz=+j.rcHz||0;S.tick=+j.tick||0;
   S.mode=(j.mode||'UNKNOWN').toUpperCase();S.armed=!!j.armed;
   S.motFL=+j.motFL||0;S.motFR=+j.motFR||0;S.motRL=+j.motRL||0;S.motRR=+j.motRR||0;
@@ -1556,6 +1579,9 @@ function applyJson(j){
   syncI('thrExpo',j.throttleExpo,3);syncI('thrUpRate',j.throttleUpRatePerSec,3);syncI('thrDownRate',j.throttleDownRatePerSec,3);
   syncI('motorIdle',j.motorIdle,3);syncI('motorMax',j.motorMax,3);syncI('thrCut',j.throttleCut,3);syncI('idleRampEnd',j.idleRampEnd,3);
   syncI('descentMinActiveM',j.descentProtectMinActiveM,3);
+  syncI('vhEnable',j.verticalHoldEnable?1:0,0);syncI('vhKp',j.pidVerticalKp,3);syncI('vhKi',j.pidVerticalKi,4);syncI('vhKd',j.pidVerticalKd,4);
+  syncI('vhOutLim',j.verticalHoldOutputLimit,3);syncI('vhCenter',j.verticalHoldCenterThrottle,3);syncI('vhDeadband',j.verticalHoldDeadband,3);
+  syncI('vhRate',j.verticalHoldMaxClimbRateMps,3);syncI('vhMinM',j.verticalHoldMinActiveM,3);syncI('vhTilt',j.verticalHoldMaxTiltDeg,1);syncI('vhDLpf',j.verticalHoldDLpfHz,1);
   if(j.mahonyKp!=null){syncI('mKp',j.mahonyKp,4);setText('smKp',fmtGain(j.mahonyKp,4));}
   if(j.mahonyKi!=null){syncI('mKi',j.mahonyKi,5);setText('smKi',fmtGain(j.mahonyKi,5));}
   syncI('ahrsFilterMode',j.ahrsFilterMode,0);syncI('madgwickBeta',j.madgwickBeta,3);
@@ -1563,6 +1589,7 @@ function applyJson(j){
   S.notchEnable=!!j.notchEnable;S.notchFreqHz=+j.notchFreqHz||0;S.notchQ=+j.notchQ||0;
   syncI('ekfAngleQ',j.ekfAngleQ,6);syncI('ekfBiasQ',j.ekfBiasQ,6);syncI('ekfAccelR',j.ekfAccelR,3);syncI('ekfMagR',j.ekfMagR,3);
   syncI('ekfMagYawOffset',j.ekfMagYawOffsetDeg,2);syncI('ekfMagYawSign',j.ekfMagYawSign,0);
+  syncI('ekfAltQ',j.ekfAltAccelQ,3);syncI('ekfBaroR',j.ekfBaroAltR,3);syncI('ekfTofR',j.ekfTofAltR,3);
   if(j.notchFreqHz!=null)setText('sNotch',(j.notchEnable?'ON ':'OFF ')+Number(j.notchFreqHz).toFixed(0)+'Hz Q'+Number(j.notchQ||0).toFixed(1));
   if(j.ekfAccelR!=null)setText('sEkfR','A '+Number(j.ekfAccelR).toFixed(3)+' M '+Number(j.ekfMagR||0).toFixed(3));
   if(j.pidRollKp!=null)setText('srKp',fmtGain(j.pidRollKp,4));
@@ -1690,6 +1717,10 @@ async function sendAllGains(){
     roll_output_limit:'outRollLim',pitch_output_limit:'outPitchLim',yaw_output_limit:'outYawLim',
     throttle_expo:'thrExpo',throttle_up_rate_per_sec:'thrUpRate',throttle_down_rate_per_sec:'thrDownRate',
     motor_idle:'motorIdle',motor_max:'motorMax',throttle_cut:'thrCut',idle_ramp_end:'idleRampEnd',
+    descent_protect_min_active_m:'descentMinActiveM',
+    vertical_hold_enable:'vhEnable',pid_vertical_kp:'vhKp',pid_vertical_ki:'vhKi',pid_vertical_kd:'vhKd',
+    vertical_hold_output_limit:'vhOutLim',vertical_hold_center_throttle:'vhCenter',vertical_hold_deadband:'vhDeadband',
+    vertical_hold_max_climb_rate_mps:'vhRate',vertical_hold_min_active_m:'vhMinM',vertical_hold_max_tilt_deg:'vhTilt',vertical_hold_d_lpf_hz:'vhDLpf',
     pid_roll_kp:'rKp',pid_roll_ki:'rKi',pid_roll_kd:'rKd',
     pid_pitch_kp:'pKp',pid_pitch_ki:'pKi',pid_pitch_kd:'pKd',
     pid_yaw_kp:'yKp',pid_yaw_ki:'yKi',pid_yaw_kd:'yKd',
@@ -1701,14 +1732,15 @@ async function sendAllGains(){
     ahrs_filter_mode:'ahrsFilterMode', mahony_kp:'mKp', mahony_ki:'mKi', madgwick_beta:'madgwickBeta',
     notch_enable:'notchEnable', notch_freq_hz:'notchFreqHz', notch_q:'notchQ',
     ekf_angle_q:'ekfAngleQ', ekf_bias_q:'ekfBiasQ', ekf_accel_r:'ekfAccelR', ekf_mag_r:'ekfMagR',
-    ekf_mag_yaw_offset_deg:'ekfMagYawOffset', ekf_mag_yaw_sign:'ekfMagYawSign',
+    ekf_mag_yaw_offset_deg:'ekfMagYawOffset', ekf_mag_yaw_sign:'ekfMagYawSign', ekf_alt_accel_q:'ekfAltQ', ekf_baro_alt_r:'ekfBaroR', ekf_tof_alt_r:'ekfTofR',
     notch_enable:'notchEnable',notch_freq_hz:'notchFreqHz',notch_q:'notchQ',
     ekf_angle_q:'ekfAngleQ',ekf_bias_q:'ekfBiasQ',ekf_accel_r:'ekfAccelR',ekf_mag_r:'ekfMagR',
-    ekf_mag_yaw_offset_deg:'ekfMagYawOffset',ekf_mag_yaw_sign:'ekfMagYawSign'
+    ekf_mag_yaw_offset_deg:'ekfMagYawOffset',ekf_mag_yaw_sign:'ekfMagYawSign',ekf_alt_accel_q:'ekfAltQ',ekf_baro_alt_r:'ekfBaroR',ekf_tof_alt_r:'ekfTofR'
   };
   const payload={};
   Object.entries(map).forEach(([k,id])=>{const el=document.getElementById(id);if(!el)return;const v=parseFloat(el.value);if(!isNaN(v))payload[k]=v;});
   if('notch_enable' in payload) payload.notch_enable=!!payload.notch_enable;
+  if('vertical_hold_enable' in payload) payload.vertical_hold_enable=!!payload.vertical_hold_enable;
   await postTune(payload);
 }
 async function postTune(payload){
@@ -2024,6 +2056,8 @@ function render(){
   setText('vtof',S.tofReady?(S.tofValid?S.tofDistance.toFixed(3)+' m':'invalid'):'off');
   setText('vtofvz',S.tofReady?S.tofVelocity.toFixed(2)+' m/s':'—');
   setText('vdp',(S.descentProtectActive?'ON ':'OFF ')+S.descentThrottleBoost.toFixed(3)+' >'+S.descentProtectMinActiveM.toFixed(2)+'m');
+  setText('vvh',(S.verticalHoldActive?'ON ':S.verticalHoldAvailable?'RDY ':'OFF ')+S.verticalHoldThrottleAdjust.toFixed(3)+' err '+S.verticalHoldErrorM.toFixed(2)+'m');
+  setText('veh',S.ekfHeightValid?S.ekfHeightM.toFixed(2)+' m '+S.ekfVerticalVelocityMps.toFixed(2)+' m/s':'invalid');
   setText('attAlt',isFinite(S.bmpAlt)?S.bmpAlt.toFixed(2)+' m':'—');
   setText('fltFilter',S.ahrsFilter||'EKF');
   if(isFinite(S.cpu0)){

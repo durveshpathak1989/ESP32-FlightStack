@@ -82,7 +82,7 @@ void Logger::_appendFloat(String& s, float v, uint8_t dp) {
 String Logger::csvHeader() const {
     return F("t_us,loop_count,period_us,jitter_us,control_exec_us,imu_read_us,rc_read_us,ahrs_exec_us,pid_exec_us,motor_exec_us,"
              "mode,armed,imuOk,rcValid,magValid,motorSaturated,rpmActualValid,"
-             "thr,thrProtected,descentBoost,descentProtectActive,posHoldRequested,posHoldActive,xyHoldAvailable,tofValid,tofStale,tofDistanceM,tofVzMps,rcRoll,rcPitch,rcYaw,"
+             "thr,thrProtected,descentBoost,descentProtectActive,verticalHoldActive,verticalHoldAvailable,verticalHoldTargetM,verticalHoldHeightM,verticalHoldErrorM,verticalHoldAdjust,ekfHeightValid,ekfHeightM,ekfVzMps,posHoldRequested,posHoldActive,xyHoldAvailable,tofValid,tofStale,tofDistanceM,tofVzMps,rcRoll,rcPitch,rcYaw,"
              "targetRollDeg,targetPitchDeg,targetYawDeg,targetRollRateDps,targetPitchRateDps,targetYawRateDps,"
              "ekfRoll,ekfPitch,ekfYaw,ctrlRoll,ctrlPitch,ctrlYaw,zeroRoll,zeroPitch,zeroYaw,"
              "ax,ay,az,gx,gy,gz,mx,my,mz,accelNorm,gyroNorm,magNorm,ekfBgx,ekfBgy,ekfBgz,ahrsMode,ekfMagUsed,"
@@ -115,6 +115,15 @@ String Logger::csvRow(uint16_t chronologicalIndex) const {
     _appendFloat(s,r.protected_throttle,4);
     _appendFloat(s,r.descent_throttle_boost,4);
     s += ','; s += String(r.descent_protect_active);
+    s += ','; s += String(r.vertical_hold_active);
+    s += ','; s += String(r.vertical_hold_available);
+    _appendFloat(s,r.vertical_hold_target_m,4);
+    _appendFloat(s,r.vertical_hold_height_m,4);
+    _appendFloat(s,r.vertical_hold_error_m,4);
+    _appendFloat(s,r.vertical_hold_adjust,4);
+    s += ','; s += String(r.ekf_height_valid);
+    _appendFloat(s,r.ekf_height_m,4);
+    _appendFloat(s,r.ekf_vz_mps,4);
     s += ','; s += String(r.pos_hold_requested);
     s += ','; s += String(r.pos_hold_active);
     s += ','; s += String(r.xy_hold_available);

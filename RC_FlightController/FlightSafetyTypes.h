@@ -9,6 +9,40 @@ struct ToFData {
     uint32_t lastUpdateMs = 0;
 };
 
+struct AltitudeSensorData {
+    ToFData tof;
+    bool bmpValid = false;
+    float bmpAltitude_m = 0.0f;
+    float bmpVerticalSpeed_mps = 0.0f;
+    uint32_t bmpLastUpdateMs = 0;
+};
+
+struct VerticalHoldResult {
+    float throttle = 0.0f;
+    float targetHeight_m = 0.0f;
+    float estimatedHeight_m = 0.0f;
+    float estimatedVelocity_mps = 0.0f; // positive up
+    float error_m = 0.0f;
+    float throttleAdjust = 0.0f;
+    float pilotRate_mps = 0.0f;
+    bool available = false;
+    bool active = false;
+    bool heightValid = false;
+    bool tiltLimited = false;
+};
+
+struct VerticalHoldConfig {
+    bool enable = false;
+    float throttleCut = 0.03f;
+    float outputLimit = 0.0f;
+    float centerThrottle = 0.50f;
+    float deadband = 0.08f;
+    float maxClimbRate_mps = 0.50f;
+    float minActive_m = 0.50f;
+    float maxTilt_deg = 25.0f;
+    float dLpf_hz = 5.0f;
+};
+
 struct HorizontalNavEstimate {
     bool valid = false;
     float vx_mps = 0.0f;

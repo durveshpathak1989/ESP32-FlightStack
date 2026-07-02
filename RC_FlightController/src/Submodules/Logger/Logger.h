@@ -38,6 +38,15 @@ struct LoggerRow {
     float protected_throttle;
     float descent_throttle_boost;
     uint8_t descent_protect_active;
+    uint8_t vertical_hold_active;
+    uint8_t vertical_hold_available;
+    float vertical_hold_target_m;
+    float vertical_hold_height_m;
+    float vertical_hold_error_m;
+    float vertical_hold_adjust;
+    uint8_t ekf_height_valid;
+    float ekf_height_m;
+    float ekf_vz_mps;
     uint8_t pos_hold_requested;
     uint8_t pos_hold_active;
     uint8_t xy_hold_available;

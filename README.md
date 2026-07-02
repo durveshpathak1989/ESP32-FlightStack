@@ -349,6 +349,8 @@ SWC / CH9 requests POS_HOLD only while armed. This is currently `POS_HOLD_NO_XY_
 
 ToF descent protection is gated by the tunable `descent_protect_min_active_m` value, default `0.50 m`, so the guard only acts above that range and below the configured protection start distance.
 
+ANGLE mode also has a conservative vertical hold assist: BMP280 + tilt-compensated ToF feed a vertical EKF, and a capped vertical PID adjusts collective throttle only when height, throttle, and tilt safety gates are valid.
+
 Implementation notes and bench-test checklist: [docs/POS_HOLD_TOF_DESCENT_PROTECTION.md](docs/POS_HOLD_TOF_DESCENT_PROTECTION.md)
 
 ### Yaw heading hold

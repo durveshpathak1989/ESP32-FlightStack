@@ -124,6 +124,23 @@ static constexpr float LANDING_THROTTLE_FLOOR       = 0.08f;
 static constexpr float DESCENT_ASSIST_GAIN          = 0.15f;
 static constexpr float DESCENT_ASSIST_MAX_BOOST     = 0.18f;
 
+static constexpr bool  TUNE_VERTICAL_HOLD_ENABLE             = true;
+static constexpr float TUNE_VERTICAL_HOLD_KP                 = 0.18f;
+static constexpr float TUNE_VERTICAL_HOLD_KI                 = 0.020f;
+static constexpr float TUNE_VERTICAL_HOLD_KD                 = 0.080f;
+static constexpr float TUNE_VERTICAL_HOLD_I_LIMIT            = 0.60f;
+static constexpr float TUNE_VERTICAL_HOLD_OUTPUT_LIMIT       = 0.15f;
+static constexpr float TUNE_VERTICAL_HOLD_CENTER_THROTTLE    = 0.50f;
+static constexpr float TUNE_VERTICAL_HOLD_DEADBAND           = 0.08f;
+static constexpr float TUNE_VERTICAL_HOLD_MAX_CLIMB_RATE_MPS = 0.50f;
+static constexpr float TUNE_VERTICAL_HOLD_MIN_ACTIVE_M       = 0.50f;
+static constexpr float TUNE_VERTICAL_HOLD_MAX_TILT_DEG       = 25.0f;
+static constexpr float TUNE_VERTICAL_HOLD_D_LPF_HZ           = 5.0f;
+
+static constexpr float TUNE_EKF_ALT_ACCEL_Q                  = 0.35f;
+static constexpr float TUNE_EKF_BARO_ALT_R                   = 1.25f;
+static constexpr float TUNE_EKF_TOF_ALT_R                    = 0.025f;
+
 // ── Pilot command limits ────────────────────────────────────
 static constexpr float TUNE_MAX_ANGLE_DEG = 5.0f;
 static constexpr float TUNE_MAX_RATE_DPS  = 70.0f;
@@ -388,6 +405,7 @@ struct FlightState {
     float mx_uT, my_uT, mz_uT;
     float imuTemp_c;
     float bmpTemp_c, bmpPressure_hpa, bmpAltitude_m;
+    uint32_t bmpLastUpdate_ms;
     bool  bmpValid;
     float tofDistance_m;
     float tofRawDistance_m;
@@ -407,6 +425,22 @@ struct FlightState {
     bool  descentProtectActive;
     float descentThrottleBoost;
     float descentProtectMinActive_m;
+    bool  verticalHoldAvailable;
+    bool  verticalHoldActive;
+    bool  verticalHoldHeightValid;
+    bool  verticalHoldTiltLimited;
+    float verticalHoldTarget_m;
+    float verticalHoldHeight_m;
+    float verticalHoldVelocity_mps;
+    float verticalHoldError_m;
+    float verticalHoldThrottleAdjust;
+    float verticalHoldPilotRate_mps;
+    float verticalHoldP;
+    float verticalHoldI;
+    float verticalHoldD;
+    float ekfHeight_m;
+    float ekfVerticalVelocity_mps;
+    bool  ekfHeightValid;
     float rawThrottle;
     float protectedThrottle;
     float cpuCore0_pct, cpuCore1_pct;
@@ -512,6 +546,18 @@ struct TuningState {
     float throttle_cut;
     float idle_ramp_end;
     float descent_protect_min_active_m;
+    bool  vertical_hold_enable;
+    float pid_vertical_kp;
+    float pid_vertical_ki;
+    float pid_vertical_kd;
+    float vertical_hold_i_limit;
+    float vertical_hold_output_limit;
+    float vertical_hold_center_throttle;
+    float vertical_hold_deadband;
+    float vertical_hold_max_climb_rate_mps;
+    float vertical_hold_min_active_m;
+    float vertical_hold_max_tilt_deg;
+    float vertical_hold_d_lpf_hz;
     float pid_ilimit;
 
     // Inner rate loop PID
@@ -548,6 +594,9 @@ struct TuningState {
     float ekf_mag_declination_deg;
     float ekf_mag_yaw_offset_deg;
     float ekf_mag_yaw_sign;
+    float ekf_alt_accel_q;
+    float ekf_baro_alt_r;
+    float ekf_tof_alt_r;
 
     volatile bool dirty;
 };
@@ -665,6 +714,10 @@ static PID pidAngleRoll (TUNE_ANGLE_ROLL_KP,  TUNE_ANGLE_ROLL_KI,  TUNE_ANGLE_RO
 static PID pidAnglePitch(TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
 // Yaw Control
 static PID pidAngleYaw  (TUNE_ANGLE_YAW_KP,   0.0f,                0.0f);
+static PID pidVerticalHold(TUNE_VERTICAL_HOLD_KP,
+                           TUNE_VERTICAL_HOLD_KI,
+                           TUNE_VERTICAL_HOLD_KD,
+                           TUNE_VERTICAL_HOLD_I_LIMIT);
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -688,6 +741,18 @@ static void syncTuningFromObjects()
     g_tuning.throttle_cut               = TUNE_THROTTLE_CUT;
     g_tuning.idle_ramp_end              = TUNE_IDLE_RAMP_END;
     g_tuning.descent_protect_min_active_m = DESCENT_PROTECT_MIN_ACTIVE_M;
+    g_tuning.vertical_hold_enable       = TUNE_VERTICAL_HOLD_ENABLE;
+    g_tuning.pid_vertical_kp            = pidVerticalHold.kp;
+    g_tuning.pid_vertical_ki            = pidVerticalHold.ki;
+    g_tuning.pid_vertical_kd            = pidVerticalHold.kd;
+    g_tuning.vertical_hold_i_limit      = TUNE_VERTICAL_HOLD_I_LIMIT;
+    g_tuning.vertical_hold_output_limit = TUNE_VERTICAL_HOLD_OUTPUT_LIMIT;
+    g_tuning.vertical_hold_center_throttle = TUNE_VERTICAL_HOLD_CENTER_THROTTLE;
+    g_tuning.vertical_hold_deadband     = TUNE_VERTICAL_HOLD_DEADBAND;
+    g_tuning.vertical_hold_max_climb_rate_mps = TUNE_VERTICAL_HOLD_MAX_CLIMB_RATE_MPS;
+    g_tuning.vertical_hold_min_active_m = TUNE_VERTICAL_HOLD_MIN_ACTIVE_M;
+    g_tuning.vertical_hold_max_tilt_deg = TUNE_VERTICAL_HOLD_MAX_TILT_DEG;
+    g_tuning.vertical_hold_d_lpf_hz     = TUNE_VERTICAL_HOLD_D_LPF_HZ;
     g_tuning.pid_ilimit                 = pidRateRoll.iLimit;
 
     g_tuning.pid_roll_kp                = pidRateRoll.kp;
@@ -730,6 +795,9 @@ static void syncTuningFromObjects()
     g_tuning.ekf_mag_declination_deg    = TUNE_EKF_MAG_DECL_DEG;
     g_tuning.ekf_mag_yaw_offset_deg     = TUNE_EKF_MAG_YAW_OFF_DEG;
     g_tuning.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
+    g_tuning.ekf_alt_accel_q            = TUNE_EKF_ALT_ACCEL_Q;
+    g_tuning.ekf_baro_alt_r             = TUNE_EKF_BARO_ALT_R;
+    g_tuning.ekf_tof_alt_r              = TUNE_EKF_TOF_ALT_R;
     g_tuning.dirty                      = false;
 }
 // Copy g_tuning into live PID/AHRS objects. Caller already holds g_tuneMutex.
@@ -752,6 +820,10 @@ static void applyTuningToObjectsLocked()
     pidAnglePitch.ki       = g_tuning.pid_angle_pitch_ki;
     pidAnglePitch.kd       = g_tuning.pid_angle_pitch_kd;
     pidAngleYaw.kp         = g_tuning.pid_angle_yaw_kp;
+    pidVerticalHold.kp     = g_tuning.pid_vertical_kp;
+    pidVerticalHold.ki     = g_tuning.pid_vertical_ki;
+    pidVerticalHold.kd     = g_tuning.pid_vertical_kd;
+    pidVerticalHold.iLimit = constrain(g_tuning.vertical_hold_i_limit, 0.0f, 10.0f);
 
     // Apply the global I-limit to every PID object so the Config tab lever works.
     pidRateRoll.iLimit     = g_tuning.pid_ilimit;
@@ -781,6 +853,9 @@ static void applyTuningToObjectsLocked()
     attitudeEKF.setMagDeclinationDeg(constrain(g_tuning.ekf_mag_declination_deg, -30.0f, 30.0f));
     attitudeEKF.setMagYawOffsetDeg(constrain(g_tuning.ekf_mag_yaw_offset_deg, -180.0f, 180.0f));
     attitudeEKF.setMagYawSign(g_tuning.ekf_mag_yaw_sign);
+    attitudeEKF.setAltitudeEstimatorNoise(constrain(g_tuning.ekf_alt_accel_q, 0.0001f, 20.0f),
+                                          constrain(g_tuning.ekf_baro_alt_r, 0.001f, 100.0f),
+                                          constrain(g_tuning.ekf_tof_alt_r, 0.0001f, 10.0f));
 
     g_tuning.dirty         = false;
     g_tuneApplySeq         = g_tuneRequestSeq;
@@ -1130,6 +1205,22 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.tof_age_ms=s.tofAge_ms;
     out.descent_protect_active=s.descentProtectActive;
     out.descent_throttle_boost=s.descentThrottleBoost;
+    out.vertical_hold_available=s.verticalHoldAvailable;
+    out.vertical_hold_active=s.verticalHoldActive;
+    out.vertical_hold_height_valid=s.verticalHoldHeightValid;
+    out.vertical_hold_tilt_limited=s.verticalHoldTiltLimited;
+    out.vertical_hold_target_m=s.verticalHoldTarget_m;
+    out.vertical_hold_height_m=s.verticalHoldHeight_m;
+    out.vertical_hold_velocity_mps=s.verticalHoldVelocity_mps;
+    out.vertical_hold_error_m=s.verticalHoldError_m;
+    out.vertical_hold_throttle_adjust=s.verticalHoldThrottleAdjust;
+    out.vertical_hold_pilot_rate_mps=s.verticalHoldPilotRate_mps;
+    out.vertical_hold_p=s.verticalHoldP;
+    out.vertical_hold_i=s.verticalHoldI;
+    out.vertical_hold_d=s.verticalHoldD;
+    out.ekf_height_m=s.ekfHeight_m;
+    out.ekf_vertical_velocity_mps=s.ekfVerticalVelocity_mps;
+    out.ekf_height_valid=s.ekfHeightValid;
     out.raw_throttle=s.rawThrottle;
     out.protected_throttle=s.protectedThrottle;
     out.cpu_core0_pct=s.cpuCore0_pct; out.cpu_core1_pct=s.cpuCore1_pct;
@@ -1149,6 +1240,18 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.throttle_cut               = t.throttle_cut;
     out.idle_ramp_end              = t.idle_ramp_end;
     out.descent_protect_min_active_m = t.descent_protect_min_active_m;
+    out.vertical_hold_enable       = t.vertical_hold_enable;
+    out.pid_vertical_kp            = t.pid_vertical_kp;
+    out.pid_vertical_ki            = t.pid_vertical_ki;
+    out.pid_vertical_kd            = t.pid_vertical_kd;
+    out.vertical_hold_i_limit      = t.vertical_hold_i_limit;
+    out.vertical_hold_output_limit = t.vertical_hold_output_limit;
+    out.vertical_hold_center_throttle = t.vertical_hold_center_throttle;
+    out.vertical_hold_deadband     = t.vertical_hold_deadband;
+    out.vertical_hold_max_climb_rate_mps = t.vertical_hold_max_climb_rate_mps;
+    out.vertical_hold_min_active_m = t.vertical_hold_min_active_m;
+    out.vertical_hold_max_tilt_deg = t.vertical_hold_max_tilt_deg;
+    out.vertical_hold_d_lpf_hz     = t.vertical_hold_d_lpf_hz;
     out.pid_ilimit                 = t.pid_ilimit;
 
     out.pid_roll_kp=t.pid_roll_kp;   out.pid_roll_ki=t.pid_roll_ki;   out.pid_roll_kd=t.pid_roll_kd;
@@ -1178,6 +1281,9 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.ekf_mag_declination_deg=t.ekf_mag_declination_deg;
     out.ekf_mag_yaw_offset_deg=t.ekf_mag_yaw_offset_deg;
     out.ekf_mag_yaw_sign=t.ekf_mag_yaw_sign;
+    out.ekf_alt_accel_q=t.ekf_alt_accel_q;
+    out.ekf_baro_alt_r=t.ekf_baro_alt_r;
+    out.ekf_tof_alt_r=t.ekf_tof_alt_r;
     out.tune_request_seq = g_tuneRequestSeq;
     out.tune_apply_seq   = g_tuneApplySeq;
     out.tune_reject_seq  = g_tuneRejectSeq;
@@ -1234,6 +1340,18 @@ static bool handleTune(const TunePacket& in)
     if (in.has_throttle_cut)               g_tuning.throttle_cut               = constrain(in.throttle_cut, 0.0f, 0.30f);
     if (in.has_idle_ramp_end)              g_tuning.idle_ramp_end              = constrain(in.idle_ramp_end, 0.01f, 0.60f);
     if (in.has_descent_protect_min_active_m) g_tuning.descent_protect_min_active_m = constrain(in.descent_protect_min_active_m, TOF_MIN_VALID_M, DESCENT_PROTECT_START_M - 0.05f);
+    if (in.has_vertical_hold_enable)        g_tuning.vertical_hold_enable       = in.vertical_hold_enable;
+    if (in.has_pid_vertical_kp)             g_tuning.pid_vertical_kp            = constrain(in.pid_vertical_kp, 0.0f, 5.0f);
+    if (in.has_pid_vertical_ki)             g_tuning.pid_vertical_ki            = constrain(in.pid_vertical_ki, 0.0f, 2.0f);
+    if (in.has_pid_vertical_kd)             g_tuning.pid_vertical_kd            = constrain(in.pid_vertical_kd, 0.0f, 5.0f);
+    if (in.has_vertical_hold_i_limit)       g_tuning.vertical_hold_i_limit      = constrain(in.vertical_hold_i_limit, 0.0f, 10.0f);
+    if (in.has_vertical_hold_output_limit)  g_tuning.vertical_hold_output_limit = constrain(in.vertical_hold_output_limit, 0.0f, 0.50f);
+    if (in.has_vertical_hold_center_throttle) g_tuning.vertical_hold_center_throttle = constrain(in.vertical_hold_center_throttle, 0.05f, 0.95f);
+    if (in.has_vertical_hold_deadband)      g_tuning.vertical_hold_deadband     = constrain(in.vertical_hold_deadband, 0.0f, 0.30f);
+    if (in.has_vertical_hold_max_climb_rate_mps) g_tuning.vertical_hold_max_climb_rate_mps = constrain(in.vertical_hold_max_climb_rate_mps, 0.05f, 3.0f);
+    if (in.has_vertical_hold_min_active_m)  g_tuning.vertical_hold_min_active_m = constrain(in.vertical_hold_min_active_m, TOF_MIN_VALID_M, 20.0f);
+    if (in.has_vertical_hold_max_tilt_deg)  g_tuning.vertical_hold_max_tilt_deg = constrain(in.vertical_hold_max_tilt_deg, 5.0f, 60.0f);
+    if (in.has_vertical_hold_d_lpf_hz)      g_tuning.vertical_hold_d_lpf_hz     = constrain(in.vertical_hold_d_lpf_hz, 0.0f, 30.0f);
     if (in.has_pid_ilimit)                 g_tuning.pid_ilimit                 = constrain(in.pid_ilimit, 0.0f, 1000.0f);
 
     // Keep idle/ramp relationships sane.
@@ -1279,6 +1397,9 @@ static bool handleTune(const TunePacket& in)
     if (in.has_ekf_mag_declination_deg)  g_tuning.ekf_mag_declination_deg = constrain(in.ekf_mag_declination_deg, -30.0f, 30.0f);
     if (in.has_ekf_mag_yaw_offset_deg)   g_tuning.ekf_mag_yaw_offset_deg  = constrain(in.ekf_mag_yaw_offset_deg, -180.0f, 180.0f);
     if (in.has_ekf_mag_yaw_sign)         g_tuning.ekf_mag_yaw_sign        = (in.ekf_mag_yaw_sign < 0.0f) ? -1.0f : 1.0f;
+    if (in.has_ekf_alt_accel_q)          g_tuning.ekf_alt_accel_q         = constrain(in.ekf_alt_accel_q, 0.0001f, 20.0f);
+    if (in.has_ekf_baro_alt_r)           g_tuning.ekf_baro_alt_r          = constrain(in.ekf_baro_alt_r, 0.001f, 100.0f);
+    if (in.has_ekf_tof_alt_r)            g_tuning.ekf_tof_alt_r           = constrain(in.ekf_tof_alt_r, 0.0001f, 10.0f);
     // Accept and apply immediately while disarmed. This removes the confusing
     // one-cycle handshake where the POST succeeded but telemetry still showed
     // old values until taskControl got around to applying dirty tuning.
@@ -1823,6 +1944,111 @@ static ToFData latestToFSnapshot()
     return out;
 }
 
+static AltitudeSensorData latestAltitudeSensorSnapshot()
+{
+    AltitudeSensorData out;
+    if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
+        out.tof.valid = g_state.tofValid;
+        out.tof.distance_m = g_state.tofDistance_m;
+        out.tof.verticalVelocity_mps = g_state.tofVerticalVelocity_mps;
+        out.tof.lastUpdateMs = g_state.tofLastUpdate_ms;
+        out.bmpValid = g_state.bmpValid;
+        out.bmpAltitude_m = g_state.bmpAltitude_m;
+        out.bmpVerticalSpeed_mps = g_state.bmpVerticalSpeed_mps;
+        out.bmpLastUpdateMs = g_state.bmpLastUpdate_ms;
+        xSemaphoreGive(g_flightMutex);
+    }
+    return out;
+}
+
+static float tiltCompensatedToFHeightM(float rangeM, float rollDeg, float pitchDeg)
+{
+    const float rollRad = rollDeg * DEG_TO_RAD;
+    const float pitchRad = pitchDeg * DEG_TO_RAD;
+    const float tiltCos = cosf(rollRad) * cosf(pitchRad);
+    if (tiltCos <= 0.20f) return rangeM;
+    return rangeM * tiltCos;
+}
+
+static VerticalHoldResult applyAngleVerticalHold(float pilotThrottle,
+                                                 float rawThrottle,
+                                                 bool angleModeActive,
+                                                 bool heightValid,
+                                                 float heightM,
+                                                 float verticalVelocityMps,
+                                                 float rollDeg,
+                                                 float pitchDeg,
+                                                 float dt,
+                                                 float maxThrottle,
+                                                 const VerticalHoldConfig& cfg)
+{
+    static bool holdInitialized = false;
+    static float targetHeightM = 0.0f;
+
+    VerticalHoldResult r;
+    const float startThrottle = constrain(pilotThrottle, 0.0f, 1.0f);
+    r.throttle = startThrottle;
+    r.estimatedHeight_m = heightM;
+    r.estimatedVelocity_mps = verticalVelocityMps;
+    r.targetHeight_m = targetHeightM;
+    r.heightValid = heightValid;
+
+    const float maxTiltDeg = constrain(cfg.maxTilt_deg, 5.0f, 60.0f);
+    r.tiltLimited = (fabsf(rollDeg) > maxTiltDeg) || (fabsf(pitchDeg) > maxTiltDeg);
+
+    const float minActiveM = constrain(cfg.minActive_m, TOF_MIN_VALID_M, 20.0f);
+    const bool enabled = cfg.enable;
+    const bool throttleReady = rawThrottle > cfg.throttleCut;
+    r.available = enabled && angleModeActive && heightValid && throttleReady &&
+                  !r.tiltLimited && heightM > minActiveM;
+
+    if (!r.available || dt <= 0.0f || dt > 0.05f) {
+        holdInitialized = false;
+        targetHeightM = heightM;
+        r.targetHeight_m = targetHeightM;
+        pidVerticalHold.reset();
+        return r;
+    }
+
+    if (!holdInitialized) {
+        targetHeightM = heightM;
+        pidVerticalHold.reset();
+        holdInitialized = true;
+    }
+
+    const float centerThrottle = constrain(cfg.centerThrottle,
+                                           cfg.throttleCut + 0.05f,
+                                           0.95f);
+    const float deadband = constrain(cfg.deadband, 0.0f, 0.30f);
+    const float maxClimbRate = constrain(cfg.maxClimbRate_mps, 0.05f, 3.0f);
+
+    float stick = rawThrottle - centerThrottle;
+    float rateCmd = 0.0f;
+    if (stick > deadband) {
+        const float denom = max(0.001f, 1.0f - centerThrottle - deadband);
+        rateCmd = constrain((stick - deadband) / denom, 0.0f, 1.0f) * maxClimbRate;
+    } else if (stick < -deadband) {
+        const float denom = max(0.001f, centerThrottle - deadband - cfg.throttleCut);
+        rateCmd = -constrain((-stick - deadband) / denom, 0.0f, 1.0f) * maxClimbRate;
+    }
+
+    targetHeightM = constrain(targetHeightM + rateCmd * dt, minActiveM, 30.0f);
+
+    const float errM = targetHeightM - heightM;
+    const float dLpfHz = constrain(cfg.dLpf_hz, 0.0f, 30.0f);
+    const float outputLimit = constrain(cfg.outputLimit, 0.0f, 0.50f);
+    float adjust = pidVerticalHold.updateDOnMeasurement(errM, heightM, dt, dLpfHz);
+    adjust = constrain(adjust, -outputLimit, outputLimit);
+
+    r.throttle = constrain(startThrottle + adjust, 0.0f, constrain(maxThrottle, 0.0f, 1.0f));
+    r.throttleAdjust = r.throttle - startThrottle;
+    r.targetHeight_m = targetHeightM;
+    r.error_m = errM;
+    r.pilotRate_mps = rateCmd;
+    r.active = true;
+    return r;
+}
+
 static DescentProtectionResult applyToFDescentProtection(float pilotThrottle,
                                                          const ToFData& tof,
                                                          bool armed,
@@ -1901,6 +2127,7 @@ static void taskControl(void* /*pv*/)
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
     pidAngleYaw.reset();
+    pidVerticalHold.reset();
     attitudeEKF.reset();
     g_yawHoldActive = false;
 
@@ -1915,6 +2142,7 @@ static void taskControl(void* /*pv*/)
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
             pidAngleYaw.reset();
+            pidVerticalHold.reset();
             attitudeEKF.reset();
             g_yawHoldActive = false;
             runAutonomousCalibration();
@@ -1985,6 +2213,7 @@ static void taskControl(void* /*pv*/)
             pidAngleRoll.reset();
             pidAnglePitch.reset();
             pidAngleYaw.reset();
+            pidVerticalHold.reset();
 
             g_yawHoldActive = false;
 
@@ -2124,7 +2353,8 @@ static void taskControl(void* /*pv*/)
         RCCommand cmd = rcReceiver.getCommand();
         updateControlTransitionCounters(cmd);
         g_execTiming.lastRcUs = micros() - phaseStartUs;
-        ToFData tofSnapshot = latestToFSnapshot();
+        AltitudeSensorData altitudeSnapshot = latestAltitudeSensorSnapshot();
+        ToFData tofSnapshot = altitudeSnapshot.tof;
         g_positionHoldState.requested = cmd.posHoldRequested;
         g_positionHoldState.active = (cmd.mode == FlightMode::POS_HOLD);
         g_positionHoldState.xySensorValid = g_horizontalNavEstimate.valid;
@@ -2188,6 +2418,30 @@ static void taskControl(void* /*pv*/)
         }
 
         // ── DISARMED / FAILSAFE ───────────────────────────────
+        static uint32_t lastBmpAltFuseMs = 0;
+        static uint32_t lastTofAltFuseMs = 0;
+        const bool bmpHeightFresh = altitudeSnapshot.bmpValid &&
+                                    altitudeSnapshot.bmpLastUpdateMs != 0 &&
+                                    altitudeSnapshot.bmpLastUpdateMs != lastBmpAltFuseMs;
+        bool tofHeightValid = altitudeSnapshot.tof.valid &&
+                              altitudeSnapshot.tof.lastUpdateMs != 0 &&
+                              altitudeSnapshot.tof.lastUpdateMs != lastTofAltFuseMs;
+        float tofHeightM = altitudeSnapshot.tof.distance_m;
+        if (tofHeightValid && imuOk) {
+            tofHeightM = tiltCompensatedToFHeightM(altitudeSnapshot.tof.distance_m,
+                                                   rollCtrlDeg,
+                                                   pitchCtrlDeg);
+        }
+        attitudeEKF.updateAltitudeSensors(altitudeSnapshot.bmpAltitude_m,
+                                          bmpHeightFresh,
+                                          tofHeightM,
+                                          tofHeightValid,
+                                          millis());
+        if (bmpHeightFresh) lastBmpAltFuseMs = altitudeSnapshot.bmpLastUpdateMs;
+        if (tofHeightValid) lastTofAltFuseMs = altitudeSnapshot.tof.lastUpdateMs;
+        const PositionVelocityEstimate& verticalEstimate = attitudeEKF.positionVelocity();
+        const bool ekfHeightValid = attitudeEKF.altitudeValid();
+
         if (cmd.mode == FlightMode::DISARMED || cmd.mode == FlightMode::FAILSAFE) {
             phaseStartUs = micros();
             if (g_motorOutputsActive) {
@@ -2206,6 +2460,7 @@ static void taskControl(void* /*pv*/)
             notchGx.reset(); notchGy.reset(); notchGz.reset();
             lpfSpRoll.reset(); lpfSpPitch.reset(); lpfSpYaw.reset();
             pidAngleYaw.reset();
+            pidVerticalHold.reset();
             g_yawHoldActive = false;
 
             phaseStartUs = micros();
@@ -2269,6 +2524,22 @@ static void taskControl(void* /*pv*/)
                 g_state.descentProtectActive = false;
                 g_state.descentThrottleBoost = 0.0f;
                 g_state.descentProtectMinActive_m = descentProtectMinActiveForState;
+                g_state.verticalHoldAvailable = false;
+                g_state.verticalHoldActive = false;
+                g_state.verticalHoldHeightValid = ekfHeightValid;
+                g_state.verticalHoldTiltLimited = false;
+                g_state.verticalHoldTarget_m = verticalEstimate.posZ_m;
+                g_state.verticalHoldHeight_m = verticalEstimate.posZ_m;
+                g_state.verticalHoldVelocity_mps = verticalEstimate.velZ_mps;
+                g_state.verticalHoldError_m = 0.0f;
+                g_state.verticalHoldThrottleAdjust = 0.0f;
+                g_state.verticalHoldPilotRate_mps = 0.0f;
+                g_state.verticalHoldP = pidVerticalHold.lastP;
+                g_state.verticalHoldI = pidVerticalHold.lastI;
+                g_state.verticalHoldD = pidVerticalHold.lastD;
+                g_state.ekfHeight_m = verticalEstimate.posZ_m;
+                g_state.ekfVerticalVelocity_mps = verticalEstimate.velZ_mps;
+                g_state.ekfHeightValid = ekfHeightValid;
                 g_state.controlAuthorityRemaining = 0.0f;
                 g_state.rollOutputLimited = false;
                 g_state.pitchOutputLimited = false;
@@ -2340,6 +2611,18 @@ static void taskControl(void* /*pv*/)
             tune.throttle_cut               = TUNE_THROTTLE_CUT;
             tune.idle_ramp_end              = TUNE_IDLE_RAMP_END;
             tune.descent_protect_min_active_m = DESCENT_PROTECT_MIN_ACTIVE_M;
+            tune.vertical_hold_enable       = TUNE_VERTICAL_HOLD_ENABLE;
+            tune.pid_vertical_kp            = TUNE_VERTICAL_HOLD_KP;
+            tune.pid_vertical_ki            = TUNE_VERTICAL_HOLD_KI;
+            tune.pid_vertical_kd            = TUNE_VERTICAL_HOLD_KD;
+            tune.vertical_hold_i_limit      = TUNE_VERTICAL_HOLD_I_LIMIT;
+            tune.vertical_hold_output_limit = TUNE_VERTICAL_HOLD_OUTPUT_LIMIT;
+            tune.vertical_hold_center_throttle = TUNE_VERTICAL_HOLD_CENTER_THROTTLE;
+            tune.vertical_hold_deadband     = TUNE_VERTICAL_HOLD_DEADBAND;
+            tune.vertical_hold_max_climb_rate_mps = TUNE_VERTICAL_HOLD_MAX_CLIMB_RATE_MPS;
+            tune.vertical_hold_min_active_m = TUNE_VERTICAL_HOLD_MIN_ACTIVE_M;
+            tune.vertical_hold_max_tilt_deg = TUNE_VERTICAL_HOLD_MAX_TILT_DEG;
+            tune.vertical_hold_d_lpf_hz     = TUNE_VERTICAL_HOLD_D_LPF_HZ;
             tune.yaw_deadband               = TUNE_YAW_DEADBAND;
             tune.yaw_max_rate_dps           = TUNE_YAW_MAX_RATE_DPS;
             tune.pid_roll_ff                = TUNE_RATE_ROLL_FF;
@@ -2360,6 +2643,9 @@ static void taskControl(void* /*pv*/)
             tune.ekf_mag_declination_deg    = TUNE_EKF_MAG_DECL_DEG;
             tune.ekf_mag_yaw_offset_deg     = TUNE_EKF_MAG_YAW_OFF_DEG;
             tune.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
+            tune.ekf_alt_accel_q            = TUNE_EKF_ALT_ACCEL_Q;
+            tune.ekf_baro_alt_r             = TUNE_EKF_BARO_ALT_R;
+            tune.ekf_tof_alt_r              = TUNE_EKF_TOF_ALT_R;
         }
 
         const float MAX_ANGLE_DEG      = tune.max_angle_deg;
@@ -2475,8 +2761,31 @@ static void taskControl(void* /*pv*/)
         }
 
         float pilotThr = constrain(thrSmooth, 0.0f, 1.0f);
+        VerticalHoldConfig verticalHoldCfg;
+        verticalHoldCfg.enable = tune.vertical_hold_enable;
+        verticalHoldCfg.throttleCut = THROTTLE_CUT;
+        verticalHoldCfg.outputLimit = tune.vertical_hold_output_limit;
+        verticalHoldCfg.centerThrottle = tune.vertical_hold_center_throttle;
+        verticalHoldCfg.deadband = tune.vertical_hold_deadband;
+        verticalHoldCfg.maxClimbRate_mps = tune.vertical_hold_max_climb_rate_mps;
+        verticalHoldCfg.minActive_m = tune.vertical_hold_min_active_m;
+        verticalHoldCfg.maxTilt_deg = tune.vertical_hold_max_tilt_deg;
+        verticalHoldCfg.dLpf_hz = tune.vertical_hold_d_lpf_hz;
+
+        VerticalHoldResult verticalHold =
+            applyAngleVerticalHold(pilotThr,
+                                   thrRaw,
+                                   cmd.mode == FlightMode::ANGLE,
+                                   ekfHeightValid,
+                                   verticalEstimate.posZ_m,
+                                   verticalEstimate.velZ_mps,
+                                   roll,
+                                   pitch,
+                                   dt,
+                                   MOTOR_MAX,
+                                   verticalHoldCfg);
         DescentProtectionResult descentProtect =
-            applyToFDescentProtection(pilotThr,
+            applyToFDescentProtection(verticalHold.throttle,
                                       tofSnapshot,
                                       true,
                                       MOTOR_MAX,
@@ -2597,6 +2906,15 @@ static void taskControl(void* /*pv*/)
             row.protected_throttle = thr;
             row.descent_throttle_boost = descentProtect.boost;
             row.descent_protect_active = descentProtect.active ? 1 : 0;
+            row.vertical_hold_active = verticalHold.active ? 1 : 0;
+            row.vertical_hold_available = verticalHold.available ? 1 : 0;
+            row.vertical_hold_target_m = verticalHold.targetHeight_m;
+            row.vertical_hold_height_m = verticalHold.estimatedHeight_m;
+            row.vertical_hold_error_m = verticalHold.error_m;
+            row.vertical_hold_adjust = verticalHold.throttleAdjust;
+            row.ekf_height_valid = ekfHeightValid ? 1 : 0;
+            row.ekf_height_m = verticalEstimate.posZ_m;
+            row.ekf_vz_mps = verticalEstimate.velZ_mps;
             row.pos_hold_requested = cmd.posHoldRequested ? 1 : 0;
             row.pos_hold_active = posHoldActive ? 1 : 0;
             row.xy_hold_available = g_positionHoldState.xySensorValid ? 1 : 0;
@@ -2816,6 +3134,22 @@ static void taskControl(void* /*pv*/)
             g_state.descentProtectActive = descentProtect.active;
             g_state.descentThrottleBoost = descentProtect.boost;
             g_state.descentProtectMinActive_m = tune.descent_protect_min_active_m;
+            g_state.verticalHoldAvailable = verticalHold.available;
+            g_state.verticalHoldActive = verticalHold.active;
+            g_state.verticalHoldHeightValid = verticalHold.heightValid;
+            g_state.verticalHoldTiltLimited = verticalHold.tiltLimited;
+            g_state.verticalHoldTarget_m = verticalHold.targetHeight_m;
+            g_state.verticalHoldHeight_m = verticalHold.estimatedHeight_m;
+            g_state.verticalHoldVelocity_mps = verticalHold.estimatedVelocity_mps;
+            g_state.verticalHoldError_m = verticalHold.error_m;
+            g_state.verticalHoldThrottleAdjust = verticalHold.throttleAdjust;
+            g_state.verticalHoldPilotRate_mps = verticalHold.pilotRate_mps;
+            g_state.verticalHoldP = pidVerticalHold.lastP;
+            g_state.verticalHoldI = pidVerticalHold.lastI;
+            g_state.verticalHoldD = pidVerticalHold.lastD;
+            g_state.ekfHeight_m = verticalEstimate.posZ_m;
+            g_state.ekfVerticalVelocity_mps = verticalEstimate.velZ_mps;
+            g_state.ekfHeightValid = ekfHeightValid;
             g_state.controlAuthorityRemaining = controlAuthorityRemaining;
             g_state.rollOutputLimited = rollOutputLimited;
             g_state.pitchOutputLimited = pitchOutputLimited;
@@ -3111,6 +3445,7 @@ static void taskBMP(void* /*pv*/)
                 g_state.bmpPressure_hpa = b.pressure_hpa;
                 g_state.bmpAltitude_m  = b.altitude_m;
                 g_state.bmpVerticalSpeed_mps = bmpVz;
+                g_state.bmpLastUpdate_ms = nowMsBmp;
                 g_state.bmpValid       = b.valid;
                 xSemaphoreGive(g_flightMutex);
             }
