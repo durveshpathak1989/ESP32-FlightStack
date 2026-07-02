@@ -30,11 +30,21 @@ struct LoggerRow {
     uint16_t ahrs_exec_us;
     uint16_t pid_exec_us;
     uint16_t motor_exec_us;
-    uint8_t  mode;        // 0=DISARMED, 1=ANGLE, 2=ACRO, 3=FAILSAFE
+    uint8_t  mode;        // 0=DISARMED, 1=ANGLE, 2=ACRO, 3=POS_HOLD, 4=FAILSAFE
     uint16_t flags;       // bit0 armed, bit1 imuOk, bit2 rcValid, bit3 magValid, bit4 motorSat, bit5 rpmActualValid
 
     // Pilot/target tracking
     float throttle;
+    float protected_throttle;
+    float descent_throttle_boost;
+    uint8_t descent_protect_active;
+    uint8_t pos_hold_requested;
+    uint8_t pos_hold_active;
+    uint8_t xy_hold_available;
+    uint8_t tof_valid;
+    uint8_t tof_stale;
+    float tof_distance_m;
+    float tof_vz_mps;
     float rc_roll;
     float rc_pitch;
     float rc_yaw;

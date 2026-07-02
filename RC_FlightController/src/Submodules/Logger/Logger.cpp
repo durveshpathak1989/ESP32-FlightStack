@@ -82,7 +82,7 @@ void Logger::_appendFloat(String& s, float v, uint8_t dp) {
 String Logger::csvHeader() const {
     return F("t_us,loop_count,period_us,jitter_us,control_exec_us,imu_read_us,rc_read_us,ahrs_exec_us,pid_exec_us,motor_exec_us,"
              "mode,armed,imuOk,rcValid,magValid,motorSaturated,rpmActualValid,"
-             "thr,rcRoll,rcPitch,rcYaw,"
+             "thr,thrProtected,descentBoost,descentProtectActive,posHoldRequested,posHoldActive,xyHoldAvailable,tofValid,tofStale,tofDistanceM,tofVzMps,rcRoll,rcPitch,rcYaw,"
              "targetRollDeg,targetPitchDeg,targetYawDeg,targetRollRateDps,targetPitchRateDps,targetYawRateDps,"
              "ekfRoll,ekfPitch,ekfYaw,ctrlRoll,ctrlPitch,ctrlYaw,zeroRoll,zeroPitch,zeroYaw,"
              "ax,ay,az,gx,gy,gz,mx,my,mz,accelNorm,gyroNorm,magNorm,ekfBgx,ekfBgy,ekfBgz,ahrsMode,ekfMagUsed,"
@@ -111,7 +111,18 @@ String Logger::csvRow(uint16_t chronologicalIndex) const {
     s += String((r.flags & 0x0004) ? 1 : 0); s += ','; s += String((r.flags & 0x0008) ? 1 : 0); s += ',';
     s += String((r.flags & 0x0010) ? 1 : 0); s += ','; s += String((r.flags & 0x0020) ? 1 : 0);
 
-    _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
+    _appendFloat(s,r.throttle,4);
+    _appendFloat(s,r.protected_throttle,4);
+    _appendFloat(s,r.descent_throttle_boost,4);
+    s += ','; s += String(r.descent_protect_active);
+    s += ','; s += String(r.pos_hold_requested);
+    s += ','; s += String(r.pos_hold_active);
+    s += ','; s += String(r.xy_hold_available);
+    s += ','; s += String(r.tof_valid);
+    s += ','; s += String(r.tof_stale);
+    _appendFloat(s,r.tof_distance_m,4);
+    _appendFloat(s,r.tof_vz_mps,4);
+    _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
     _appendFloat(s,r.target_roll_deg,3); _appendFloat(s,r.target_pitch_deg,3); _appendFloat(s,r.target_yaw_deg,3);
     _appendFloat(s,r.target_roll_rate_dps,3); _appendFloat(s,r.target_pitch_rate_dps,3); _appendFloat(s,r.target_yaw_rate_dps,3);
     _appendFloat(s,r.ekf_roll_deg,3); _appendFloat(s,r.ekf_pitch_deg,3); _appendFloat(s,r.ekf_yaw_deg,3);

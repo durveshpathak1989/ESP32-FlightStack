@@ -64,6 +64,7 @@
 #include "src/Submodules/GPS/GPSSensor.h"
 #include "src/Submodules/Logger/Logger.h"
 #include "FirmwareBuildInfo.h"
+#include "FlightSafetyTypes.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -106,7 +107,22 @@ static constexpr uint32_t TOF_I2C_HZ                = 400000;
 static constexpr uint32_t TOF_TIMING_BUDGET_US      = 20000;
 static constexpr uint32_t TOF_INTER_MEASUREMENT_MS  = 25;
 static constexpr uint32_t TOF_TASK_PERIOD_MS        = 25;      // 40 Hz poll, matches 25 ms ranging cadence
-static constexpr uint32_t TOF_STALE_MS              = 200;
+static constexpr uint32_t TOF_STALE_MS              = 150;
+static constexpr float    TOF_MIN_VALID_M           = 0.05f;
+static constexpr float    TOF_MAX_VALID_M           = 2.00f;
+static constexpr float    TOF_LPF_ALPHA             = 0.35f;
+static constexpr float    TOF_MAX_RANGE_STEP_M      = 0.35f;   // reject sudden single-sample jumps
+
+static constexpr float POS_HOLD_MAX_ANGLE_DEG       = 10.0f;
+static constexpr float POS_HOLD_STICK_DEADBAND      = 0.05f;
+
+static constexpr float DESCENT_PROTECT_MIN_ACTIVE_M = 0.50f;
+static constexpr float DESCENT_PROTECT_START_M      = 1.00f;
+static constexpr float DESCENT_PROTECT_STRONG_M     = 0.35f;
+static constexpr float MAX_SAFE_DESCENT_MPS         = 0.35f;
+static constexpr float LANDING_THROTTLE_FLOOR       = 0.08f;
+static constexpr float DESCENT_ASSIST_GAIN          = 0.15f;
+static constexpr float DESCENT_ASSIST_MAX_BOOST     = 0.18f;
 
 // ── Pilot command limits ────────────────────────────────────
 static constexpr float TUNE_MAX_ANGLE_DEG = 5.0f;
@@ -374,6 +390,8 @@ struct FlightState {
     float bmpTemp_c, bmpPressure_hpa, bmpAltitude_m;
     bool  bmpValid;
     float tofDistance_m;
+    float tofRawDistance_m;
+    float tofVerticalVelocity_mps;
     uint16_t tofDistance_mm;
     uint8_t tofRangeStatus;
     uint8_t tofObjectCount;
@@ -384,6 +402,13 @@ struct FlightState {
     uint32_t tofLastUpdate_ms;
     bool  tofReady;
     bool  tofValid;
+    bool  tofStale;
+    bool  tofJumpRejected;
+    bool  descentProtectActive;
+    float descentThrottleBoost;
+    float descentProtectMinActive_m;
+    float rawThrottle;
+    float protectedThrottle;
     float cpuCore0_pct, cpuCore1_pct;
     bool  cpuValid;
     float motorFL, motorFR, motorRL, motorRR;
@@ -407,7 +432,8 @@ struct FlightState {
     float rollRateError_dps, pitchRateError_dps, yawRateError_dps;
     float yawError_deg;
     bool  motorSaturated;
-    bool  angleModeActive, acroModeActive;
+    bool  angleModeActive, acroModeActive, posHoldModeActive;
+    bool  posHoldRequested, swcHigh, xyHoldAvailable;
     uint32_t rcFailsafeCount;
     uint16_t modeSwitchRaw_us, armSwitchRaw_us;
     uint16_t auxTune1Raw_us, auxTune2Raw_us;
@@ -452,6 +478,8 @@ static volatile uint32_t g_lastArmChangeMs = 0;
 static bool g_transitionTrackerInitialized = false;
 static FlightMode g_lastObservedMode = FlightMode::DISARMED;
 static bool g_lastObservedArmed = false;
+static HorizontalNavEstimate g_horizontalNavEstimate;
+static PositionHoldState g_positionHoldState;
 
 // Software level-zero trim state. Offset is post-AHRS only.
 static float g_levelRollOffsetDeg  = 0.0f;
@@ -483,6 +511,7 @@ struct TuningState {
     float motor_max;
     float throttle_cut;
     float idle_ramp_end;
+    float descent_protect_min_active_m;
     float pid_ilimit;
 
     // Inner rate loop PID
@@ -658,6 +687,7 @@ static void syncTuningFromObjects()
     g_tuning.motor_max                  = TUNE_MOTOR_MAX;
     g_tuning.throttle_cut               = TUNE_THROTTLE_CUT;
     g_tuning.idle_ramp_end              = TUNE_IDLE_RAMP_END;
+    g_tuning.descent_protect_min_active_m = DESCENT_PROTECT_MIN_ACTIVE_M;
     g_tuning.pid_ilimit                 = pidRateRoll.iLimit;
 
     g_tuning.pid_roll_kp                = pidRateRoll.kp;
@@ -935,6 +965,7 @@ static const char* flightModeToStr(FlightMode m) {
         case FlightMode::DISARMED: return "DISARMED";
         case FlightMode::ANGLE:    return "ANGLE";
         case FlightMode::ACRO:     return "ACRO";
+        case FlightMode::POS_HOLD: return "POSHOLD";
         case FlightMode::FAILSAFE: return "FAILSAFE";
         default:                   return "UNKNOWN";
     }
@@ -1018,6 +1049,11 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.yaw_error_deg=s.yawError_deg;
     out.motor_saturated=s.motorSaturated;
     out.angle_mode_active=s.angleModeActive; out.acro_mode_active=s.acroModeActive;
+    out.pos_hold_mode_active=s.posHoldModeActive;
+    out.pos_hold_requested=s.posHoldRequested;
+    out.swc_high=s.swcHigh;
+    out.xy_hold_available=s.xyHoldAvailable;
+    out.pos_hold_status=s.posHoldModeActive ? "POS_HOLD_NO_XY_SENSOR" : "INACTIVE";
     out.rc_ch1_us=s.rc.raw[0]; out.rc_ch2_us=s.rc.raw[1]; out.rc_ch3_us=s.rc.raw[2]; out.rc_ch4_us=s.rc.raw[3]; out.rc_ch5_us=s.rc.raw[4];
     out.rc_ch6_us=s.rc.raw[5]; out.rc_ch7_us=s.rc.raw[6]; out.rc_ch8_us=s.rc.raw[7]; out.rc_ch9_us=s.rc.raw[8]; out.rc_ch10_us=s.rc.raw[9];
     out.rc_failsafe_count=s.rcFailsafeCount;
@@ -1083,6 +1119,19 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.rpm_actual_valid=s.rpmActualValid;
     out.bmp_temp_c=s.bmpTemp_c; out.bmp_pressure_hpa=s.bmpPressure_hpa;
     out.bmp_altitude_m=s.bmpAltitude_m; out.bmp_valid=s.bmpValid;
+    out.tof_distance_m=s.tofDistance_m;
+    out.tof_raw_distance_m=s.tofRawDistance_m;
+    out.tof_vertical_velocity_mps=s.tofVerticalVelocity_mps;
+    out.tof_valid=s.tofValid;
+    out.tof_stale=s.tofStale;
+    out.tof_ready=s.tofReady;
+    out.tof_jump_rejected=s.tofJumpRejected;
+    out.tof_object_count=s.tofObjectCount;
+    out.tof_age_ms=s.tofAge_ms;
+    out.descent_protect_active=s.descentProtectActive;
+    out.descent_throttle_boost=s.descentThrottleBoost;
+    out.raw_throttle=s.rawThrottle;
+    out.protected_throttle=s.protectedThrottle;
     out.cpu_core0_pct=s.cpuCore0_pct; out.cpu_core1_pct=s.cpuCore1_pct;
     out.cpu_valid=s.cpuValid;
 
@@ -1099,6 +1148,7 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.motor_max                  = t.motor_max;
     out.throttle_cut               = t.throttle_cut;
     out.idle_ramp_end              = t.idle_ramp_end;
+    out.descent_protect_min_active_m = t.descent_protect_min_active_m;
     out.pid_ilimit                 = t.pid_ilimit;
 
     out.pid_roll_kp=t.pid_roll_kp;   out.pid_roll_ki=t.pid_roll_ki;   out.pid_roll_kd=t.pid_roll_kd;
@@ -1183,6 +1233,7 @@ static bool handleTune(const TunePacket& in)
     if (in.has_motor_max)                  g_tuning.motor_max                  = constrain(in.motor_max, 0.10f, 1.00f);
     if (in.has_throttle_cut)               g_tuning.throttle_cut               = constrain(in.throttle_cut, 0.0f, 0.30f);
     if (in.has_idle_ramp_end)              g_tuning.idle_ramp_end              = constrain(in.idle_ramp_end, 0.01f, 0.60f);
+    if (in.has_descent_protect_min_active_m) g_tuning.descent_protect_min_active_m = constrain(in.descent_protect_min_active_m, TOF_MIN_VALID_M, DESCENT_PROTECT_START_M - 0.05f);
     if (in.has_pid_ilimit)                 g_tuning.pid_ilimit                 = constrain(in.pid_ilimit, 0.0f, 1000.0f);
 
     // Keep idle/ramp relationships sane.
@@ -1759,6 +1810,75 @@ static String flightLogRowCsv(uint16_t i) {
     return flightLogger.csvRow(i);
 }
 
+static ToFData latestToFSnapshot()
+{
+    ToFData out;
+    if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
+        out.valid = g_state.tofValid;
+        out.distance_m = g_state.tofDistance_m;
+        out.verticalVelocity_mps = g_state.tofVerticalVelocity_mps;
+        out.lastUpdateMs = g_state.tofLastUpdate_ms;
+        xSemaphoreGive(g_flightMutex);
+    }
+    return out;
+}
+
+static DescentProtectionResult applyToFDescentProtection(float pilotThrottle,
+                                                         const ToFData& tof,
+                                                         bool armed,
+                                                         float maxThrottle,
+                                                         float minActiveDistanceM)
+{
+    DescentProtectionResult r;
+    const float safeMaxThrottle = constrain(maxThrottle, 0.0f, 1.0f);
+    const float startThrottle = constrain(pilotThrottle, 0.0f, 1.0f);
+    r.throttle = startThrottle;
+
+    if (!armed || !tof.valid || tof.lastUpdateMs == 0) {
+        return r;
+    }
+
+    const uint32_t ageMs = millis() - tof.lastUpdateMs;
+    r.tofStale = (ageMs > TOF_STALE_MS);
+    if (r.tofStale) {
+        return r;
+    }
+
+    const float d = tof.distance_m;
+    const float minActiveM = constrain(minActiveDistanceM,
+                                       TOF_MIN_VALID_M,
+                                       DESCENT_PROTECT_START_M - 0.05f);
+    if (d < TOF_MIN_VALID_M ||
+        d > TOF_MAX_VALID_M ||
+        d <= minActiveM ||
+        d >= DESCENT_PROTECT_START_M) {
+        return r;
+    }
+
+    const float proximity = constrain((DESCENT_PROTECT_START_M - d) /
+                                      (DESCENT_PROTECT_START_M - DESCENT_PROTECT_STRONG_M),
+                                      0.0f,
+                                      1.0f);
+    float out = startThrottle;
+
+    // ToF vertical velocity uses positive-down: decreasing range means descending.
+    if (tof.verticalVelocity_mps > MAX_SAFE_DESCENT_MPS) {
+        const float excess = tof.verticalVelocity_mps - MAX_SAFE_DESCENT_MPS;
+        const float boost = constrain(proximity * DESCENT_ASSIST_GAIN * excess,
+                                      0.0f,
+                                      DESCENT_ASSIST_MAX_BOOST);
+        out += boost;
+    }
+
+    const float floorThrottle = proximity * LANDING_THROTTLE_FLOOR;
+    out = max(out, floorThrottle);
+    out = constrain(out, 0.0f, safeMaxThrottle);
+
+    r.throttle = out;
+    r.boost = max(0.0f, out - startThrottle);
+    r.active = (r.boost > 0.0005f);
+    return r;
+}
 
 
 
@@ -2004,6 +2124,15 @@ static void taskControl(void* /*pv*/)
         RCCommand cmd = rcReceiver.getCommand();
         updateControlTransitionCounters(cmd);
         g_execTiming.lastRcUs = micros() - phaseStartUs;
+        ToFData tofSnapshot = latestToFSnapshot();
+        g_positionHoldState.requested = cmd.posHoldRequested;
+        g_positionHoldState.active = (cmd.mode == FlightMode::POS_HOLD);
+        g_positionHoldState.xySensorValid = g_horizontalNavEstimate.valid;
+        float descentProtectMinActiveForState = DESCENT_PROTECT_MIN_ACTIVE_M;
+        if (xSemaphoreTake(g_tuneMutex, 0) == pdTRUE) {
+            descentProtectMinActiveForState = g_tuning.descent_protect_min_active_m;
+            xSemaphoreGive(g_tuneMutex);
+        }
  
         float rollCtrlDeg = 0.0f, pitchCtrlDeg = 0.0f, yawCtrlDeg = 0.0f;
         if (imuOk) computeControlAttitude(att, rollCtrlDeg, pitchCtrlDeg, yawCtrlDeg);
@@ -2098,6 +2227,10 @@ static void taskControl(void* /*pv*/)
                 g_state.rc      = cmd;
                 g_state.angleModeActive = false;
                 g_state.acroModeActive = false;
+                g_state.posHoldModeActive = false;
+                g_state.posHoldRequested = cmd.posHoldRequested;
+                g_state.swcHigh = cmd.swcHigh;
+                g_state.xyHoldAvailable = false;
                 g_state.modeSwitchRaw_us = cmd.raw[RC_CH_AUX2];
                 g_state.armSwitchRaw_us = cmd.raw[RC_CH_FLIGHTMODE];
                 g_state.auxTune1Raw_us = cmd.raw[RC_CH_AUX1];
@@ -2131,6 +2264,11 @@ static void taskControl(void* /*pv*/)
                 g_state.armingTransitionCount = g_armingTransitionCount;
                 g_state.lastArmChange_ms = g_lastArmChangeMs;
                 g_state.throttleLow = true;
+                g_state.rawThrottle = cmd.throttle;
+                g_state.protectedThrottle = 0.0f;
+                g_state.descentProtectActive = false;
+                g_state.descentThrottleBoost = 0.0f;
+                g_state.descentProtectMinActive_m = descentProtectMinActiveForState;
                 g_state.controlAuthorityRemaining = 0.0f;
                 g_state.rollOutputLimited = false;
                 g_state.pitchOutputLimited = false;
@@ -2201,6 +2339,7 @@ static void taskControl(void* /*pv*/)
             tune.motor_max                  = TUNE_MOTOR_MAX;
             tune.throttle_cut               = TUNE_THROTTLE_CUT;
             tune.idle_ramp_end              = TUNE_IDLE_RAMP_END;
+            tune.descent_protect_min_active_m = DESCENT_PROTECT_MIN_ACTIVE_M;
             tune.yaw_deadband               = TUNE_YAW_DEADBAND;
             tune.yaw_max_rate_dps           = TUNE_YAW_MAX_RATE_DPS;
             tune.pid_roll_ff                = TUNE_RATE_ROLL_FF;
@@ -2237,9 +2376,24 @@ static void taskControl(void* /*pv*/)
         float pitchCmd = lpfSpPitch.apply(cmd.pitch, dt, RC_LPF_HZ);
         float yawCmd   = lpfSpYaw  .apply(cmd.yaw,   dt, RC_LPF_HZ);
 
-        if (cmd.mode == FlightMode::ANGLE) {
-            targetRollDeg = rollCmd * MAX_ANGLE_DEG;
-            targetPitchDeg = pitchCmd * MAX_ANGLE_DEG;
+        const bool posHoldActive = (cmd.mode == FlightMode::POS_HOLD);
+        const bool angleLikeMode = (cmd.mode == FlightMode::ANGLE) || posHoldActive;
+
+        if (angleLikeMode) {
+            float rollHoldCmd = rollCmd;
+            float pitchHoldCmd = pitchCmd;
+            float angleLimitDeg = MAX_ANGLE_DEG;
+
+            if (posHoldActive) {
+                // POS_HOLD_NO_XY_SENSOR shell: no fake accelerometer XY integration.
+                // It self-levels like ANGLE and leaves pilot override on the sticks.
+                angleLimitDeg = min(MAX_ANGLE_DEG, POS_HOLD_MAX_ANGLE_DEG);
+                if (fabsf(rollHoldCmd) < POS_HOLD_STICK_DEADBAND) rollHoldCmd = 0.0f;
+                if (fabsf(pitchHoldCmd) < POS_HOLD_STICK_DEADBAND) pitchHoldCmd = 0.0f;
+            }
+
+            targetRollDeg = rollHoldCmd * angleLimitDeg;
+            targetPitchDeg = pitchHoldCmd * angleLimitDeg;
             angleErrRollDeg = targetRollDeg - roll;
             angleErrPitchDeg = targetPitchDeg - pitch;
             targetRollRateDps = pidAngleRoll.update(angleErrRollDeg, dt);
@@ -2320,7 +2474,14 @@ static void taskControl(void* /*pv*/)
             thrSmooth -= min(thrSmooth - thrTarget, maxStepDown);
         }
 
-        float thr = constrain(thrSmooth, 0.0f, 1.0f);
+        float pilotThr = constrain(thrSmooth, 0.0f, 1.0f);
+        DescentProtectionResult descentProtect =
+            applyToFDescentProtection(pilotThr,
+                                      tofSnapshot,
+                                      true,
+                                      MOTOR_MAX,
+                                      tune.descent_protect_min_active_m);
+        float thr = descentProtect.throttle;
 
         float flPre = thr + rO - pO - yO;
         float frPre = thr - rO - pO + yO;
@@ -2433,6 +2594,16 @@ static void taskControl(void* /*pv*/)
                       | (g_state.rpmActualValid ? 0x0020 : 0);
 
             row.throttle = cmd.throttle;
+            row.protected_throttle = thr;
+            row.descent_throttle_boost = descentProtect.boost;
+            row.descent_protect_active = descentProtect.active ? 1 : 0;
+            row.pos_hold_requested = cmd.posHoldRequested ? 1 : 0;
+            row.pos_hold_active = posHoldActive ? 1 : 0;
+            row.xy_hold_available = g_positionHoldState.xySensorValid ? 1 : 0;
+            row.tof_valid = tofSnapshot.valid ? 1 : 0;
+            row.tof_stale = descentProtect.tofStale ? 1 : 0;
+            row.tof_distance_m = tofSnapshot.distance_m;
+            row.tof_vz_mps = tofSnapshot.verticalVelocity_mps;
             row.rc_roll = rollCmd;
             row.rc_pitch = pitchCmd;
             row.rc_yaw = yawCmd;
@@ -2603,13 +2774,17 @@ static void taskControl(void* /*pv*/)
             g_state.missedLoopCount = g_execTiming.missedTimerReleases;
             g_state.angleModeActive = (cmd.mode == FlightMode::ANGLE);
             g_state.acroModeActive = (cmd.mode == FlightMode::ACRO);
+            g_state.posHoldModeActive = posHoldActive;
+            g_state.posHoldRequested = cmd.posHoldRequested;
+            g_state.swcHigh = cmd.swcHigh;
+            g_state.xyHoldAvailable = g_positionHoldState.xySensorValid;
             g_state.modeSwitchRaw_us = cmd.raw[RC_CH_AUX2];
             g_state.armSwitchRaw_us = cmd.raw[RC_CH_FLIGHTMODE];
             g_state.auxTune1Raw_us = cmd.raw[RC_CH_AUX1];
             g_state.auxTune2Raw_us = cmd.raw[RC_CH_AUX5];
             g_state.rcFailsafeCount = rcReceiver.getFailsafeCount();
-            g_state.angleLoopEnabled = (cmd.mode == FlightMode::ANGLE) && imuOk;
-            g_state.rateLoopEnabled = imuOk && (cmd.mode == FlightMode::ANGLE || cmd.mode == FlightMode::ACRO);
+            g_state.angleLoopEnabled = angleLikeMode && imuOk;
+            g_state.rateLoopEnabled = imuOk && (angleLikeMode || cmd.mode == FlightMode::ACRO);
             g_state.actualRollRate_dps = gx;
             g_state.actualPitchRate_dps = gy;
             g_state.actualYawRate_dps = gz;
@@ -2636,6 +2811,11 @@ static void taskControl(void* /*pv*/)
             g_state.armingTransitionCount = g_armingTransitionCount;
             g_state.lastArmChange_ms = g_lastArmChangeMs;
             g_state.throttleLow = (thrRaw <= THROTTLE_CUT);
+            g_state.rawThrottle = thrRaw;
+            g_state.protectedThrottle = thr;
+            g_state.descentProtectActive = descentProtect.active;
+            g_state.descentThrottleBoost = descentProtect.boost;
+            g_state.descentProtectMinActive_m = tune.descent_protect_min_active_m;
             g_state.controlAuthorityRemaining = controlAuthorityRemaining;
             g_state.rollOutputLimited = rollOutputLimited;
             g_state.pitchOutputLimited = pitchOutputLimited;
@@ -2746,6 +2926,7 @@ static void taskSerial(void* /*pv*/)
             case FlightMode::DISARMED: ms="DISARMD"; break;
             case FlightMode::ANGLE:    ms="ANGLE  "; break;
             case FlightMode::ACRO:     ms="ACRO   "; break;
+            case FlightMode::POS_HOLD: ms="POSHOLD"; break;
             case FlightMode::FAILSAFE: ms="FAILSFE"; break;
         }
 
@@ -2756,7 +2937,7 @@ static void taskSerial(void* /*pv*/)
                           "OFF R=%+5.2f P=%+5.2f Y=%+5.2f | "
                           "MOT %.2f %.2f %.2f %.2f | "
                           "BMP %.1fC %.1fhPa %.1fm | "
-                          "ToF %s %.3fm obj=%u %lums | "
+                          "ToF %s %.3fm vz=%+.2fmps obj=%u %lums DP=%d Boost=%.3f Traw=%.3f Tprot=%.3f | "
                           "GPS %s Sats=%d | "
                           "Mag:%s Est:%s mKp=%.2f\n",
                           (unsigned long)tick, ms,
@@ -2767,8 +2948,13 @@ static void taskSerial(void* /*pv*/)
                           s.bmpTemp_c, s.bmpPressure_hpa, s.bmpAltitude_m,
                           s.tofValid ? "OK" : (s.tofReady ? "---" : "OFF"),
                           s.tofDistance_m,
+                          s.tofVerticalVelocity_mps,
                           (unsigned int)s.tofObjectCount,
                           (unsigned long)((s.tofAge_ms == UINT32_MAX) ? 0 : s.tofAge_ms),
+                          s.descentProtectActive ? 1 : 0,
+                          s.descentThrottleBoost,
+                          s.rawThrottle,
+                          s.protectedThrottle,
                           s.gps.valid ? "FIX" : "---", s.gps.satellites,
                           imu.isMagConnected() ? "9DOF" : "6DOF",
                           (s.ahrsFilterMode == 1) ? "Mahony" : ((s.ahrsFilterMode == 2) ? "Madgwick" : "EKF"),
@@ -2816,6 +3002,12 @@ static void taskToF(void* /*pv*/)
 {
     const TickType_t period = pdMS_TO_TICKS(TOF_TASK_PERIOD_MS);
     TickType_t lastWake = xTaskGetTickCount();
+    bool filterInit = false;
+    float filteredM = 0.0f;
+    float prevFilteredM = 0.0f;
+    float verticalVelocityMps = 0.0f; // positive-down: decreasing range means descending
+    uint32_t filteredUpdateMs = 0;
+    bool jumpRejected = false;
 
     for (;;) {
         bool ready = tofSensor.isReady();
@@ -2826,21 +3018,56 @@ static void taskToF(void* /*pv*/)
         }
 
         FlightToFReading r = tofSensor.reading();
-        uint32_t ageMs = ready ? tofSensor.ageMs() : UINT32_MAX;
-        bool valid = ready && r.valid && (ageMs <= TOF_STALE_MS);
+        float rawDistanceM = r.distanceMm * 0.001f;
+        jumpRejected = false;
+
+        if (ready && r.newData && r.valid &&
+            rawDistanceM >= TOF_MIN_VALID_M &&
+            rawDistanceM <= TOF_MAX_VALID_M) {
+            const uint32_t sampleMs = (r.lastUpdateMs != 0) ? r.lastUpdateMs : millis();
+
+            if (!filterInit) {
+                filteredM = rawDistanceM;
+                prevFilteredM = filteredM;
+                filteredUpdateMs = sampleMs;
+                verticalVelocityMps = 0.0f;
+                filterInit = true;
+            } else if (fabsf(rawDistanceM - filteredM) <= TOF_MAX_RANGE_STEP_M) {
+                const uint32_t dtMs = sampleMs - filteredUpdateMs;
+                prevFilteredM = filteredM;
+                filteredM += TOF_LPF_ALPHA * (rawDistanceM - filteredM);
+                if (dtMs > 0) {
+                    const float dt = (float)dtMs * 0.001f;
+                    verticalVelocityMps = -((filteredM - prevFilteredM) / dt);
+                }
+                filteredUpdateMs = sampleMs;
+            } else {
+                jumpRejected = true;
+            }
+        }
+
+        uint32_t ageMs = (ready && filteredUpdateMs != 0) ? (millis() - filteredUpdateMs) : UINT32_MAX;
+        bool stale = ageMs > TOF_STALE_MS;
+        bool valid = ready && filterInit && !stale &&
+                     filteredM >= TOF_MIN_VALID_M &&
+                     filteredM <= TOF_MAX_VALID_M;
 
         if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
             g_state.tofReady         = ready;
             g_state.tofValid         = valid;
             g_state.tofDistance_mm   = r.distanceMm;
-            g_state.tofDistance_m    = r.distanceMm * 0.001f;
+            g_state.tofRawDistance_m = rawDistanceM;
+            g_state.tofDistance_m    = filterInit ? filteredM : rawDistanceM;
+            g_state.tofVerticalVelocity_mps = filterInit ? verticalVelocityMps : 0.0f;
             g_state.tofRangeStatus   = r.rangeStatus;
             g_state.tofObjectCount   = r.objectCount;
             g_state.tofStreamCount   = r.streamCount;
             g_state.tofSignalMcps    = r.signalMcps;
             g_state.tofAmbientMcps   = r.ambientMcps;
             g_state.tofAge_ms        = ageMs;
-            g_state.tofLastUpdate_ms = r.lastUpdateMs;
+            g_state.tofLastUpdate_ms = filteredUpdateMs;
+            g_state.tofStale         = stale;
+            g_state.tofJumpRejected  = jumpRejected;
             xSemaphoreGive(g_flightMutex);
         }
 

@@ -95,12 +95,12 @@ Development philosophy:
 | Area | Current capability |
 |---|---|
 | MCU | Adafruit HUZZAH32 Feather / ESP32-WROOM-32E |
-| RTOS | Dual-core FreeRTOS, 7 tasks |
+| RTOS | Dual-core FreeRTOS, 8 tasks |
 | IMU | MPU-9250 / MPU-6500 over SPI at 400 Hz |
 | AHRS | Runtime-selectable: EKF (default), Mahony, Madgwick |
 | Vibration filter | Static notch + dynamic FFT-tracked notch (45–170 Hz) |
 | RC | FlySky FS-i6X + FS-iA6B iBUS, 200 Hz |
-| Flight modes | ANGLE (self-level), ACRO (rate), DISARMED, FAILSAFE |
+| Flight modes | ANGLE (self-level), ACRO (rate), POS_HOLD shell, DISARMED, FAILSAFE |
 | Control | Cascaded angle+rate PID, yaw heading-hold |
 | Motors | X-frame mixer, PWM ESCs via ESP32 LEDC |
 | Barometer | BMP280 over I²C, 20 Hz, vertical speed estimate |
@@ -114,7 +114,7 @@ Development philosophy:
 | Calibration | Autonomous gyro + 6-position accel + magnetometer + ESC via RC |
 | Offline maps | Local `.osm` file loaded in browser, no internet required |
 | CPU monitor | Per-core utilization estimate via idle hook |
-| ToF | VL53L4CX optional altitude sensor (I²C shared with BMP280) |
+| ToF | VL53L4CX optional altitude sensor with descent-protection guard (I2C shared with BMP280) |
 
 ---
 
@@ -343,6 +343,14 @@ Rate mode. The stick commands angular velocity. Releasing the stick stops rotati
 RC stick → target rate → rate PID → motor mixer
 ```
 
+### POS_HOLD shell
+
+SWC / CH9 requests POS_HOLD only while armed. This is currently `POS_HOLD_NO_XY_SENSOR`: it behaves like a gentle ANGLE/self-level mode with a conservative angle cap and pilot stick override. It does not claim true horizontal position hold until optical flow, GPS velocity, UWB, or another XY position/velocity source is integrated.
+
+ToF descent protection is gated by the tunable `descent_protect_min_active_m` value, default `0.50 m`, so the guard only acts above that range and below the configured protection start distance.
+
+Implementation notes and bench-test checklist: [docs/POS_HOLD_TOF_DESCENT_PROTECTION.md](docs/POS_HOLD_TOF_DESCENT_PROTECTION.md)
+
 ### Yaw heading hold
 
 When the yaw stick is within `yaw_deadband` of centre, the firmware holds the last commanded heading using a yaw angle PID. Moving the stick beyond the deadband switches to rate mode for yaw.
@@ -362,6 +370,7 @@ If iBUS frames stop arriving, the receiver driver marks the signal invalid and m
 | `taskGPS` | 0 | 1 | 4096 | 50 Hz | GPS NMEA drain and parse |
 | `taskSerial` | 0 | 1 | 4096 | 20 Hz | Serial status and PID trace |
 | `taskBMP` | 0 | 1 | 3072 | 20 Hz | BMP280 read, vertical speed |
+| `taskToF` | 0 | 1 | 4096 | 40 Hz | VL53L4CX range, velocity estimate, descent guard input |
 | `taskCPU` | 0 | 1 | 3072 | 2 Hz | CPU utilization estimate |
 | `taskWiFi` | 0 | 1 | 12288 | Event-driven | HTTP server, telemetry, OTA |
 

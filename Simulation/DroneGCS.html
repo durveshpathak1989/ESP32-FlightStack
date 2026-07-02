@@ -447,6 +447,9 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="data-row"><span class="dn">BMP Temp</span><span class="dv" id="vbt">—</span></div>
     <div class="data-row"><span class="dn">Pressure</span><span class="dv" id="vbp">—</span></div>
     <div class="data-row"><span class="dn">Altitude</span><span class="dv" id="vba">—</span></div>
+    <div class="data-row"><span class="dn">ToF Range</span><span class="dv" id="vtof">—</span></div>
+    <div class="data-row"><span class="dn">ToF Vz</span><span class="dv" id="vtofvz">—</span></div>
+    <div class="data-row"><span class="dn">Descent Guard</span><span class="dv" id="vdp">—</span></div>
     <div class="data-row"><span class="dn">CPU0</span><span class="dv" id="vcpu0">—</span></div><div class="bar-track"><div class="bar-fill" id="bcpu0"></div></div>
     <div class="data-row"><span class="dn">CPU1</span><span class="dv" id="vcpu1">—</span></div><div class="bar-track"><div class="bar-fill" id="bcpu1"></div></div>
 
@@ -455,6 +458,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
       <div class="health-badge" id="hImu">IMU —</div>
       <div class="health-badge" id="hMag">MAG —</div>
       <div class="health-badge" id="hBmp">BMP —</div>
+      <div class="health-badge" id="hTof">ToF —</div>
       <div class="health-badge" id="hCpu">CPU —</div>
     </div>
   </div>
@@ -618,6 +622,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Motor Max</span><input class="tval" id="motorMax" value="1.000"><button class="tapply" onclick="sendSingle('motor_max','motorMax')">SET</button></div>
     <div class="tune-row"><span>Cut</span><input class="tval" id="thrCut" value="0.030"><button class="tapply" onclick="sendSingle('throttle_cut','thrCut')">SET</button></div>
     <div class="tune-row"><span>Idle Ramp</span><input class="tval" id="idleRampEnd" value="0.150"><button class="tapply" onclick="sendSingle('idle_ramp_end','idleRampEnd')">SET</button></div>
+    <div class="tune-row"><span>DP Min m</span><input class="tval" id="descentMinActiveM" value="0.500"><button class="tapply" onclick="sendSingle('descent_protect_min_active_m','descentMinActiveM')">SET</button></div>
   </div>
 
   <div class="panel">
@@ -1114,10 +1119,10 @@ let identityUrl2='http://192.168.4.1/identity';
 const S={
   roll:0,pitch:0,yaw:0,rollCtrl:0,pitchCtrl:0,yawCtrl:0,rollOffset:0,pitchOffset:0,yawOffset:0,ax:0,ay:0,az:0,gx:0,gy:0,gz:0,
   mx:0,my:0,mz:0,imuValid:false,magValid:false,ahrsFilter:'EKF',ahrsFilterMode:0,rpmActualValid:false,cmdRpmFL:0,cmdRpmFR:0,cmdRpmRL:0,cmdRpmRR:0,actualRpmFL:0,actualRpmFR:0,actualRpmRL:0,actualRpmRR:0,
-  thr:0,rcRoll:0,rcPitch:0,rcYaw:0,rcHz:0,
+  thr:0,rawThrottle:0,protectedThrottle:0,descentThrottleBoost:0,descentProtectMinActiveM:0.50,descentProtectActive:false,rcRoll:0,rcPitch:0,rcYaw:0,rcHz:0,
   motFL:0,motFR:0,motRL:0,motRR:0,rpmFL:0,rpmFR:0,rpmRL:0,rpmRR:0,
   mode:'UNKNOWN',armed:false,tick:0,
-  angleModeActive:false,acroModeActive:false,modeSwitchRawUs:0,armSwitchRawUs:0,auxTune1RawUs:0,auxTune2RawUs:0,
+  angleModeActive:false,acroModeActive:false,posHoldModeActive:false,posHoldRequested:false,swcHigh:false,xyHoldAvailable:false,posHoldStatus:'INACTIVE',modeSwitchRawUs:0,armSwitchRawUs:0,auxTune1RawUs:0,auxTune2RawUs:0,
   maxAngleDeg:0,maxRateDps:0,angleLoopEnabled:false,rateLoopEnabled:false,targetYawDeg:0,
   actualRollRateDps:0,actualPitchRateDps:0,actualYawRateDps:0,
   angleRollP:0,angleRollI:0,angleRollD:0,anglePitchP:0,anglePitchI:0,anglePitchD:0,
@@ -1125,6 +1130,7 @@ const S={
   armingTransitionCount:0,lastArmChangeMs:0,throttleLow:false,controlAuthorityRemaining:0,
   rollOutputLimited:false,pitchOutputLimited:false,yawOutputLimited:false,rateOutputLimited:false,
   bmpTemp:NaN,bmpPressure:NaN,bmpAlt:NaN,bmpValid:false,
+  tofDistance:NaN,tofRawDistance:NaN,tofVelocity:0,tofValid:false,tofStale:true,tofReady:false,tofJumpRejected:false,tofObjectCount:0,tofAgeMs:0,
   cpu0:NaN,cpu1:NaN,
   gpsValid:false,gpsLat:0,gpsLon:0,gpsAlt:0,gpsSpd:0,gpsCrs:0,
   gpsSats:0,gpsHdop:0,gpsFix:0,gpsH:0,gpsM:0,gpsSec:0
@@ -1227,10 +1233,10 @@ function renderGps(){
 let logging=false,logRows=[],logRunId=0,logSampleIndex=0,logPrevMagNormCalc=null;
 const LOG_COLUMNS=[
   'logRunId','sampleIndex','timeMs','timeUs',
-  'armed','flightMode','modeId','angleModeActive','acroModeActive','failsafeActive',
+  'armed','flightMode','modeId','angleModeActive','acroModeActive','posHoldModeActive','posHoldRequested','xyHoldAvailable','failsafeActive',
   'rcValid','rcFrameRate_Hz','rcFailsafeCount',
   'rcCh1_us','rcCh2_us','rcCh3_us','rcCh4_us','rcCh5_us','rcCh6_us','rcCh7_us','rcCh8_us','rcCh9_us','rcCh10_us',
-  'cmdRoll_norm','cmdPitch_norm','cmdYaw_norm','cmdThrottle_norm',
+  'cmdRoll_norm','cmdPitch_norm','cmdYaw_norm','cmdThrottle_norm','rawThrottle_norm','protectedThrottle_norm','descentThrottleBoost','descentProtectActive','tofValid','tofStale','tofDistance_m','tofVelocity_mps',
   'ax_g','ay_g','az_g','gx_dps','gy_dps','gz_dps','mx_uT','my_uT','mz_uT','imuTemp_C','accelNorm_g','gyroNorm_dps','magNorm_uT','magValid','mag_heading_calc_deg','mag_norm_calc_uT','mag_delta_uT','mag_trusted',
   'roll_deg','pitch_deg','yaw_deg','yaw_signed_deg','q0','q1','q2','q3','accelRoll_deg','accelPitch_deg','gyroRoll_deg','gyroPitch_deg','magHeading_deg',
   'targetRollAngle_deg','targetPitchAngle_deg','targetYaw_deg','targetRollRate_dps','targetPitchRate_dps','targetYawRate_dps',
@@ -1252,7 +1258,7 @@ const LOG_COLUMNS=[
   'wifiTelemetryRate_Hz','wifiDropCount','onboardLoggingActive','onboardLogDropCount','onboardLogFileSize_bytes'
 ];
 const LOG_HEADER=LOG_COLUMNS.join(',');
-const modeId=m=>m==='ANGLE'?1:m==='ACRO'?2:m==='FAILSAFE'?3:0;
+const modeId=m=>m==='ANGLE'?1:m==='ACRO'?2:m==='POSHOLD'?3:m==='FAILSAFE'?4:0;
 const logNum=v=>{const n=Number(v);return Number.isFinite(n)?n:0;};
 const logFixed=(v,d)=>logNum(v).toFixed(d);
 const logBool=v=>v?1:0;
@@ -1277,10 +1283,10 @@ function appendLogRow(){
   const satAny=!!(S.motorSaturated||S.rollOutputLimited||S.pitchOutputLimited||S.yawOutputLimited);
   const r=[
     logRunId,logSampleIndex++,nowMs,nowUs,
-    logBool(S.armed),S.mode,modeId(S.mode),logBool(S.angleModeActive),logBool(S.acroModeActive),logBool(S.mode==='FAILSAFE'),
+    logBool(S.armed),S.mode,modeId(S.mode),logBool(S.angleModeActive),logBool(S.acroModeActive),logBool(S.posHoldModeActive),logBool(S.posHoldRequested),logBool(S.xyHoldAvailable),logBool(S.mode==='FAILSAFE'),
     logBool(S.rcValid),logFixed(S.rcHz,1),S.rcFailsafeCount||0,
     S.rcCh1Us||0,S.rcCh2Us||0,S.rcCh3Us||0,S.rcCh4Us||0,S.auxTune1RawUs||0,S.auxTune2RawUs||0,S.armSwitchRawUs||0,S.modeSwitchRawUs||0,S.rcCh9Us||0,S.rcCh10Us||0,
-    logFixed(S.rcRoll,4),logFixed(S.rcPitch,4),logFixed(S.rcYaw,4),logFixed(S.thr,4),
+    logFixed(S.rcRoll,4),logFixed(S.rcPitch,4),logFixed(S.rcYaw,4),logFixed(S.thr,4),logFixed(S.rawThrottle,4),logFixed(S.protectedThrottle,4),logFixed(S.descentThrottleBoost,4),logBool(S.descentProtectActive),logBool(S.tofValid),logBool(S.tofStale),logFixed(S.tofDistance,4),logFixed(S.tofVelocity,4),
     logFixed(S.ax,5),logFixed(S.ay,5),logFixed(S.az,5),logFixed(S.gx,4),logFixed(S.gy,4),logFixed(S.gz,4),logFixed(S.mx,3),logFixed(S.my,3),logFixed(S.mz,3),logFixed(S.imuTempC,2),accelNorm.toFixed(5),gyroNorm.toFixed(4),logFixed(S.magNormUt,3),logBool(S.magValid),magHeadingCalc.toFixed(3),magNormCalc.toFixed(3),magDelta.toFixed(3),logBool(S.magTrusted),
     logFixed(S.roll,3),logFixed(S.pitch,3),logFixed(S.yaw,3),yawSigned.toFixed(3),logFixed(S.q0,6),logFixed(S.q1,6),logFixed(S.q2,6),logFixed(S.q3,6),logFixed(S.accelRollDeg,3),logFixed(S.accelPitchDeg,3),logFixed(S.gyroRollDeg,3),logFixed(S.gyroPitchDeg,3),logFixed(S.magHeadingDeg,3),
     logFixed(S.targetRollDeg,3),logFixed(S.targetPitchDeg,3),logFixed(S.targetYawDeg,3),logFixed(S.targetRollRateDps,3),logFixed(S.targetPitchRateDps,3),logFixed(S.targetYawRateDps,3),
@@ -1490,7 +1496,7 @@ function applyJson(j){
   S.mx=+j.mx||0;S.my=+j.my||0;S.mz=+j.mz||0;
   S.imuTempC=+j.imuTempC||0;S.magNormUt=+j.magNormUt||0;
   S.imuValid=!!j.imuValid;S.magValid=!!j.magValid;S.magTrusted=!!j.ekfMagUsed;S.ahrsFilter=j.ahrsFilter||'EKF';S.ahrsFilterMode=+j.ahrsFilterMode||0;
-  S.thr=+j.thr||0;S.rcRoll=+j.rcRoll||0;S.rcPitch=+j.rcPitch||0;S.rcYaw=+j.rcYaw||0;
+  S.thr=+j.thr||0;S.rawThrottle=+j.rawThrottle||S.thr;S.protectedThrottle=+j.protectedThrottle||0;S.descentThrottleBoost=+j.descentThrottleBoost||0;S.descentProtectMinActiveM=+j.descentProtectMinActiveM||0.50;S.descentProtectActive=!!j.descentProtectActive;S.rcRoll=+j.rcRoll||0;S.rcPitch=+j.rcPitch||0;S.rcYaw=+j.rcYaw||0;
   S.rcHz=+j.rcHz||0;S.tick=+j.tick||0;
   S.mode=(j.mode||'UNKNOWN').toUpperCase();S.armed=!!j.armed;
   S.motFL=+j.motFL||0;S.motFR=+j.motFR||0;S.motRL=+j.motRL||0;S.motRR=+j.motRR||0;
@@ -1501,7 +1507,7 @@ function applyJson(j){
   S.rpmFL=+j.rpmFL||0;S.rpmFR=+j.rpmFR||0;S.rpmRL=+j.rpmRL||0;S.rpmRR=+j.rpmRR||0;
   S.cmdRpmFL=+j.cmdRpmFL||S.rpmFL;S.cmdRpmFR=+j.cmdRpmFR||S.rpmFR;S.cmdRpmRL=+j.cmdRpmRL||S.rpmRL;S.cmdRpmRR=+j.cmdRpmRR||S.rpmRR;
   S.actualRpmFL=+j.actualRpmFL||0;S.actualRpmFR=+j.actualRpmFR||0;S.actualRpmRL=+j.actualRpmRL||0;S.actualRpmRR=+j.actualRpmRR||0;S.rpmActualValid=!!j.rpmActualValid;
-  S.angleModeActive=!!j.angleModeActive;S.acroModeActive=!!j.acroModeActive;
+  S.angleModeActive=!!j.angleModeActive;S.acroModeActive=!!j.acroModeActive;S.posHoldModeActive=!!j.posHoldModeActive;S.posHoldRequested=!!j.posHoldRequested;S.swcHigh=!!j.swcHigh;S.xyHoldAvailable=!!j.xyHoldAvailable;S.posHoldStatus=j.posHoldStatus||'INACTIVE';
   S.rcValid=!!j.rcValid;S.rcFailsafeCount=+j.rcFailsafeCount||0;
   S.rcCh1Us=+j.rcCh1Us||0;S.rcCh2Us=+j.rcCh2Us||0;S.rcCh3Us=+j.rcCh3Us||0;S.rcCh4Us=+j.rcCh4Us||0;S.rcCh5Us=+j.rcCh5Us||0;
   S.rcCh6Us=+j.rcCh6Us||0;S.rcCh7Us=+j.rcCh7Us||0;S.rcCh8Us=+j.rcCh8Us||0;S.rcCh9Us=+j.rcCh9Us||0;S.rcCh10Us=+j.rcCh10Us||0;
@@ -1531,6 +1537,7 @@ function applyJson(j){
   S.rollOutputLimited=!!j.rollOutputLimited;S.pitchOutputLimited=!!j.pitchOutputLimited;
   S.yawOutputLimited=!!j.yawOutputLimited;S.rateOutputLimited=!!j.rateOutputLimited;
   S.bmpTemp=+j.bmpTempC;S.bmpPressure=+j.bmpPressureHpa;S.bmpAlt=+j.bmpAltitudeM;
+  S.tofDistance=+j.tofDistanceM;S.tofRawDistance=+j.tofRawDistanceM;S.tofVelocity=+j.tofVelocityMps||0;S.tofValid=!!j.tofValid;S.tofStale=!!j.tofStale;S.tofReady=!!j.tofReady;S.tofJumpRejected=!!j.tofJumpRejected;S.tofObjectCount=+j.tofObjectCount||0;S.tofAgeMs=+j.tofAgeMs||0;
   S.bmpValid=!!j.bmpValid;S.cpu0=+j.cpuCore0;S.cpu1=+j.cpuCore1;
   S.gpsValid=!!j.gpsValid;S.gpsLat=+j.gpsLat||0;S.gpsLon=+j.gpsLon||0;
   S.gpsAlt=+j.gpsAltM||0;S.gpsSpd=+j.gpsSpeedKmh||0;S.gpsCrs=+j.gpsCourse||0;
@@ -1548,6 +1555,7 @@ function applyJson(j){
   syncI('outRollLim',j.rollOutputLimit,3);syncI('outPitchLim',j.pitchOutputLimit,3);syncI('outYawLim',j.yawOutputLimit,3);
   syncI('thrExpo',j.throttleExpo,3);syncI('thrUpRate',j.throttleUpRatePerSec,3);syncI('thrDownRate',j.throttleDownRatePerSec,3);
   syncI('motorIdle',j.motorIdle,3);syncI('motorMax',j.motorMax,3);syncI('thrCut',j.throttleCut,3);syncI('idleRampEnd',j.idleRampEnd,3);
+  syncI('descentMinActiveM',j.descentProtectMinActiveM,3);
   if(j.mahonyKp!=null){syncI('mKp',j.mahonyKp,4);setText('smKp',fmtGain(j.mahonyKp,4));}
   if(j.mahonyKi!=null){syncI('mKi',j.mahonyKi,5);setText('smKi',fmtGain(j.mahonyKi,5));}
   syncI('ahrsFilterMode',j.ahrsFilterMode,0);syncI('madgwickBeta',j.madgwickBeta,3);
@@ -1994,6 +2002,7 @@ const modeStyle={
   DISARMED:{bg:'rgba(48,209,88,.1)',border:'rgba(48,209,88,.6)',color:'#30d158'},
   ANGLE:   {bg:'rgba(10,132,255,.1)',border:'rgba(10,132,255,.6)',color:'#0a84ff'},
   ACRO:    {bg:'rgba(255,69,58,.1)',border:'rgba(255,69,58,.6)',color:'#ff453a'},
+  POSHOLD: {bg:'rgba(191,90,242,.1)',border:'rgba(191,90,242,.65)',color:'#bf5af2'},
   FAILSAFE:{bg:'rgba(255,159,10,.15)',border:'rgba(255,159,10,.7)',color:'#ff9f0a'},
   UNKNOWN: {bg:'rgba(99,99,102,.1)',border:'rgba(99,99,102,.4)',color:'#636366'}
 };
@@ -2012,6 +2021,9 @@ function render(){
   setText('vbt',isFinite(S.bmpTemp)?S.bmpTemp.toFixed(1)+' °C':'—');
   setText('vbp',isFinite(S.bmpPressure)?S.bmpPressure.toFixed(2)+' hPa':'—');
   setText('vba',isFinite(S.bmpAlt)?S.bmpAlt.toFixed(1)+' m':'—');
+  setText('vtof',S.tofReady?(S.tofValid?S.tofDistance.toFixed(3)+' m':'invalid'):'off');
+  setText('vtofvz',S.tofReady?S.tofVelocity.toFixed(2)+' m/s':'—');
+  setText('vdp',(S.descentProtectActive?'ON ':'OFF ')+S.descentThrottleBoost.toFixed(3)+' >'+S.descentProtectMinActiveM.toFixed(2)+'m');
   setText('attAlt',isFinite(S.bmpAlt)?S.bmpAlt.toFixed(2)+' m':'—');
   setText('fltFilter',S.ahrsFilter||'EKF');
   if(isFinite(S.cpu0)){
@@ -2034,7 +2046,7 @@ function render(){
   drawAI(S.roll,S.pitch);drawCompass(S.yaw);
   drawStick('sL',S.rcYaw,S.thr*2-1);drawStick('sR',S.rcRoll,S.rcPitch);
   setText('stk',S.tick);setText('shz',S.rcHz.toFixed(0)+' Hz');
-  setHealth('hImu','IMU',S.imuValid);setHealth('hMag','MAG',S.magValid);setHealth('hBmp','BMP',S.bmpValid);setHealth('hCpu','CPU',isFinite(S.cpu0)&&isFinite(S.cpu1)&&S.cpu0<95&&S.cpu1<95);
+  setHealth('hImu','IMU',S.imuValid);setHealth('hMag','MAG',S.magValid);setHealth('hBmp','BMP',S.bmpValid);setHealth('hTof','ToF',S.tofReady&&S.tofValid&&!S.tofStale);setHealth('hCpu','CPU',isFinite(S.cpu0)&&isFinite(S.cpu1)&&S.cpu0<95&&S.cpu1<95);
   // Sensor cards
   setText('sc-gx',fmt(S.gx,2));setText('sc-gy',fmt(S.gy,2));setText('sc-gz',fmt(S.gz,2));
   setText('sc-ax',fmt(S.ax,3));setText('sc-ay',fmt(S.ay,3));setText('sc-az',fmt(S.az,3));
