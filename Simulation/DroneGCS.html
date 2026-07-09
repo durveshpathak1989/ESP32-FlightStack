@@ -136,6 +136,22 @@ canvas.stick{border:1px solid var(--sep);border-radius:6px;display:block;margin:
 .chip.ok{color:var(--green);border-color:rgba(48,209,88,.4);background:rgba(48,209,88,.08)}
 .chip.warn{color:var(--orange);border-color:rgba(255,159,10,.4);background:rgba(255,159,10,.08)}
 #aiPanel{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.battery-card{margin-top:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:9px 10px;transition:.2s}
+.battery-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.battery-value{font-family:var(--mono);font-size:20px;font-weight:800;color:var(--t1);line-height:1}
+.battery-sub{font-size:10px;color:var(--t3);letter-spacing:.8px;margin-top:4px;white-space:nowrap}
+.battery-percent{font-family:var(--mono);font-size:18px;font-weight:800;color:var(--green);white-space:nowrap}
+.battery-visual{display:grid;grid-template-columns:1fr 7px;align-items:center;gap:3px;margin-top:8px}
+.battery-shell{height:22px;border:1px solid rgba(235,235,245,.38);border-radius:5px;padding:2px;background:rgba(0,0,0,.28);overflow:hidden}
+.battery-fill{height:100%;width:0%;border-radius:3px;background:var(--green);transition:width .25s ease,background .25s ease}
+.battery-tip{width:7px;height:11px;border:1px solid rgba(235,235,245,.38);border-left:0;border-radius:0 3px 3px 0;background:rgba(235,235,245,.18)}
+.battery-status{margin-top:6px;font-size:10px;color:var(--t3);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.battery-card.low{border-color:rgba(255,159,10,.55);background:rgba(255,159,10,.06)}
+.battery-card.critical{border-color:rgba(255,69,58,.65);background:rgba(255,69,58,.08)}
+.battery-card.fallback{border-color:rgba(255,214,10,.45);background:rgba(255,214,10,.05)}
+.battery-card.low .battery-percent{color:var(--orange)}
+.battery-card.critical .battery-percent{color:var(--red)}
+.battery-card.fallback .battery-percent{color:var(--yellow)}
 
 /* ── SENSORS TAB ── */
 #tab-sensors{display:none}
@@ -441,6 +457,22 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
       <div class="motor-item"><div class="motor-lbl">FR</div><div class="motor-val" id="mFR">—</div><div class="bar-track"><div class="bar-fill" id="bmFR"></div></div></div>
       <div class="motor-item"><div class="motor-lbl">RL</div><div class="motor-val" id="mRL">—</div><div class="bar-track"><div class="bar-fill" id="bmRL"></div></div></div>
       <div class="motor-item"><div class="motor-lbl">RR</div><div class="motor-val" id="mRR">—</div><div class="bar-track"><div class="bar-fill" id="bmRR"></div></div></div>
+    </div>
+
+    <div class="sec-title">BATTERY</div>
+    <div class="battery-card fallback" id="batCard">
+      <div class="battery-top">
+        <div>
+          <div class="battery-value" id="batVoltage">&mdash;</div>
+          <div class="battery-sub" id="batMeta">&mdash;</div>
+        </div>
+        <div class="battery-percent" id="batPercent">&mdash;</div>
+      </div>
+      <div class="battery-visual">
+        <div class="battery-shell"><div class="battery-fill" id="batFill"></div></div>
+        <div class="battery-tip"></div>
+      </div>
+      <div class="battery-status" id="batStatus">&mdash;</div>
     </div>
 
     <div class="sec-title">BARO / CPU</div>
@@ -1116,6 +1148,7 @@ const S={
   mx:0,my:0,mz:0,imuValid:false,magValid:false,ahrsFilter:'EKF',ahrsFilterMode:0,rpmActualValid:false,cmdRpmFL:0,cmdRpmFR:0,cmdRpmRL:0,cmdRpmRR:0,actualRpmFL:0,actualRpmFR:0,actualRpmRL:0,actualRpmRR:0,
   thr:0,rcRoll:0,rcPitch:0,rcYaw:0,rcHz:0,
   motFL:0,motFR:0,motRL:0,motRR:0,rpmFL:0,rpmFR:0,rpmRL:0,rpmRR:0,
+  batteryVoltageV:0,batteryAdcV:0,batteryCellV:0,batteryPercent:0,batteryValid:false,batteryLow:false,batteryCritical:false,
   mode:'UNKNOWN',armed:false,tick:0,
   angleModeActive:false,acroModeActive:false,modeSwitchRawUs:0,armSwitchRawUs:0,auxTune1RawUs:0,auxTune2RawUs:0,
   maxAngleDeg:0,maxRateDps:0,angleLoopEnabled:false,rateLoopEnabled:false,targetYawDeg:0,
@@ -1527,7 +1560,10 @@ function applyJson(j){
   S.pidResetCount=+j.pidResetCount||0;S.modeTransitionCount=+j.modeTransitionCount||0;
   S.lastModeChangeMs=+j.lastModeChangeMs||0;S.armingTransitionCount=+j.armingTransitionCount||0;S.lastArmChangeMs=+j.lastArmChangeMs||0;
   S.throttleLow=!!j.throttleLow;S.controlAuthorityRemaining=+j.controlAuthorityRemaining||0;
-  S.motorSaturated=!!j.motorSaturated;S.batteryVoltageV=+j.batteryVoltageV||0;
+  S.motorSaturated=!!j.motorSaturated;
+  S.batteryVoltageV=+j.batteryVoltageV||0;S.batteryAdcV=+j.batteryAdcV||0;S.batteryCellV=+j.batteryCellV||0;
+  const batteryPct=Number(j.batteryPercent);S.batteryPercent=Number.isFinite(batteryPct)?clamp(batteryPct,0,100):0;
+  S.batteryValid=!!j.batteryValid;S.batteryLow=!!j.batteryLow;S.batteryCritical=!!j.batteryCritical;
   S.rollOutputLimited=!!j.rollOutputLimited;S.pitchOutputLimited=!!j.pitchOutputLimited;
   S.yawOutputLimited=!!j.yawOutputLimited;S.rateOutputLimited=!!j.rateOutputLimited;
   S.bmpTemp=+j.bmpTempC;S.bmpPressure=+j.bmpPressureHpa;S.bmpAlt=+j.bmpAltitudeM;
@@ -2009,6 +2045,18 @@ function render(){
     const pct=Math.round(v*100);const c=pct>70?'#ff453a':pct>30?'#ff9f0a':pct>0?base:'rgba(235,235,245,.3)';
     const el=document.getElementById('m'+id);if(el){el.textContent=pct+' %';el.style.color=c;}setBar('bm'+id,pct,c);
   });
+  const batPct=clamp(Number.isFinite(S.batteryPercent)?S.batteryPercent:0,0,100);
+  const batVoltage=Number.isFinite(S.batteryVoltageV)?S.batteryVoltageV:0;
+  const batCell=Number.isFinite(S.batteryCellV)?S.batteryCellV:0;
+  const batAdc=Number.isFinite(S.batteryAdcV)?S.batteryAdcV:0;
+  const batState=S.batteryCritical?'critical':S.batteryLow?'low':S.batteryValid?'ok':'fallback';
+  const batColor=S.batteryCritical?'#ff453a':S.batteryLow?'#ff9f0a':S.batteryValid?'#30d158':'#ffd60a';
+  const batCard=document.getElementById('batCard');if(batCard)batCard.className='battery-card '+batState;
+  setText('batVoltage',batVoltage>0?batVoltage.toFixed(2)+' V':'--');
+  setText('batPercent',Math.round(batPct)+' %');
+  setText('batMeta',batCell>0?batCell.toFixed(2)+' V/cell':'ADC --');
+  setText('batStatus',S.batteryCritical?'CRITICAL':S.batteryLow?'LOW':S.batteryValid?('ADC '+batAdc.toFixed(2)+' V'):'FALLBACK NOMINAL');
+  setBar('batFill',batPct,batColor);
   setText('vbt',isFinite(S.bmpTemp)?S.bmpTemp.toFixed(1)+' °C':'—');
   setText('vbp',isFinite(S.bmpPressure)?S.bmpPressure.toFixed(2)+' hPa':'—');
   setText('vba',isFinite(S.bmpAlt)?S.bmpAlt.toFixed(1)+' m':'—');

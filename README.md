@@ -130,7 +130,7 @@ Development philosophy:
 | RC receiver | FlySky FS-iA6B | iBUS serial protocol |
 | ESCs | Standard PWM ESCs | 50 Hz PWM, 1000–2000 µs pulse |
 | Motors | 2212-class, ~920 KV | Quadcopter propulsion |
-| Battery | 3S LiPo (11.1 V nominal) | Main power |
+| Battery | 3S LiPo (11.1 V nominal, 12.6 V full) | Main power, measured through GPIO34 divider |
 | BEC | 5 V BEC | Powers controller and receiver |
 | ToF (optional) | VL53L4CX | Altitude, shared I²C bus |
 
@@ -155,8 +155,21 @@ Development philosophy:
 | Motor FR | 15 | 15 | ESP32 → ESC | Front-right, CW |
 | Motor RL | 14 | 14 | ESP32 → ESC | Rear-left, CW |
 | Motor RR | 32 | 32 | ESP32 → ESC | Rear-right, CCW |
+| Battery ADC | 34 | 34 | Divider -> ESP32 | ADC1 input-only; 235k/35k divider, sampled every 500 ms |
 
-Free GPIO: 23 (cleanest), 26 (ADC2/Wi-Fi caveat), 34/36/39 (input-only).
+Free GPIO: 23 (cleanest), 26 (ADC2/Wi-Fi caveat), 36/39 (input-only). GPIO34 is used by the battery ADC.
+
+### Battery Voltage Monitor
+
+GPIO34 reads the 3S pack through a high-value divider and updates telemetry every 500 ms. The firmware is configured for:
+
+```
+Battery + -> 235k -> ADC node -> 35k -> GND
+ADC node -> GPIO34
+Divider scale: 7.7143
+```
+
+A 12.2 V pack should measure about 1.58 V at GPIO34. Use a multimeter on the ADC node before plugging into the ESP32; the ADC pin must stay below 3.3 V. A 1k series resistor into GPIO34 and a 0.1 uF capacitor from GPIO34 to GND are recommended for noise filtering and input protection. If your real resistor values differ, update `BATTERY_RTOP_OHMS`, `BATTERY_RBOTTOM_OHMS`, or `BATTERY_ADC_CAL_SCALE` in `RC_FlightController.ino`.
 
 ---
 
@@ -522,6 +535,8 @@ IP:       192.168.4.1
 | `/update` | GET | OTA upload page |
 | `/update` | POST | OTA firmware upload (disarmed, throttle low, motors off) |
 
+Battery telemetry fields from `/telemetry`: `batteryVoltageV`, `batteryAdcV`, `batteryCellV`, `batteryPercent`, `batteryValid`, `batteryLow`, and `batteryCritical`.
+
 ---
 
 ## Onboard Flight Log
@@ -584,12 +599,13 @@ While **disarmed** with **SWB** held high (ACRO position), the firmware averages
 
 ## Wi-Fi Ground Station
 
-The browser-based GCS (`DroneGroundStation.html`) connects directly to `http://192.168.4.1`. No build step or internet connection is required once the file is open.
+The browser-based GCS (`Simulation/DroneGCS.html`) connects directly to `http://192.168.4.1`. No build step or internet connection is required once the file is open.
 
 Features:
 
 - Live attitude display (roll, pitch, yaw)
 - Motor output gauges
+- Battery voltage, percentage, and low/critical visual
 - PID output traces
 - Barometer altitude and vertical speed
 - GPS position and satellite count
@@ -608,7 +624,7 @@ Recommended folder layout:
 
 ```
 DroneGCS/
-├── DroneGroundStation.html
+├── DroneGCS.html
 └── YourArea.osm
 ```
 
@@ -622,7 +638,7 @@ python3 -m http.server 8080
 Open in the browser:
 
 ```
-http://localhost:8080/DroneGroundStation.html
+http://localhost:8080/DroneGCS.html
 ```
 
 The GCS fetches telemetry from `http://192.168.4.1` while the OSM file is loaded locally. Use only a small OSM extract around your test field — large files slow the browser significantly.
@@ -892,7 +908,7 @@ The following issues are identified and tracked for the next release:
 | 7 | Unfiltered derivative term in PID | Gyro noise amplification at high Kd |
 | 8 | Single `pid_ilimit = 50` shared across rate (dps) and angle (deg) loops | Dimensionally inconsistent wind-up limit |
 | 9 | `FLIGHT_LOG_SIZE = 100` but comment says 300 | Log is 1 s, not 3 s |
-| 10 | `BATTERY_VOLTAGE = 11.1` hardcoded | RPM estimates degrade with battery sag |
+| 10 | GPIO34 battery divider calibration needs a real-hardware multimeter check | Incorrect divider ratio skews percentage and RPM estimate |
 
 ---
 

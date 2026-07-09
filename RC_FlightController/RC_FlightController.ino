@@ -53,6 +53,7 @@
 #include "src/Submodules/IMU/MPU9250.h"
 #include "src/Submodules/iFly/FlySkyiBUS.h"
 #include "src/Submodules/WiFiTelemetry/TelemetryWiFi.h"
+#include "src/Submodules/BatteryMonitor/BatteryMonitor.h"
 #include "src/Submodules/BMP280/BMP280Sensor.h"
 #include "src/Submodules/EKF/AttitudeEKF.h"
 #include "src/Submodules/ToF/FlightToF_VL53L4CX.h"
@@ -89,6 +90,7 @@
 #define PIN_BMP_SCL   22
 #define PIN_GPS_RX    13
 #define PIN_GPS_TX    17   // GPS module RXD (optional for read-only operation)
+#define PIN_BATTERY_ADC 34
 
 // ═════════════════════════════════════════════════════════════
 //  TUNING DASHBOARD — edit flight behavior here first
@@ -216,7 +218,11 @@ static constexpr uint16_t LEVEL_ZERO_SWB_THRESHOLD = 1700;
 //  Motor RPM estimation constants
 // ─────────────────────────────────────────────────────────────
 #define MOTOR_KV         920.0f
-#define BATTERY_VOLTAGE    11.1f
+static constexpr float BATTERY_NOMINAL_V = 11.1f;
+static constexpr uint8_t BATTERY_CELL_COUNT = 3;
+static constexpr float BATTERY_RTOP_OHMS = 235000.0f;
+static constexpr float BATTERY_RBOTTOM_OHMS = 35000.0f;
+static constexpr float BATTERY_ADC_CAL_SCALE = 1.0f;
 
 static constexpr uint16_t FLIGHT_LOGGER_CAPACITY = 120;  // 100 Hz x 1.2 s, heap-safe on ESP32
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
@@ -341,6 +347,7 @@ MadgwickAHRS madgwickAHRS;
 NotchFilter notchAx, notchAy, notchAz;
 NotchFilter notchGx, notchGy, notchGz;
 static FlightToF_VL53L4CX tofSensor(Wire);
+static BatteryMonitor batteryMonitor;
 static float    g_dynamicNotchHz = TUNE_NOTCH_FREQ_HZ;
 static bool     g_dynamicNotchTracking = false;
 static uint32_t g_lastDynamicNotchUpdateMs = 0;
@@ -387,6 +394,13 @@ struct FlightState {
     float cpuCore0_pct, cpuCore1_pct;
     bool  cpuValid;
     float motorFL, motorFR, motorRL, motorRR;
+    float batteryVoltage_v;
+    float batteryAdcVoltage_v;
+    float batteryCellVoltage_v;
+    float batteryPercent;
+    bool  batteryValid;
+    bool  batteryLow;
+    bool  batteryCritical;
     float pidRollOut, pidPitchOut, pidYawOut;   // true PID outputs for tuning trace
     float motorFLPreSat, motorFRPreSat, motorRLPreSat, motorRRPreSat;
     uint32_t loopPeriod_us, imuRead_us, rcRead_us, ahrsUpdate_us;
@@ -1057,7 +1071,13 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.throttle=s.rc.throttle; out.rc_roll=s.rc.roll;
     out.rc_pitch=s.rc.pitch;    out.rc_yaw=s.rc.yaw;
     out.rc_hz=rcReceiver.getFrameRate();
-    out.battery_voltage_v=BATTERY_VOLTAGE;
+    out.battery_voltage_v=s.batteryVoltage_v;
+    out.battery_adc_v=s.batteryAdcVoltage_v;
+    out.battery_cell_v=s.batteryCellVoltage_v;
+    out.battery_percent=s.batteryPercent;
+    out.battery_valid=s.batteryValid;
+    out.battery_low=s.batteryLow;
+    out.battery_critical=s.batteryCritical;
     out.motor_fl=s.motorFL; out.motor_fr=s.motorFR;
     out.motor_rl=s.motorRL; out.motor_rr=s.motorRR;
     out.motor_fl_pre_sat=s.motorFLPreSat; out.motor_fr_pre_sat=s.motorFRPreSat;
@@ -1072,9 +1092,8 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.wifi_service_us=s.wifiService_us;
     out.onboard_log_write_us=s.onboardLogWrite_us;
     out.missed_loop_count=s.missedLoopCount;
-    float rpmScale = MOTOR_KV * BATTERY_VOLTAGE;
-    out.cmd_rpm_fl=s.motorFL*rpmScale; out.cmd_rpm_fr=s.motorFR*rpmScale;
-    out.cmd_rpm_rl=s.motorRL*rpmScale; out.cmd_rpm_rr=s.motorRR*rpmScale;
+    out.cmd_rpm_fl=s.cmdRpmFL; out.cmd_rpm_fr=s.cmdRpmFR;
+    out.cmd_rpm_rl=s.cmdRpmRL; out.cmd_rpm_rr=s.cmdRpmRR;
     // Backward-compatible aliases: until ESC RPM telemetry is added, rpm* means commanded/estimated RPM.
     out.rpm_fl=out.cmd_rpm_fl; out.rpm_fr=out.cmd_rpm_fr;
     out.rpm_rl=out.cmd_rpm_rl; out.rpm_rr=out.cmd_rpm_rr;
@@ -1826,6 +1845,10 @@ static void taskControl(void* /*pv*/)
             periodUs = TARGET_US;
         }
 
+        batteryMonitor.update(millis());
+        const BatteryStatus bat = batteryMonitor.status();
+        const float batteryVoltageForRpm = bat.valid ? bat.batteryVoltage_v : BATTERY_NOMINAL_V;
+
         // ── Welford timing accumulator (Test 7.1) ────────────
         if (xSemaphoreTake(g_timingMutex, 0) == pdTRUE) {
             uint32_t n = ++g_timing.count;
@@ -2084,6 +2107,13 @@ static void taskControl(void* /*pv*/)
                 g_state.armed   = false;
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
                 g_state.motorFLPreSat = g_state.motorFRPreSat = g_state.motorRLPreSat = g_state.motorRRPreSat = 0;
+                g_state.batteryVoltage_v = batteryVoltageForRpm;
+                g_state.batteryAdcVoltage_v = bat.adcVoltage_v;
+                g_state.batteryCellVoltage_v = bat.cellVoltage_v;
+                g_state.batteryPercent = bat.percent;
+                g_state.batteryValid = bat.valid;
+                g_state.batteryLow = bat.low;
+                g_state.batteryCritical = bat.critical;
                 g_state.pidRollOut = g_state.pidPitchOut = g_state.pidYawOut = 0;
                 g_state.loopPeriod_us = periodUs;
                 g_state.loopJitter_us = (int16_t)constrain((int32_t)periodUs - (int32_t)TARGET_US, -32768, 32767);
@@ -2136,6 +2166,9 @@ static void taskControl(void* /*pv*/)
                 g_state.pitchOutputLimited = false;
                 g_state.yawOutputLimited = false;
                 g_state.rateOutputLimited = false;
+                g_state.cmdRpmFL = g_state.cmdRpmFR = g_state.cmdRpmRL = g_state.cmdRpmRR = 0.0f;
+                g_state.actualRpmFL = g_state.actualRpmFR = g_state.actualRpmRL = g_state.actualRpmRR = 0.0f;
+                g_state.rpmActualValid = false;
                 if (imuOk) {
                     g_state.roll_deg = att.roll_deg;  g_state.pitch_deg = att.pitch_deg;
                     g_state.yaw_deg  = att.yaw_deg;
@@ -2399,7 +2432,7 @@ static void taskControl(void* /*pv*/)
 
 
         const float magNorm_uT = imuOk ? sqrtf(s.mx_uT*s.mx_uT + s.my_uT*s.my_uT + s.mz_uT*s.mz_uT) : 0.0f;
-        const float rpmScaleLog = MOTOR_KV * BATTERY_VOLTAGE;
+        const float rpmScaleLog = MOTOR_KV * batteryVoltageForRpm;
         const float cmdRpmFL = fl * rpmScaleLog;
         const float cmdRpmFR = fr * rpmScaleLog;
         const float cmdRpmRL = rl * rpmScaleLog;
@@ -2524,7 +2557,7 @@ static void taskControl(void* /*pv*/)
             row.rpm_diag_b = cmdRpmFR + cmdRpmRL;
             row.rpm_diag_diff = row.rpm_diag_a - row.rpm_diag_b;
 
-            row.battery_v = BATTERY_VOLTAGE;
+            row.battery_v = batteryVoltageForRpm;
             row.cpu0_pct = g_state.cpuCore0_pct;
             row.cpu1_pct = g_state.cpuCore1_pct;
             row.notch_freq_hz = tune.notch_freq_hz;
@@ -2586,6 +2619,13 @@ static void taskControl(void* /*pv*/)
                 g_state.pitchAngleError_deg = pitchAngleErrDeg;
                 g_state.loopCount++;
             }
+            g_state.batteryVoltage_v = batteryVoltageForRpm;
+            g_state.batteryAdcVoltage_v = bat.adcVoltage_v;
+            g_state.batteryCellVoltage_v = bat.cellVoltage_v;
+            g_state.batteryPercent = bat.percent;
+            g_state.batteryValid = bat.valid;
+            g_state.batteryLow = bat.low;
+            g_state.batteryCritical = bat.critical;
             g_state.motorFL=fl; g_state.motorFR=fr;
             g_state.motorRL=rl; g_state.motorRR=rr;
             g_state.motorFLPreSat=flPre; g_state.motorFRPreSat=frPre;
@@ -3015,6 +3055,28 @@ void setup()
     memset(&g_state,    0, sizeof(g_state));
     memset(&g_timing,   0, sizeof(g_timing));
 
+    batteryMonitor.begin(PIN_BATTERY_ADC,
+                         BATTERY_CELL_COUNT,
+                         BATTERY_RTOP_OHMS,
+                         BATTERY_RBOTTOM_OHMS,
+                         BATTERY_NOMINAL_V,
+                         BATTERY_ADC_CAL_SCALE);
+    BatteryStatus bootBattery = batteryMonitor.forceRead();
+    g_state.batteryVoltage_v = bootBattery.batteryVoltage_v;
+    g_state.batteryAdcVoltage_v = bootBattery.adcVoltage_v;
+    g_state.batteryCellVoltage_v = bootBattery.cellVoltage_v;
+    g_state.batteryPercent = bootBattery.percent;
+    g_state.batteryValid = bootBattery.valid;
+    g_state.batteryLow = bootBattery.low;
+    g_state.batteryCritical = bootBattery.critical;
+    DBG_PRINTF("[BOOT] Battery ADC pin=%u scale=%.4f adc=%.3fV batt=%.3fV cell=%.3fV valid=%d\n",
+               (unsigned)PIN_BATTERY_ADC,
+               batteryMonitor.scale(),
+               bootBattery.adcVoltage_v,
+               bootBattery.batteryVoltage_v,
+               bootBattery.cellVoltage_v,
+               bootBattery.valid ? 1 : 0);
+    DBG_PRINTLN(F("[BOOT] Battery sanity: 12.2V pack should read about 1.58V at ADC."));
 
     motorsBegin();
     motorEscArm();   // sends 1000 µs for 3 s; comment out after ESC calibration done
