@@ -1,0 +1,19 @@
+Reference,Approved manufacturer,Approved orderable MPN,Control note
+U1,Espressif,ESP32-WROOM-32E-N4,Use genuine traceable module; preserve antenna keepout
+U2,TDK InvenSense,MPU-9250,OBSOLETE/EOL; traceable customer inventory and incoming test required
+U3,Texas Instruments,TPS5430DDAR,DDA PowerPAD package
+U4,Diodes Incorporated,AP2112K-3.3TRG1,SOT-25 fixed 3.3 V
+U5,STMicroelectronics,USBLC6-2SC6,SOT-23-6 USB ESD protector
+U6,Silicon Labs,CP2102N-A02-GQFN24R,QFN-24 USB-UART bridge
+U7,Texas Instruments,TPS2113APWR,TSSOP-8 automatic power mux
+L1,Bourns,SRP7028A-150M,15 uH shielded power inductor
+D1,Diodes Incorporated,B340A-13-F,3 A 40 V SMA Schottky
+F1,Littelfuse,1206L075/16YR,0.75 A hold 16 V resettable fuse
+J4,JST,BM04B-SRSS-TB(LF)(SN),Qwiic-compatible top-entry 1.0 mm JST-SH
+J14,JST,BM07B-SRSS-TB(LF)(SN),Top-entry 1.0 mm JST-SH seven-position ESC
+J2,JST,BM02B-GHS-TBT(LF)(SN),Top-entry 1.25 mm JST-GH
+J5,JST,BM04B-GHS-TBT(LF)(SN),Top-entry 1.25 mm JST-GH
+J6,JST,BM03B-GHS-TBT(LF)(SN),Top-entry 1.25 mm JST-GH
+J9,GCT,USB4105-GF-A,Top-mount USB-C receptacle
+C1,Murata,GRM32ER71E106KA12L,10 uF 25 V X7R 1210
+C4,Panasonic,EEE-FK1A221P,220 uF 10 V low-ESR 6.3 x 5.8 mm

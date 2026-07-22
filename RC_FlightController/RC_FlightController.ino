@@ -81,14 +81,14 @@
 #define PIN_MPU_INT   27   // optional, not driven by firmware
 
 #define PIN_MOTOR_FL  25
-#define PIN_MOTOR_FR  15
-#define PIN_MOTOR_RL  14
+#define PIN_MOTOR_FR  4
+#define PIN_MOTOR_RL  26
 #define PIN_MOTOR_RR  32
 #define PIN_IBUS_RX   16
-#define PIN_IBUS_TX   4    // spare GPIO, not connected — avoids GPIO17 conflict with GPS TX
+#define PIN_IBUS_TX   2    // spare GPIO, not connected — keeps GPIO12-15 reserved for JTAG
 #define PIN_BMP_SDA   21
 #define PIN_BMP_SCL   22
-#define PIN_GPS_RX    13
+#define PIN_GPS_RX    23
 #define PIN_GPS_TX    17   // GPS module RXD (optional for read-only operation)
 #define PIN_BATTERY_ADC 34
 
