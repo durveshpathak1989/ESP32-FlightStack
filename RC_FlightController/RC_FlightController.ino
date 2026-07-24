@@ -168,7 +168,7 @@ static constexpr float NOTCH_SAMPLE_HZ      = 400.0f;  // control loop sample ra
 static constexpr bool     TUNE_DYNAMIC_NOTCH_ENABLE = true;
 static constexpr float    DYN_NOTCH_MIN_HZ          = 45.0f;
 static constexpr float    DYN_NOTCH_MAX_HZ          = 170.0f;  // below 0.45 * 400 Hz
-static constexpr uint32_t DYN_NOTCH_UPDATE_MS       = 250;     // 4 Hz update rate
+static constexpr uint32_t DYN_NOTCH_UPDATE_MS       = 1000;    // 1 Hz coefficient update; avoid in-flight reconfig thrash
 static constexpr float    DYN_NOTCH_ALPHA           = 0.25f;   // smoothing
 static constexpr float    DYN_NOTCH_MAX_STEP_HZ     = 8.0f;    // max movement per update
 static constexpr float    DYN_NOTCH_MIN_THROTTLE    = 0.15f;
@@ -546,6 +546,7 @@ static SemaphoreHandle_t g_tuneMutex;
 static volatile uint32_t g_tuneRequestSeq = 0;
 static volatile uint32_t g_tuneApplySeq   = 0;
 static volatile uint32_t g_tuneRejectSeq  = 0;
+static volatile bool     g_notchResetPending = false;
 static volatile uint8_t  g_ahrsFilterModeActive = 0;
 
 // ─────────────────────────────────────────────────────────────
@@ -774,8 +775,8 @@ static void applyTuningToObjects()
 {
     if (xSemaphoreTake(g_tuneMutex, 0) != pdTRUE) return;
     applyTuningToObjectsLocked();
+    g_notchResetPending = true;
     xSemaphoreGive(g_tuneMutex);
-    calLog("[TUNE] Runtime tune values applied.");
 }
 // ─────────────────────────────────────────────────────────────
 //  Log helpers (push to WiFi ring buffer + Serial)
@@ -1253,6 +1254,7 @@ static bool handleTune(const TunePacket& in)
     g_tuneRequestSeq++;
     g_tuning.dirty = true;
     applyTuningToObjectsLocked();
+    g_notchResetPending = true;
     uint32_t appliedSeq = g_tuneApplySeq;
     xSemaphoreGive(g_tuneMutex);
 
@@ -1908,6 +1910,16 @@ static void taskControl(void* /*pv*/)
         float accelRollDeg = 0.0f, accelPitchDeg = 0.0f;
         float rollAngleErrDeg = 0.0f, pitchAngleErrDeg = 0.0f;
         if (imuOk) {
+            if (g_notchResetPending) {
+                notchAx.reset(s.ax_g);
+                notchAy.reset(s.ay_g);
+                notchAz.reset(s.az_g);
+                notchGx.reset(s.gx_dps);
+                notchGy.reset(s.gy_dps);
+                notchGz.reset(s.gz_dps);
+                g_notchResetPending = false;
+            }
+
             // Apply tunable motor-vibration notch before EKF and before PID.
             // Keep original `s` for raw telemetry/logging; use `sf` for control.
             MPU_SensorData sf = s;
