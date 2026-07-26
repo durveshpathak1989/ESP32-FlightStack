@@ -62,3 +62,27 @@
 	path = RC_FlightController/src/Submodules/iFly
 	url = https://github.com/durveshpathak1989/ifly.git
 	branch = master
+[submodule "RC_FlightController/src/Submodules/FlightStateMachine"]
+	path = RC_FlightController/src/Submodules/FlightStateMachine
+	url = https://github.com/durveshpathak1989/flight-state-machine.git
+	branch = master
+[submodule "RC_FlightController/src/Submodules/SafetyCommandGate"]
+	path = RC_FlightController/src/Submodules/SafetyCommandGate
+	url = https://github.com/durveshpathak1989/safety-command-gate.git
+	branch = master
+[submodule "RC_FlightController/src/Submodules/TelemetrySnapshot"]
+	path = RC_FlightController/src/Submodules/TelemetrySnapshot
+	url = https://github.com/durveshpathak1989/telemetry-snapshot.git
+	branch = master
+[submodule "RC_FlightController/src/Submodules/CoreMonitor"]
+	path = RC_FlightController/src/Submodules/CoreMonitor
+	url = https://github.com/durveshpathak1989/core-monitor.git
+	branch = master
+[submodule "RC_FlightController/src/Submodules/FlightScheduler"]
+	path = RC_FlightController/src/Submodules/FlightScheduler
+	url = https://github.com/durveshpathak1989/flight-scheduler.git
+	branch = master
+[submodule "RC_FlightController/src/Submodules/FlightApplication"]
+	path = RC_FlightController/src/Submodules/FlightApplication
+	url = https://github.com/durveshpathak1989/flight-application.git
+	branch = master
