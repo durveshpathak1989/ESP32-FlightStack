@@ -188,7 +188,7 @@ static constexpr bool LOG_DYNAMIC_NOTCH_DEBUG = false;
 // Higher R = trust that sensor less. Higher Q = allow faster EKF state motion.
 static constexpr float TUNE_EKF_ANGLE_Q        = 0.0008f;
 static constexpr float TUNE_EKF_BIAS_Q         = 0.000001f;
-static constexpr float TUNE_EKF_ACCEL_R        = 0.100f;
+static constexpr float TUNE_EKF_ACCEL_R        = 0.150f;
 static constexpr float TUNE_EKF_MAG_R          = 0.200f;
 static constexpr float TUNE_EKF_MAG_DECL_DEG   = 0.0f;
 static constexpr float TUNE_EKF_MAG_YAW_OFF_DEG= 0.0f;
