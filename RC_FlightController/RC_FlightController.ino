@@ -130,16 +130,16 @@ static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 
 // ── Initial PID gains loaded at boot ────────────────────────
 // Inner Loop
-static constexpr float TUNE_RATE_ROLL_KP   = 0.04000f;
-static constexpr float TUNE_RATE_ROLL_KI   = 0.0000000f;
-static constexpr float TUNE_RATE_ROLL_KD   = 0.0000150f;
-static constexpr float TUNE_RATE_ROLL_FF   = 0.00100f;
-static constexpr float TUNE_RATE_ROLL_D_LPF_HZ = 30.0f;
-static constexpr float TUNE_RATE_PITCH_KP  = 0.06000f;
-static constexpr float TUNE_RATE_PITCH_KI  = 0.0000000f;
-static constexpr float TUNE_RATE_PITCH_KD  = 0.0000150f;
-static constexpr float TUNE_RATE_PITCH_FF  = 0.00100f;
-static constexpr float TUNE_RATE_PITCH_D_LPF_HZ = 30.0f;
+static constexpr float TUNE_RATE_ROLL_KP   = 0.02000f;
+static constexpr float TUNE_RATE_ROLL_KI   = 0.001000f;
+static constexpr float TUNE_RATE_ROLL_KD   = 0.00000f;
+static constexpr float TUNE_RATE_ROLL_FF   = 0.000000f;
+static constexpr float TUNE_RATE_ROLL_D_LPF_HZ = 94.0f;
+static constexpr float TUNE_RATE_PITCH_KP  = 0.04000f;
+static constexpr float TUNE_RATE_PITCH_KI  = 0.001000f;
+static constexpr float TUNE_RATE_PITCH_KD  = 0.00000f;
+static constexpr float TUNE_RATE_PITCH_FF  = 0.000000f;
+static constexpr float TUNE_RATE_PITCH_D_LPF_HZ = 94.0f;
 static constexpr float TUNE_RATE_YAW_KP    = 0.00500f;
 static constexpr float TUNE_RATE_YAW_KI    = 0.0000000f;
 static constexpr float TUNE_RATE_YAW_KD    = 0.0000000f;
