@@ -111,7 +111,7 @@ static constexpr uint32_t TOF_TASK_PERIOD_MS        = 25;      // 40 Hz poll, ma
 static constexpr uint32_t TOF_STALE_MS              = 200;
 
 // ── Pilot command limits ────────────────────────────────────
-static constexpr float TUNE_MAX_ANGLE_DEG = 5.0f;
+static constexpr float TUNE_MAX_ANGLE_DEG = 20.0f;
 static constexpr float TUNE_MAX_RATE_DPS  = 70.0f;
 
 // ── PID output authority limits before motor mixing ─────────
@@ -120,7 +120,7 @@ static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.100f;
 static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.100f;
 
 // ── Throttle shaping + motor output limits ──────────────────
-static constexpr float TUNE_THROTTLE_EXPO              = 0.90f;
+static constexpr float TUNE_THROTTLE_EXPO              = 0.50f;
 static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
 static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
 static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
@@ -131,29 +131,29 @@ static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 // ── Initial PID gains loaded at boot ────────────────────────
 // Inner Loop
 static constexpr float TUNE_RATE_ROLL_KP   = 0.001500f;
-static constexpr float TUNE_RATE_ROLL_KI   = 0.00000f;
-static constexpr float TUNE_RATE_ROLL_KD   = 0.000000100f;
+static constexpr float TUNE_RATE_ROLL_KI   = 0.001000f;
+static constexpr float TUNE_RATE_ROLL_KD   = 0.000000f;
 static constexpr float TUNE_RATE_ROLL_FF   = 0.000000f;
 static constexpr float TUNE_RATE_ROLL_D_LPF_HZ = 100.0f;
 static constexpr float TUNE_RATE_PITCH_KP  = 0.002500f;
-static constexpr float TUNE_RATE_PITCH_KI  = 0.00000f;
-static constexpr float TUNE_RATE_PITCH_KD  = 0.000000100f;
+static constexpr float TUNE_RATE_PITCH_KI  = 0.001000f;
+static constexpr float TUNE_RATE_PITCH_KD  = 0.000000f;
 static constexpr float TUNE_RATE_PITCH_FF  = 0.000000f;
 static constexpr float TUNE_RATE_PITCH_D_LPF_HZ = 100.0f;
 static constexpr float TUNE_RATE_YAW_KP    = 0.001000f;
-static constexpr float TUNE_RATE_YAW_KI    = 0.0000000f;
+static constexpr float TUNE_RATE_YAW_KI    = 0.001000f;
 static constexpr float TUNE_RATE_YAW_KD    = 0.0000000f;
-static constexpr float TUNE_RATE_YAW_FF    = 0.00100f;
-static constexpr float TUNE_RATE_YAW_D_LPF_HZ = 30.0f;
+static constexpr float TUNE_RATE_YAW_FF    = 0.000000f;
+static constexpr float TUNE_RATE_YAW_D_LPF_HZ = 100.0f;
 // Outer Loop
-static constexpr float TUNE_ANGLE_ROLL_KP  = 4.00f;
+static constexpr float TUNE_ANGLE_ROLL_KP  = 2.50f;
 static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
 static constexpr float TUNE_ANGLE_ROLL_KD  = 0.000000f;
-static constexpr float TUNE_ANGLE_PITCH_KP = 4.00f;
+static constexpr float TUNE_ANGLE_PITCH_KP = 2.50f;
 static constexpr float TUNE_ANGLE_PITCH_KI = 0.000f;
 static constexpr float TUNE_ANGLE_PITCH_KD = 0.000000f;
 // Outer Loop — Yaw heading hold
-static constexpr float TUNE_ANGLE_YAW_KP     = 2.00f;   // heading-hold Kp (tune up if soft)
+static constexpr float TUNE_ANGLE_YAW_KP     = 2.50f;   // heading-hold Kp (tune up if soft)
 static constexpr float TUNE_YAW_DEADBAND     = 0.02f;   // |yaw stick| below this = hold
 static constexpr float TUNE_YAW_MAX_RATE_DPS = 20.0f;   // cap on commanded yaw rate
 
@@ -188,7 +188,7 @@ static constexpr bool LOG_DYNAMIC_NOTCH_DEBUG = false;
 // Higher R = trust that sensor less. Higher Q = allow faster EKF state motion.
 static constexpr float TUNE_EKF_ANGLE_Q        = 0.0008f;
 static constexpr float TUNE_EKF_BIAS_Q         = 0.000001f;
-static constexpr float TUNE_EKF_ACCEL_R        = 0.150f;
+static constexpr float TUNE_EKF_ACCEL_R        = 0.200f;
 static constexpr float TUNE_EKF_MAG_R          = 0.200f;
 static constexpr float TUNE_EKF_MAG_DECL_DEG   = 0.0f;
 static constexpr float TUNE_EKF_MAG_YAW_OFF_DEG= 0.0f;

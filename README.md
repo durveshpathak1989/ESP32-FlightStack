@@ -420,7 +420,7 @@ POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The
 
 | Key | Default | Meaning |
 |---|---:|---|
-| `max_angle_deg` | 25.0 | Maximum lean in ANGLE mode (degrees) |
+| `max_angle_deg` | 20.0 | Maximum lean in ANGLE mode (degrees) |
 | `max_rate_dps` | 150.0 | Maximum roll rate in ACRO (deg/s) |
 | `max_pitch_rate_dps` | 150.0 | Maximum pitch rate in ACRO (deg/s) |
 | `yaw_max_rate_dps` | 90.0 | Maximum yaw rate (deg/s) |
@@ -438,7 +438,7 @@ POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The
 
 | Key | Default | Meaning |
 |---|---:|---|
-| `throttle_expo` | 0.60 | Softens low-throttle response |
+| `throttle_expo` | 0.50 | Softens low-throttle response |
 | `throttle_up_rate_per_sec` | 0.70 | Max throttle increase rate per second |
 | `throttle_down_rate_per_sec` | 1.00 | Max throttle decrease rate per second |
 | `motor_idle` | 0.08 | Minimum motor output when armed and throttle above cut |
@@ -451,27 +451,27 @@ POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The
 | Key | Default |
 |---|---:|
 | `pid_roll_kp` | 0.00015 |
-| `pid_roll_ki` | 0.00000 |
-| `pid_roll_kd` | 0.00001 |
+| `pid_roll_ki` | 0.00100 |
+| `pid_roll_kd` | 0.00000 |
 | `pid_pitch_kp` | 0.00015 |
-| `pid_pitch_ki` | 0.00000 |
-| `pid_pitch_kd` | 0.00001 |
+| `pid_pitch_ki` | 0.00100 |
+| `pid_pitch_kd` | 0.00000 |
 | `pid_yaw_kp` | 0.00015 |
-| `pid_yaw_ki` | 0.00000 |
-| `pid_yaw_kd` | 0.00001 |
+| `pid_yaw_ki` | 0.00100 |
+| `pid_yaw_kd` | 0.00000 |
 | `pid_ilimit` | 50.0 |
 
 ### Angle PID (outer loop)
 
 | Key | Default |
 |---|---:|
-| `pid_angle_roll_kp` | 8.00 |
+| `pid_angle_roll_kp` | 2.50 |
 | `pid_angle_roll_ki` | 0.00 |
-| `pid_angle_roll_kd` | 0.010 |
-| `pid_angle_pitch_kp` | 8.00 |
+| `pid_angle_roll_kd` | 0.000 |
+| `pid_angle_pitch_kp` | 2.50 |
 | `pid_angle_pitch_ki` | 0.00 |
-| `pid_angle_pitch_kd` | 0.010 |
-| `pid_angle_yaw_kp` | 6.00 |
+| `pid_angle_pitch_kd` | 0.000 |
+| `pid_angle_yaw_kp` | 2.50 |
 
 ### Notch filter
 
@@ -496,7 +496,7 @@ POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The
 |---|---:|---|
 | `ekf_angle_q` | 0.0008 | Process noise — angle states |
 | `ekf_bias_q` | 0.000001 | Process noise — gyro bias states |
-| `ekf_accel_r` | 0.060 | Accel measurement noise (higher = trust less) |
+| `ekf_accel_r` | 0.200 | Accel measurement noise (higher = trust less) |
 | `ekf_mag_r` | 0.200 | Magnetometer measurement noise |
 | `ekf_mag_declination_deg` | 0.0 | Local magnetic declination |
 | `ekf_mag_yaw_offset_deg` | 0.0 | Yaw alignment offset |
