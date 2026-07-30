@@ -1,16 +1,16 @@
 RC_FlightController build metrics
 
-Last regenerated: 2026-07-27T02:25:16Z
-Arduino CLI: /Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli
+Last regenerated: 2026-07-31T03:50:51Z
+Arduino CLI: C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe
 Arduino CLI version: 1.5.1 (commit 01f3d4f2b, 2026-06-05T10:22:12Z)
 Board FQBN:
 esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default
 
 Release build command:
-/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=0 --output-dir build/bin_release RC_FlightController
+C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=0 --output-dir RC_FlightController\build\bin_release RC_FlightController
 
 Debug build command:
-/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=1 --output-dir build/bin_debug RC_FlightController
+C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe compile --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=1 --output-dir RC_FlightController\build\bin_debug RC_FlightController
 
 Generated artifact folders:
 build\bin_release   VERBOSE_ON=0, normal OTA/release use
@@ -19,51 +19,51 @@ build\bin_debug     VERBOSE_ON=1, verbose diagnostics enabled
 The root build\RC_FlightController.ino.bin and build\RC_FlightController.ino.merged.bin files mirror the release build.
 
 Release build metrics (VERBOSE_ON=0):
-Program storage used: 1,138,803 bytes
+Program storage used: 1,138,771 bytes
 Program storage maximum: 1,966,080 bytes
 Flash utilization: 57%
 Global variables used: 76,260 bytes
 Dynamic memory maximum: 327,680 bytes
 RAM utilization: 23%
 Free RAM for local variables: 251,420 bytes
-OTA binary size: 1,138,944 bytes
+OTA binary size: 1,138,912 bytes
 Merged flash image size: 4,194,304 bytes
 
 Debug build metrics (VERBOSE_ON=1):
-Program storage used: 1,150,103 bytes
+Program storage used: 1,150,079 bytes
 Program storage maximum: 1,966,080 bytes
-Flash utilization: 57%
+Flash utilization: 58%
 Global variables used: 76,260 bytes
 Dynamic memory maximum: 327,680 bytes
 RAM utilization: 23%
 Free RAM for local variables: 251,420 bytes
-OTA binary size: 1,150,256 bytes
+OTA binary size: 1,150,224 bytes
 Merged flash image size: 4,194,304 bytes
 
 Firmware identity embedded in both builds:
 FW_NAME: RC_FlightController
-FW_VERSION: V5.5.1
+FW_VERSION: V5.5.1-1-g7525558
 FW_SOURCE_BRANCH: master
-FW_SOURCE_COMMIT: e413dfc97e6a
+FW_SOURCE_COMMIT: 752555854cc7
 FW_SOURCE_DIRTY: 0
-FW_BUILD_ID: 20260727T022516Z-master-e413dfc97e6a
-FW_BUILD_TIME_ISO: 2026-07-27T02:25:16Z
+FW_BUILD_ID: 20260731T035051Z-master-752555854cc7
+FW_BUILD_TIME_ISO: 2026-07-31T03:50:51Z
 
 Release SHA256 (VERBOSE_ON=0):
-build/bin_release/RC_FlightController.ino.bin: DC8ED8D798668017568F9149092F5E9678843D9126B575E9C5808ECE8B78679D
-build/bin_release/RC_FlightController.ino.merged.bin: E1922DE8017A180F23D5ABB6411B894F071DF8BC9DD17A29658F975A3C87070E
+build/bin_release/RC_FlightController.ino.bin: 59B294B434F520E65D26302C58C90593D9D4B68FE8085FA4D57F2592351273D2
+build/bin_release/RC_FlightController.ino.merged.bin: 5ED672D685966B309F5E48AD505CB5D07E4799117090196CBFA809585BE03228
 build/bin_release/RC_FlightController.ino.bootloader.bin: F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
 build/bin_release/RC_FlightController.ino.partitions.bin: 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
 
 Debug SHA256 (VERBOSE_ON=1):
-build/bin_debug/RC_FlightController.ino.bin: 183A4419622F6F8184F42630E3F0A38D9C62E203CCE732F2DC17C8691F80F735
-build/bin_debug/RC_FlightController.ino.merged.bin: 03CEA8305FB98E09093B6BFEF25EB0D94F400F89B5A4849E2B1C56D7BCD7EA29
+build/bin_debug/RC_FlightController.ino.bin: 4C7D871E8816D306A497896E13FC56A6C8EB0466FCDFC77639CA255D61E7F45D
+build/bin_debug/RC_FlightController.ino.merged.bin: 81C872ED144331C53F46B5CB77F39C03FC367A9BEC95815BAF128FE59088B350
 build/bin_debug/RC_FlightController.ino.bootloader.bin: F508DFE30F34C2490EC08CAAA96F20DC2853F66A0A92F6FB759B205E82924F29
 build/bin_debug/RC_FlightController.ino.partitions.bin: 0A8B5720E7B77FF11F1462458C3A509DEE79224E5279898F26D6A2E3AE0517B7
 
 Root release mirror SHA256:
-build/RC_FlightController.ino.bin: DC8ED8D798668017568F9149092F5E9678843D9126B575E9C5808ECE8B78679D
-build/RC_FlightController.ino.merged.bin: E1922DE8017A180F23D5ABB6411B894F071DF8BC9DD17A29658F975A3C87070E
+build/RC_FlightController.ino.bin: 59B294B434F520E65D26302C58C90593D9D4B68FE8085FA4D57F2592351273D2
+build/RC_FlightController.ino.merged.bin: 5ED672D685966B309F5E48AD505CB5D07E4799117090196CBFA809585BE03228
 
 Debug flash result:
 Not flashed after this rebuild. The latest generated debug binary is build\bin_debug\RC_FlightController.ino.bin.
