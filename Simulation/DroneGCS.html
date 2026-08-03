@@ -632,20 +632,20 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 <section class="tab-panel" id="tab-tune">
   <div class="panel">
     <div class="sec-title">PILOT COMMAND LIMITS</div>
-    <div class="tune-row"><span>Max Angle</span><input class="tval" id="limMaxAngle" value="20.0"><button class="tapply" onclick="sendSingle('max_angle_deg','limMaxAngle')">SET</button></div>
-    <div class="tune-row"><span>Max Rate</span><input class="tval" id="limMaxRate" value="70.0"><button class="tapply" onclick="sendSingle('max_rate_dps','limMaxRate')">SET</button></div>
+    <div class="tune-row"><span>Max Angle</span><input class="tval" id="limMaxAngle" value="5.0"><button class="tapply" onclick="sendSingle('max_angle_deg','limMaxAngle')">SET</button></div>
+    <div class="tune-row"><span>Max Rate</span><input class="tval" id="limMaxRate" value="120.0"><button class="tapply" onclick="sendSingle('max_rate_dps','limMaxRate')">SET</button></div>
     <div class="tune-row"><span>Yaw Max</span><input class="tval" id="yawMaxRate" value="20.0"><button class="tapply" onclick="sendSingle('yaw_max_rate_dps','yawMaxRate')">SET</button></div>
     <div class="tune-row"><span>Yaw DB</span><input class="tval" id="yawDeadband" value="0.02000"><button class="tapply" onclick="sendSingle('yaw_deadband','yawDeadband')">SET</button></div>
 
     <div class="sec-title">PID OUTPUT AUTHORITY</div>
-    <div class="tune-row"><span>Roll Lim</span><input class="tval" id="outRollLim" value="0.1000"><button class="tapply" onclick="sendSingle('roll_output_limit','outRollLim')">SET</button></div>
-    <div class="tune-row"><span>Pitch Lim</span><input class="tval" id="outPitchLim" value="0.1000"><button class="tapply" onclick="sendSingle('pitch_output_limit','outPitchLim')">SET</button></div>
-    <div class="tune-row"><span>Yaw Lim</span><input class="tval" id="outYawLim" value="0.1000"><button class="tapply" onclick="sendSingle('yaw_output_limit','outYawLim')">SET</button></div>
+    <div class="tune-row"><span>Roll Lim</span><input class="tval" id="outRollLim" value="0.1200"><button class="tapply" onclick="sendSingle('roll_output_limit','outRollLim')">SET</button></div>
+    <div class="tune-row"><span>Pitch Lim</span><input class="tval" id="outPitchLim" value="0.1200"><button class="tapply" onclick="sendSingle('pitch_output_limit','outPitchLim')">SET</button></div>
+    <div class="tune-row"><span>Yaw Lim</span><input class="tval" id="outYawLim" value="0.1200"><button class="tapply" onclick="sendSingle('yaw_output_limit','outYawLim')">SET</button></div>
 
     <div class="sec-title">THROTTLE SHAPING</div>
-    <div class="tune-row"><span>Expo</span><input class="tval" id="thrExpo" value="0.5000"><button class="tapply" onclick="sendSingle('throttle_expo','thrExpo')">SET</button></div>
-    <div class="tune-row"><span>Up Rate</span><input class="tval" id="thrUpRate" value="0.700"><button class="tapply" onclick="sendSingle('throttle_up_rate_per_sec','thrUpRate')">SET</button></div>
-    <div class="tune-row"><span>Down Rate</span><input class="tval" id="thrDownRate" value="1.000"><button class="tapply" onclick="sendSingle('throttle_down_rate_per_sec','thrDownRate')">SET</button></div>
+    <div class="tune-row"><span>Expo</span><input class="tval" id="thrExpo" value="0.7000"><button class="tapply" onclick="sendSingle('throttle_expo','thrExpo')">SET</button></div>
+    <div class="tune-row"><span>Up Rate</span><input class="tval" id="thrUpRate" value="0.500"><button class="tapply" onclick="sendSingle('throttle_up_rate_per_sec','thrUpRate')">SET</button></div>
+    <div class="tune-row"><span>Down Rate</span><input class="tval" id="thrDownRate" value="0.500"><button class="tapply" onclick="sendSingle('throttle_down_rate_per_sec','thrDownRate')">SET</button></div>
     <div class="tune-row"><span>Idle</span><input class="tval" id="motorIdle" value="0.080"><button class="tapply" onclick="sendSingle('motor_idle','motorIdle')">SET</button></div>
     <div class="tune-row"><span>Motor Max</span><input class="tval" id="motorMax" value="1.000"><button class="tapply" onclick="sendSingle('motor_max','motorMax')">SET</button></div>
     <div class="tune-row"><span>Cut</span><input class="tval" id="thrCut" value="0.030"><button class="tapply" onclick="sendSingle('throttle_cut','thrCut')">SET</button></div>
@@ -654,19 +654,19 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 
   <div class="panel">
     <div class="sec-title">RATE PID — ROLL</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="rKp" value="0.04000"><button class="tapply" onclick="sendSingle('pid_roll_kp','rKp')">SET</button></div>
-    <div class="tune-row"><span>Ki</span><input class="tval" id="rKi" value="0.001000"><button class="tapply" onclick="sendSingle('pid_roll_ki','rKi')">SET</button></div>
-    <div class="tune-row"><span>Kd</span><input class="tval" id="rKd" value="0.000000"><button class="tapply" onclick="sendSingle('pid_roll_kd','rKd')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="rKp" value="0.0009000"><button class="tapply" onclick="sendSingle('pid_roll_kp','rKp')">SET</button></div>
+    <div class="tune-row"><span>Ki</span><input class="tval" id="rKi" value="0.000001000"><button class="tapply" onclick="sendSingle('pid_roll_ki','rKi')">SET</button></div>
+    <div class="tune-row"><span>Kd</span><input class="tval" id="rKd" value="0.000000010"><button class="tapply" onclick="sendSingle('pid_roll_kd','rKd')">SET</button></div>
     <div class="tune-row"><span>FF</span><input class="tval" id="rFf" value="0.000000"><button class="tapply" onclick="sendSingle('pid_roll_ff','rFf')">SET</button></div>
     <div class="tune-row"><span>D LPF</span><input class="tval" id="rDLpf" value="100.0"><button class="tapply" onclick="sendSingle('pid_roll_d_lpf_hz','rDLpf')">SET</button></div>
     <div class="sec-title">RATE PID — PITCH</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="pKp" value="0.06000"><button class="tapply" onclick="sendSingle('pid_pitch_kp','pKp')">SET</button></div>
-    <div class="tune-row"><span>Ki</span><input class="tval" id="pKi" value="0.001000"><button class="tapply" onclick="sendSingle('pid_pitch_ki','pKi')">SET</button></div>
-    <div class="tune-row"><span>Kd</span><input class="tval" id="pKd" value="0.000000"><button class="tapply" onclick="sendSingle('pid_pitch_kd','pKd')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="pKp" value="0.001900"><button class="tapply" onclick="sendSingle('pid_pitch_kp','pKp')">SET</button></div>
+    <div class="tune-row"><span>Ki</span><input class="tval" id="pKi" value="0.000001000"><button class="tapply" onclick="sendSingle('pid_pitch_ki','pKi')">SET</button></div>
+    <div class="tune-row"><span>Kd</span><input class="tval" id="pKd" value="0.000000010"><button class="tapply" onclick="sendSingle('pid_pitch_kd','pKd')">SET</button></div>
     <div class="tune-row"><span>FF</span><input class="tval" id="pFf" value="0.000000"><button class="tapply" onclick="sendSingle('pid_pitch_ff','pFf')">SET</button></div>
     <div class="tune-row"><span>D LPF</span><input class="tval" id="pDLpf" value="100.0"><button class="tapply" onclick="sendSingle('pid_pitch_d_lpf_hz','pDLpf')">SET</button></div>
     <div class="sec-title">RATE PID — YAW</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="yKp" value="0.005000"><button class="tapply" onclick="sendSingle('pid_yaw_kp','yKp')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="yKp" value="0.008000"><button class="tapply" onclick="sendSingle('pid_yaw_kp','yKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="yKi" value="0.001000"><button class="tapply" onclick="sendSingle('pid_yaw_ki','yKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="yKd" value="0.0000000"><button class="tapply" onclick="sendSingle('pid_yaw_kd','yKd')">SET</button></div>
     <div class="tune-row"><span>FF</span><input class="tval" id="yFf" value="0.000000"><button class="tapply" onclick="sendSingle('pid_yaw_ff','yFf')">SET</button></div>
@@ -678,7 +678,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Madgwick β</span><input class="tval" id="madgwickBeta" value="0.050"><button class="tapply" onclick="sendSingle('madgwick_beta','madgwickBeta')">SET</button></div>
     <div class="tune-row"><span>EKF AngQ</span><input class="tval" id="ekfAngleQ" value="0.000800"><button class="tapply" onclick="sendSingle('ekf_angle_q','ekfAngleQ')">SET</button></div>
     <div class="tune-row"><span>EKF BiasQ</span><input class="tval" id="ekfBiasQ" value="0.000001"><button class="tapply" onclick="sendSingle('ekf_bias_q','ekfBiasQ')">SET</button></div>
-    <div class="tune-row"><span>Accel R</span><input class="tval" id="ekfAccelR" value="0.200"><button class="tapply" onclick="sendSingle('ekf_accel_r','ekfAccelR')">SET</button></div>
+    <div class="tune-row"><span>Accel R</span><input class="tval" id="ekfAccelR" value="0.400"><button class="tapply" onclick="sendSingle('ekf_accel_r','ekfAccelR')">SET</button></div>
     <div class="tune-row"><span>Mag R</span><input class="tval" id="ekfMagR" value="0.200"><button class="tapply" onclick="sendSingle('ekf_mag_r','ekfMagR')">SET</button></div>
     <div class="tune-row"><span>Mag Off</span><input class="tval" id="ekfMagYawOffset" value="0.0"><button class="tapply" onclick="sendSingle('ekf_mag_yaw_offset_deg','ekfMagYawOffset')">SET</button></div>
     <div class="tune-row"><span>Mag Sign</span><input class="tval" id="ekfMagYawSign" value="1"><button class="tapply" onclick="sendSingle('ekf_mag_yaw_sign','ekfMagYawSign')">SET</button></div>
@@ -687,20 +687,20 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 
   <div class="panel" style="display:flex;flex-direction:column">
     <div class="sec-title">ANGLE PID — ROLL</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="arKp" value="2.500"><button class="tapply" onclick="sendSingle('pid_angle_roll_kp','arKp')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="arKp" value="1.500"><button class="tapply" onclick="sendSingle('pid_angle_roll_kp','arKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="arKi" value="0.000"><button class="tapply" onclick="sendSingle('pid_angle_roll_ki','arKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="arKd" value="0.000000"><button class="tapply" onclick="sendSingle('pid_angle_roll_kd','arKd')">SET</button></div>
     <div class="sec-title">ANGLE PID — PITCH</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="apKp" value="2.500"><button class="tapply" onclick="sendSingle('pid_angle_pitch_kp','apKp')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="apKp" value="1.000"><button class="tapply" onclick="sendSingle('pid_angle_pitch_kp','apKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="apKi" value="0.000"><button class="tapply" onclick="sendSingle('pid_angle_pitch_ki','apKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="apKd" value="0.000000"><button class="tapply" onclick="sendSingle('pid_angle_pitch_kd','apKd')">SET</button></div>
     <div class="sec-title">YAW HEADING HOLD</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="ayKp" value="2.500"><button class="tapply" onclick="sendSingle('pid_angle_yaw_kp','ayKp')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="ayKp" value="1.000"><button class="tapply" onclick="sendSingle('pid_angle_yaw_kp','ayKp')">SET</button></div>
 
 
     <div class="sec-title" style="margin-top:12px">MOTOR VIBRATION NOTCH</div>
     <div class="tune-row"><span>Enable</span><input class="tval" id="notchEnable" value="1"><button class="tapply" onclick="sendSingle('notch_enable','notchEnable')">SET</button></div>
-    <div class="tune-row"><span>Freq Hz</span><input class="tval" id="notchFreqHz" value="66.36"><button class="tapply" onclick="sendSingle('notch_freq_hz','notchFreqHz')">SET</button></div>
+    <div class="tune-row"><span>Freq Hz</span><input class="tval" id="notchFreqHz" value="143.84"><button class="tapply" onclick="sendSingle('notch_freq_hz','notchFreqHz')">SET</button></div>
     <div class="tune-row"><span>Q</span><input class="tval" id="notchQ" value="10.0"><button class="tapply" onclick="sendSingle('notch_q','notchQ')">SET</button></div>
 
     <div class="sec-title" style="margin-top:12px">LIVE VALUES</div>
@@ -889,11 +889,11 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
       <div class="sec-title">FILTERS · NOTCH + EKF <span class="badge-esp">ESP32</span></div>
       <div class="cfg-section">
         <div class="cfg-row"><span class="cfg-lbl">Notch Enable<small>1 = on, 0 = bypass</small></span><input class="cfg-inp" id="cfg-notchen" value="1" type="number" min="0" max="1" step="1"></div>
-        <div class="cfg-row"><span class="cfg-lbl">Notch Frequency<small>Hz — sweep 60–140 during motor test</small></span><input class="cfg-inp" id="cfg-notchhz" value="66.36" type="number" min="1" max="180" step="1"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Notch Frequency<small>Hz — sweep 60–140 during motor test</small></span><input class="cfg-inp" id="cfg-notchhz" value="143.84" type="number" min="1" max="180" step="1"></div>
         <div class="cfg-row"><span class="cfg-lbl">Notch Q<small>higher = narrower; start 6–10</small></span><input class="cfg-inp" id="cfg-notchq" value="10.0" type="number" min="0.5" max="50" step="0.5"></div>
         <div class="cfg-row"><span class="cfg-lbl">EKF Angle Q<small>process noise; higher follows gyro faster</small></span><input class="cfg-inp" id="cfg-ekfangq" value="0.0008" type="number" min="0.000001" max="0.05" step="0.0001"></div>
         <div class="cfg-row"><span class="cfg-lbl">EKF Bias Q<small>gyro bias wander; keep small</small></span><input class="cfg-inp" id="cfg-ekfbiasq" value="0.000001" type="number" min="0.000000001" max="0.001" step="0.000001"></div>
-        <div class="cfg-row"><span class="cfg-lbl">EKF Accel R<small>higher = trust accel less under vibration</small></span><input class="cfg-inp" id="cfg-ekfaccr" value="0.060" type="number" min="0.001" max="2" step="0.005"></div>
+        <div class="cfg-row"><span class="cfg-lbl">EKF Accel R<small>higher = trust accel less under vibration</small></span><input class="cfg-inp" id="cfg-ekfaccr" value="0.400" type="number" min="0.001" max="2" step="0.005"></div>
         <div class="cfg-row"><span class="cfg-lbl">EKF Mag R<small>higher = trust mag less near motors/wires</small></span><input class="cfg-inp" id="cfg-ekfmagr" value="0.200" type="number" min="0.001" max="5" step="0.01"></div>
         <div class="cfg-row"><span class="cfg-lbl">Mag Declination<small>degrees; optional true-north correction</small></span><input class="cfg-inp" id="cfg-ekfdecl" value="0.0" type="number" min="-30" max="30" step="0.1"></div>
         <div class="cfg-row"><span class="cfg-lbl">Mag Yaw Offset<small>degrees; bench heading trim</small></span><input class="cfg-inp" id="cfg-ekfmagoff" value="0.0" type="number" min="-180" max="180" step="1"></div>
@@ -958,15 +958,15 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 const CFG_DEFAULTS = {
   kv:920, cells:4, cellV:3.7, mah:3000, poles:14,
   propDiam:5.0, propPitch:4.5, weight:650,
-  maxAngle:20, maxRoll:70, maxPitch:70, maxYaw:20, hover:0.45, iLimit:50,
-  rollOutLimit:0.100, pitchOutLimit:0.100, yawOutLimit:0.100,
-  throttleExpo:0.50, throttleUpRate:0.70, throttleDownRate:1.00,
+  maxAngle:5, maxRoll:120, maxPitch:120, maxYaw:20, hover:0.45, iLimit:50,
+  rollOutLimit:0.120, pitchOutLimit:0.120, yawOutLimit:0.120,
+  throttleExpo:0.70, throttleUpRate:0.50, throttleDownRate:0.50,
   motorIdle:0.08, motorMax:1.00, throttleCut:0.03, idleRampEnd:0.15,
   yawDeadband:0.02,
   deadband:30, armThr:1700, calThr:1700, failsafe:500, thrMin:1000, thrMax:2000,
   mahonyKp:2.0, mahonyKi:0.005, frate:500,
-  notchEnable:1, notchFreqHz:66.36, notchQ:10.0,
-  ekfAngleQ:0.0008, ekfBiasQ:0.000001, ekfAccelR:0.200, ekfMagR:0.200,
+  notchEnable:1, notchFreqHz:143.84, notchQ:10.0,
+  ekfAngleQ:0.0008, ekfBiasQ:0.000001, ekfAccelR:0.400, ekfMagR:0.200,
   ekfMagDeclinationDeg:0.0, ekfMagYawOffsetDeg:0.0, ekfMagYawSign:1,
   dshot:300, dshotMin:48, dshotMax:2047, bidir:0,
   wifiIp:'192.168.4.1', pollMs:250, plotBuf:300, gpsTrack:3000
@@ -1023,11 +1023,11 @@ function readCfgFromInputs(){
   CFG.mahonyKi = +document.getElementById('cfg-mki').value||0.005;
   CFG.frate    = +document.getElementById('cfg-frate').value||500;
   CFG.notchEnable = +document.getElementById('cfg-notchen').value||0;
-  CFG.notchFreqHz = +document.getElementById('cfg-notchhz').value||66.36;
+  CFG.notchFreqHz = +document.getElementById('cfg-notchhz').value||143.84;
   CFG.notchQ      = +document.getElementById('cfg-notchq').value||10.0;
   CFG.ekfAngleQ   = +document.getElementById('cfg-ekfangq').value||0.0008;
   CFG.ekfBiasQ    = +document.getElementById('cfg-ekfbiasq').value||0.000001;
-  CFG.ekfAccelR   = +document.getElementById('cfg-ekfaccr').value||0.060;
+  CFG.ekfAccelR   = +document.getElementById('cfg-ekfaccr').value||0.400;
   CFG.ekfMagR     = +document.getElementById('cfg-ekfmagr').value||0.200;
   CFG.ekfMagDeclinationDeg = +document.getElementById('cfg-ekfdecl').value||0.0;
   CFG.ekfMagYawOffsetDeg   = +document.getElementById('cfg-ekfmagoff').value||0.0;

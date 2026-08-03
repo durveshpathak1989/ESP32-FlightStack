@@ -4,8 +4,8 @@ ESP32-FlightStack is an open-source quadcopter flight-control stack for DIY dron
 
 A custom quadcopter flight controller built around the **Adafruit HUZZAH32 / ESP32-WROOM-32E**, written in Arduino C++ on top of FreeRTOS. The project targets both stable flight and rigorous embedded-systems research: real-time scheduling, sensor fusion, Wi-Fi telemetry, onboard logging, runtime PID tuning, autonomous calibration, and over-the-air firmware updates, all on a $10 microcontroller.
 
-**Firmware version:** v5.0.0  
-**Control loop:** 400 Hz, `esp_timer`-driven, pinned to Core 1  
+**Firmware version:** v6.0.0<br>
+**Control loop:** 400 Hz, `esp_timer`-driven, pinned to Core 1<br>
 **AHRS default:** Attitude EKF (switchable at runtime to Mahony or Madgwick)
 
 **Good GitHub topics:** `esp32`, `quadcopter`, `drone`, `uav`, `flight-controller`, `flight-control`, `embedded-c`, `esp-idf`, `arduino`, `freertos`, `pid-controller`, `imu`, `sensor-fusion`, `attitude-estimation`, `mpu9250`, `bmp280`, `madgwick-filter`, `motor-control`, `esc`
@@ -420,29 +420,29 @@ POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The
 
 | Key | Default | Meaning |
 |---|---:|---|
-| `max_angle_deg` | 20.0 | Maximum lean in ANGLE mode (degrees) |
-| `max_rate_dps` | 150.0 | Maximum roll rate in ACRO (deg/s) |
-| `max_pitch_rate_dps` | 150.0 | Maximum pitch rate in ACRO (deg/s) |
-| `yaw_max_rate_dps` | 90.0 | Maximum yaw rate (deg/s) |
-| `yaw_deadband` | 0.05 | Stick fraction below which heading hold activates |
+| `max_angle_deg` | 5.0 | Maximum lean in ANGLE mode (degrees) |
+| `max_rate_dps` | 120.0 | Maximum roll rate in ACRO (deg/s) |
+| `max_pitch_rate_dps` | 120.0 | Maximum pitch rate in ACRO (deg/s) |
+| `yaw_max_rate_dps` | 20.0 | Maximum yaw rate (deg/s) |
+| `yaw_deadband` | 0.02 | Stick fraction below which heading hold activates |
 
 ### PID authority limits
 
 | Key | Default | Meaning |
 |---|---:|---|
-| `roll_output_limit` | 0.500 | Max roll correction before mixing |
-| `pitch_output_limit` | 0.500 | Max pitch correction before mixing |
-| `yaw_output_limit` | 0.200 | Max yaw correction before mixing |
+| `roll_output_limit` | 0.120 | Max roll correction before mixing |
+| `pitch_output_limit` | 0.120 | Max pitch correction before mixing |
+| `yaw_output_limit` | 0.120 | Max yaw correction before mixing |
 
 ### Throttle shaping
 
 | Key | Default | Meaning |
 |---|---:|---|
-| `throttle_expo` | 0.50 | Softens low-throttle response |
-| `throttle_up_rate_per_sec` | 0.70 | Max throttle increase rate per second |
-| `throttle_down_rate_per_sec` | 1.00 | Max throttle decrease rate per second |
+| `throttle_expo` | 0.70 | Softens low-throttle response |
+| `throttle_up_rate_per_sec` | 0.50 | Max throttle increase rate per second |
+| `throttle_down_rate_per_sec` | 0.50 | Max throttle decrease rate per second |
 | `motor_idle` | 0.08 | Minimum motor output when armed and throttle above cut |
-| `motor_max` | 0.80 | Maximum motor output cap |
+| `motor_max` | 1.00 | Maximum motor output cap |
 | `throttle_cut` | 0.03 | Below this throttle, motors are cut |
 | `idle_ramp_end` | 0.15 | Throttle fraction where idle blending ends |
 
@@ -450,13 +450,13 @@ POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The
 
 | Key | Default |
 |---|---:|
-| `pid_roll_kp` | 0.00015 |
-| `pid_roll_ki` | 0.00100 |
-| `pid_roll_kd` | 0.00000 |
-| `pid_pitch_kp` | 0.00015 |
-| `pid_pitch_ki` | 0.00100 |
-| `pid_pitch_kd` | 0.00000 |
-| `pid_yaw_kp` | 0.00015 |
+| `pid_roll_kp` | 0.000900 |
+| `pid_roll_ki` | 0.000001 |
+| `pid_roll_kd` | 0.000000010 |
+| `pid_pitch_kp` | 0.001900 |
+| `pid_pitch_ki` | 0.000001 |
+| `pid_pitch_kd` | 0.000000010 |
+| `pid_yaw_kp` | 0.008000 |
 | `pid_yaw_ki` | 0.00100 |
 | `pid_yaw_kd` | 0.00000 |
 | `pid_ilimit` | 50.0 |
@@ -465,21 +465,21 @@ POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The
 
 | Key | Default |
 |---|---:|
-| `pid_angle_roll_kp` | 2.50 |
+| `pid_angle_roll_kp` | 1.50 |
 | `pid_angle_roll_ki` | 0.00 |
 | `pid_angle_roll_kd` | 0.000 |
-| `pid_angle_pitch_kp` | 2.50 |
+| `pid_angle_pitch_kp` | 1.00 |
 | `pid_angle_pitch_ki` | 0.00 |
 | `pid_angle_pitch_kd` | 0.000 |
-| `pid_angle_yaw_kp` | 2.50 |
+| `pid_angle_yaw_kp` | 1.00 |
 
 ### Notch filter
 
 | Key | Default | Meaning |
 |---|---:|---|
 | `notch_enable` | true | Enable static notch |
-| `notch_freq_hz` | 90.0 | Centre frequency (Hz) |
-| `notch_q` | 8.0 | Q factor — higher = narrower |
+| `notch_freq_hz` | 143.84 | Centre frequency (Hz) |
+| `notch_q` | 10.0 | Q factor — higher = narrower |
 
 ### AHRS
 
@@ -496,7 +496,7 @@ POST to `/tune` with a JSON body while **disarmed**. Any key can be omitted. The
 |---|---:|---|
 | `ekf_angle_q` | 0.0008 | Process noise — angle states |
 | `ekf_bias_q` | 0.000001 | Process noise — gyro bias states |
-| `ekf_accel_r` | 0.200 | Accel measurement noise (higher = trust less) |
+| `ekf_accel_r` | 0.400 | Accel measurement noise (higher = trust less) |
 | `ekf_mag_r` | 0.200 | Magnetometer measurement noise |
 | `ekf_mag_declination_deg` | 0.0 | Local magnetic declination |
 | `ekf_mag_yaw_offset_deg` | 0.0 | Yaw alignment offset |
@@ -893,7 +893,7 @@ OTA is gated on disarmed + throttle low + motors off. Confirm all three in the G
 
 ---
 
-## Known Firmware Issues (v5.0.0)
+## Known Firmware Issues (v6.0.0)
 
 The following issues are identified and tracked for the next release:
 
