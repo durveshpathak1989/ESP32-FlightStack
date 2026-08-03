@@ -1,13 +1,13 @@
 /*
  * Name: RC_FlightController.ino
  * Use: Main Arduino sketch that starts sensors, tasks, telemetry, calibration, PID control, and motor output.
- * Version: 5.0.0
+ * Version: 6.0.0
  * Created by: Durvesh Pathak dp676@cornell.edu
  */
 
 /**
  * ╔══════════════════════════════════════════════════════════════════╗
- * ║  RC_FlightController.ino  v5.0.0                                ║
+ * ║  RC_FlightController.ino  v6.0.0                                ║
  * ║  FlySky FS-iA6B iBUS  +  MPU-9250/6500  +  BMP280  +  GPS       ║
  * ║  Fully autonomous — no keyboard required                         ║
  * ╠══════════════════════════════════════════════════════════════════╣
@@ -111,18 +111,18 @@ static constexpr uint32_t TOF_TASK_PERIOD_MS        = 25;      // 40 Hz poll, ma
 static constexpr uint32_t TOF_STALE_MS              = 200;
 
 // ── Pilot command limits ────────────────────────────────────
-static constexpr float TUNE_MAX_ANGLE_DEG = 20.0f;
-static constexpr float TUNE_MAX_RATE_DPS  = 70.0f;
+static constexpr float TUNE_MAX_ANGLE_DEG = 5.0f;
+static constexpr float TUNE_MAX_RATE_DPS  = 120.0f;
 
 // ── PID output authority limits before motor mixing ─────────
-static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.100f;
-static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.100f;
-static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.100f;
+static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.120f;
+static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.120f;
+static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.120f;
 
 // ── Throttle shaping + motor output limits ──────────────────
-static constexpr float TUNE_THROTTLE_EXPO              = 0.50f;
-static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.70f;
-static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 1.00f;
+static constexpr float TUNE_THROTTLE_EXPO              = 0.70f;
+static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.50f;
+static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 0.50f;
 static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
 static constexpr float TUNE_MOTOR_MAX                  = 1.00f;
 static constexpr float TUNE_THROTTLE_CUT               = 0.03f;
@@ -130,37 +130,37 @@ static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
 
 // ── Initial PID gains loaded at boot ────────────────────────
 // Inner Loop
-static constexpr float TUNE_RATE_ROLL_KP   = 0.001500f;
-static constexpr float TUNE_RATE_ROLL_KI   = 0.001000f;
-static constexpr float TUNE_RATE_ROLL_KD   = 0.000000f;
+static constexpr float TUNE_RATE_ROLL_KP   = 0.000900f;
+static constexpr float TUNE_RATE_ROLL_KI   = 0.000001f;
+static constexpr float TUNE_RATE_ROLL_KD   = 0.000000010f;
 static constexpr float TUNE_RATE_ROLL_FF   = 0.000000f;
 static constexpr float TUNE_RATE_ROLL_D_LPF_HZ = 100.0f;
-static constexpr float TUNE_RATE_PITCH_KP  = 0.002500f;
-static constexpr float TUNE_RATE_PITCH_KI  = 0.001000f;
-static constexpr float TUNE_RATE_PITCH_KD  = 0.000000f;
+static constexpr float TUNE_RATE_PITCH_KP  = 0.001900f;
+static constexpr float TUNE_RATE_PITCH_KI  = 0.000001f;
+static constexpr float TUNE_RATE_PITCH_KD  = 0.000000010f;
 static constexpr float TUNE_RATE_PITCH_FF  = 0.000000f;
 static constexpr float TUNE_RATE_PITCH_D_LPF_HZ = 100.0f;
-static constexpr float TUNE_RATE_YAW_KP    = 0.001000f;
+static constexpr float TUNE_RATE_YAW_KP    = 0.008000f;
 static constexpr float TUNE_RATE_YAW_KI    = 0.001000f;
 static constexpr float TUNE_RATE_YAW_KD    = 0.0000000f;
 static constexpr float TUNE_RATE_YAW_FF    = 0.000000f;
 static constexpr float TUNE_RATE_YAW_D_LPF_HZ = 100.0f;
 // Outer Loop
-static constexpr float TUNE_ANGLE_ROLL_KP  = 2.50f;
+static constexpr float TUNE_ANGLE_ROLL_KP  = 1.50f;
 static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
 static constexpr float TUNE_ANGLE_ROLL_KD  = 0.000000f;
-static constexpr float TUNE_ANGLE_PITCH_KP = 2.50f;
+static constexpr float TUNE_ANGLE_PITCH_KP = 1.00f;
 static constexpr float TUNE_ANGLE_PITCH_KI = 0.000f;
 static constexpr float TUNE_ANGLE_PITCH_KD = 0.000000f;
 // Outer Loop — Yaw heading hold
-static constexpr float TUNE_ANGLE_YAW_KP     = 2.50f;   // heading-hold Kp (tune up if soft)
+static constexpr float TUNE_ANGLE_YAW_KP     = 1.00f;   // heading-hold Kp (tune up if soft)
 static constexpr float TUNE_YAW_DEADBAND     = 0.02f;   // |yaw stick| below this = hold
 static constexpr float TUNE_YAW_MAX_RATE_DPS = 20.0f;   // cap on commanded yaw rate
 
 // ── Motor vibration notch filter ────────────────────────────
 // Runs before EKF and before rate PID. Keep center below 0.45*sample rate.
 static constexpr bool  TUNE_NOTCH_ENABLE    = true;
-static constexpr float TUNE_NOTCH_FREQ_HZ   = 66.36f;  // start point; tune from motor log/FFT
+static constexpr float TUNE_NOTCH_FREQ_HZ   = 143.84f;  // start point; tune from motor log/FFT
 static constexpr float TUNE_NOTCH_Q         = 10.0f;   // higher = narrower notch
 static constexpr float NOTCH_SAMPLE_HZ      = 400.0f;  // control loop sample rate
 // ── Dynamic FFT-driven notch tracking ───────────────────────
@@ -188,7 +188,7 @@ static constexpr bool LOG_DYNAMIC_NOTCH_DEBUG = false;
 // Higher R = trust that sensor less. Higher Q = allow faster EKF state motion.
 static constexpr float TUNE_EKF_ANGLE_Q        = 0.0008f;
 static constexpr float TUNE_EKF_BIAS_Q         = 0.000001f;
-static constexpr float TUNE_EKF_ACCEL_R        = 0.200f;
+static constexpr float TUNE_EKF_ACCEL_R        = 0.400f;
 static constexpr float TUNE_EKF_MAG_R          = 0.200f;
 static constexpr float TUNE_EKF_MAG_DECL_DEG   = 0.0f;
 static constexpr float TUNE_EKF_MAG_YAW_OFF_DEG= 0.0f;
@@ -2718,7 +2718,7 @@ static void taskSerial(void* /*pv*/)
     uint32_t tick = 0;
 
     DBG_PRINTLN(F("\n╔══════════════════════════════════════════════════════╗"));
-    DBG_PRINTLN(F("  ║  FlySky iBUS + MPU-9250/6500 + BMP280 + GPS  v5.0.0  ║"));
+    DBG_PRINTLN(F("  ║  FlySky iBUS + MPU-9250/6500 + BMP280 + GPS  v6.0.0  ║"));
     DBG_PRINTLN(F("  ║  Wi-Fi: ESP32-DRONE / 12345678 → 192.168.4.1         ║"));
     DBG_PRINTLN(F("  ║  taskControl: timer 400 Hz, original RC              ║"));
     DBG_PRINTLN(F("  ║  Type 'p' to toggle the [PID] tuning trace.          ║"));
