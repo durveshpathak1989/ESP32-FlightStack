@@ -1,0 +1,192 @@
+name: Build 18-state EKF firmware
+
+on:
+  push:
+    branches:
+      - agent/18-state-ekf-integration
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wire-build-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out integration branch and submodules
+        uses: actions/checkout@v4
+        with:
+          ref: agent/18-state-ekf-integration
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: true
+
+      - name: Wire flight controller to full-state EKF
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('RC_FlightController/RC_FlightController.ino')
+          text = path.read_text(encoding='utf-8')
+          original = text
+
+          def insert_after_once(source: str, needle: str, addition: str) -> str:
+              if addition.strip() in source:
+                  return source
+              count = source.count(needle)
+              if count != 1:
+                  raise SystemExit(f'Expected one occurrence of {needle!r}, found {count}')
+              return source.replace(needle, needle + addition, 1)
+
+          text = insert_after_once(
+              text,
+              'static constexpr float TUNE_MADGWICK_BETA       = 0.080f;\n',
+              '\n// Experimental full-state EKF control feedback. Active only when the\n'
+              '// selected AHRS mode is EKF. A blend of 1.0 uses the EKF body-rate\n'
+              '// estimate directly; lower values retain some filtered-gyro feedback.\n'
+              'static constexpr bool  TUNE_EKF_RATE_FEEDBACK_ENABLE = true;\n'
+              'static constexpr float TUNE_EKF_RATE_BLEND           = 1.0f;\n'
+          )
+
+          text = insert_after_once(
+              text,
+              'static bool  g_yawHoldActive = false;\n',
+              'static uint32_t g_lastFusedTofTimestampMs = 0;\n'
+          )
+
+          tof_marker = '                attitudeEKF.update(ekfIn, dt, ekfOut);\n'
+          tof_addition = '''
+
+                // Fuse each physical ToF sample once, from the same task that owns
+                // the EKF. The EKF tilt-compensates range into PZ and differentiates
+                // consecutive sensor timestamps to correct VZ.
+                float tofDistanceM = 0.0f;
+                uint32_t tofSampleTimestampMs = 0;
+                bool tofSampleValid = false;
+                if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
+                    tofDistanceM = g_state.tofDistance_m;
+                    tofSampleTimestampMs = g_state.tofLastUpdate_ms;
+                    tofSampleValid = g_state.tofValid;
+                    xSemaphoreGive(g_flightMutex);
+                }
+                if (tofSampleValid &&
+                    tofSampleTimestampMs != 0 &&
+                    tofSampleTimestampMs != g_lastFusedTofTimestampMs) {
+                    attitudeEKF.updateTofMeasurement(tofDistanceM, tofSampleTimestampMs);
+                    g_lastFusedTofTimestampMs = tofSampleTimestampMs;
+                }
+'''
+          if 'attitudeEKF.updateTofMeasurement(tofDistanceM, tofSampleTimestampMs);' not in text:
+              if text.count(tof_marker) != 1:
+                  raise SystemExit(f'Expected one EKF update marker, found {text.count(tof_marker)}')
+              text = text.replace(tof_marker, tof_marker + tof_addition, 1)
+
+          old_rates = '''        float gx    = imuOk ? gxf : 0.0f;
+        float gy    = imuOk ? gyf : 0.0f;
+        float gz    = imuOk ? gzf : 0.0f;
+'''
+          new_rates = '''        float gx = imuOk ? gxf : 0.0f;
+        float gy = imuOk ? gyf : 0.0f;
+        float gz = imuOk ? gzf : 0.0f;
+
+        // In EKF mode, use the new EKF body-rate states as rate-loop feedback.
+        // Other AHRS modes retain the proven filtered-gyro path.
+        if (imuOk &&
+            TUNE_EKF_RATE_FEEDBACK_ENABLE &&
+            g_ahrsFilterModeActive == 0 &&
+            attitudeEKF.bodyRates().valid) {
+            const float ekfBlend = constrain(TUNE_EKF_RATE_BLEND, 0.0f, 1.0f);
+            gx = (1.0f - ekfBlend) * gxf + ekfBlend * attitudeEKF.rollRateDps();
+            gy = (1.0f - ekfBlend) * gyf + ekfBlend * attitudeEKF.pitchRateDps();
+            gz = (1.0f - ekfBlend) * gzf + ekfBlend * attitudeEKF.yawRateDps();
+        }
+'''
+          if new_rates.strip() not in text:
+              if text.count(old_rates) != 1:
+                  raise SystemExit(f'Expected one rate feedback block, found {text.count(old_rates)}')
+              text = text.replace(old_rates, new_rates, 1)
+
+          if text == original:
+              print('Flight-controller wiring already present; no source changes required.')
+          else:
+              path.write_text(text, encoding='utf-8')
+              print('Applied full-state EKF and ToF wiring to RC_FlightController.ino')
+          PY
+
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 platform
+        shell: bash
+        run: |
+          arduino-cli config init
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+      - name: Compile firmware
+        shell: bash
+        run: |
+          rm -rf build
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --build-path build \
+            --export-binaries \
+            RC_FlightController
+
+      - name: Collect binaries and checksums
+        shell: bash
+        run: |
+          OUT='firmware/agent-18-state-ekf-integration'
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+
+          find build -maxdepth 1 -type f \( \
+            -name '*.bin' -o \
+            -name '*.elf' -o \
+            -name '*.map' \
+          \) -print -exec cp {} "$OUT"/ \;
+
+          if ! find "$OUT" -maxdepth 1 -name '*.bin' -print -quit | grep -q .; then
+            echo 'No firmware binary was produced.' >&2
+            exit 1
+          fi
+
+          (
+            cd "$OUT"
+            sha256sum * > SHA256SUMS.txt
+          )
+
+          cat > "$OUT/BUILD_INFO.txt" <<EOF
+          Branch: agent/18-state-ekf-integration
+          Source commit before generated build commit: $GITHUB_SHA
+          EKF submodule commit: $(git -C RC_FlightController/src/Submodules/EKF rev-parse HEAD)
+          FQBN: esp32:esp32:esp32
+          Built UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+
+      - name: Commit wired source and binaries to branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add RC_FlightController/RC_FlightController.ino
+          git add firmware/agent-18-state-ekf-integration
+
+          if git diff --cached --quiet; then
+            echo 'No source or binary changes to commit.'
+          else
+            git commit -m 'Wire 18-state EKF and publish firmware binaries [skip ci]'
+            git push origin HEAD:agent/18-state-ekf-integration
+          fi
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ESP32-FlightStack-18-state-EKF
+          path: firmware/agent-18-state-ekf-integration
+          if-no-files-found: error
+          retention-days: 30
