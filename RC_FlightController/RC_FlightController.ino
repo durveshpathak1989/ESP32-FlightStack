@@ -2932,6 +2932,16 @@ void setup()
     Serial.begin(115200);
     delay(600);
 
+    // Print the immutable CI build identity before peripheral/task startup so
+    // field crash logs can be matched to the exact source tree and ELF.
+    DBG_PRINTF("[BOOT] Firmware %s %s build=%s source=%s@%s dirty=%d\n",
+               FW_NAME,
+               FW_VERSION,
+               FW_BUILD_ID,
+               FW_SOURCE_BRANCH,
+               FW_SOURCE_COMMIT,
+               FW_SOURCE_DIRTY);
+
     g_flightMutex = xSemaphoreCreateMutex();
     g_tuneMutex   = xSemaphoreCreateMutex();
     g_timingMutex = xSemaphoreCreateMutex();
