@@ -83,6 +83,10 @@
 #include "src/Platforms/Esp32/Storage/PreferencesTuningStore.h"
 #include "src/Platforms/Esp32/Runtime/Esp32FlightScheduler.h"
 #include "src/Platforms/Esp32/Runtime/SnapshotRte.h"
+#include "src/Platforms/Esp32/Tasks/CpuServiceTask.h"
+#include "src/Platforms/Esp32/Tasks/GpsServiceTask.h"
+#include "src/Platforms/Esp32/Tasks/BarometerServiceTask.h"
+#include "src/Platforms/Esp32/Tasks/TofServiceTask.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
@@ -223,7 +227,14 @@ SpectrumAnalyzer spectrumAnalyzer(NOTCH_SAMPLE_HZ);
 // ─────────────────────────────────────────────────────────────
 static FlightState       g_state;
 static SnapshotRte<FlightState> flightStateRte(g_state);
+static GpsServiceTask gpsServiceTask(gps, flightStateRte, g_state);
+static CpuServiceTask cpuServiceTask(cpuUtilization, flightStateRte, g_state);
 static SemaphoreHandle_t g_i2cMutex;
+static TofServiceTask tofServiceTask(
+    tofSensor, g_i2cMutex, flightStateRte, g_state,
+    TOF_TASK_PERIOD_MS, TOF_STALE_MS);
+static BarometerServiceTask barometerServiceTask(
+    bmp280, g_i2cMutex, flightStateRte, g_state);
 
 static volatile uint32_t g_pidResetCount = 0;
 static volatile uint32_t g_modeTransitionCount = 0;
@@ -1099,30 +1110,7 @@ static void runAutonomousCalibration()
 // ─────────────────────────────────────────────────────────────
 static void taskGPS(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(20);
-    TickType_t lastWake = xTaskGetTickCount();
-    uint32_t lastPrintMs = 0;
-
-    for (;;) {
-        gps.update();
-        GPSData d = gps.get();
-        if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
-            g_state.gps = d; flightStateRte.unlock();
-        }
-        if (millis() - lastPrintMs >= 5000) {
-            if (d.valid)
-                DBG_PRINTF("[GPS] Fix  Lat=%.6f  Lon=%.6f  Alt=%.1fm  Sats=%d"
-                              "  HDOP=%.1f  Speed=%.1fkm/h  UTC=%02d:%02d:%02d\n",
-                              d.latitude, d.longitude, d.altitude_m,
-                              d.satellites, d.hdop, d.speed_kmh,
-                              d.hour, d.minute, d.second);
-            else
-                DBG_PRINTF("[GPS] No fix  Sats=%d  Sentences=%lu\n",
-                              d.satellites, (unsigned long)d.sentenceCount);
-            lastPrintMs = millis();
-        }
-        vTaskDelayUntil(&lastWake, period);
-    }
+    gpsServiceTask.run();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2333,38 +2321,7 @@ static void taskSerial(void* /*pv*/)
 // ─────────────────────────────────────────────────────────────
 static void taskToF(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(TOF_TASK_PERIOD_MS);
-    TickType_t lastWake = xTaskGetTickCount();
-
-    for (;;) {
-        bool ready = tofSensor.isReady();
-        if (ready && xSemaphoreTake(g_i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            tofSensor.update();
-            ready = tofSensor.isReady();
-            xSemaphoreGive(g_i2cMutex);
-        }
-
-        FlightToFReading r = tofSensor.reading();
-        uint32_t ageMs = ready ? tofSensor.ageMs() : UINT32_MAX;
-        bool valid = ready && r.valid && (ageMs <= TOF_STALE_MS);
-
-        if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
-            g_state.tofReady         = ready;
-            g_state.tofValid         = valid;
-            g_state.tofDistance_mm   = r.distanceMm;
-            g_state.tofDistance_m    = r.distanceMm * 0.001f;
-            g_state.tofRangeStatus   = r.rangeStatus;
-            g_state.tofObjectCount   = r.objectCount;
-            g_state.tofStreamCount   = r.streamCount;
-            g_state.tofSignalMcps    = r.signalMcps;
-            g_state.tofAmbientMcps   = r.ambientMcps;
-            g_state.tofAge_ms        = ageMs;
-            g_state.tofLastUpdate_ms = r.lastUpdateMs;
-            flightStateRte.unlock();
-        }
-
-        vTaskDelayUntil(&lastWake, period);
-    }
+    tofServiceTask.run();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2372,49 +2329,7 @@ static void taskToF(void* /*pv*/)
 // ─────────────────────────────────────────────────────────────
 static void taskBMP(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(50);
-    TickType_t lastWake = xTaskGetTickCount();
-    bool bmpVzInit = false;
-    float prevBmpAltM = 0.0f;
-    uint32_t prevBmpMs = 0;
-
-    for (;;) {
-        BMP280Data b;
-        bool haveBmpSample = false;
-        bool bmpReadOk = false;
-
-        if (xSemaphoreTake(g_i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            bmpReadOk = bmp280.read(b);
-            haveBmpSample = true;
-            xSemaphoreGive(g_i2cMutex);
-        }
-
-        if (bmpReadOk) {
-            uint32_t nowMsBmp = millis();
-            float bmpVz = 0.0f;
-            if (b.valid && bmpVzInit && nowMsBmp > prevBmpMs) {
-                float dtBmp = (nowMsBmp - prevBmpMs) * 0.001f;
-                bmpVz = (b.altitude_m - prevBmpAltM) / dtBmp;
-            }
-            if (b.valid) { prevBmpAltM = b.altitude_m; prevBmpMs = nowMsBmp; bmpVzInit = true; }
-
-            if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
-                g_state.bmpTemp_c      = b.temperature_c;
-                g_state.bmpPressure_hpa = b.pressure_hpa;
-                g_state.bmpAltitude_m  = b.altitude_m;
-                g_state.bmpVerticalSpeed_mps = bmpVz;
-                g_state.bmpValid       = b.valid;
-                flightStateRte.unlock();
-            }
-        } else if (haveBmpSample) {
-            if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
-                g_state.bmpValid = false;
-                g_state.bmpVerticalSpeed_mps = 0.0f;
-                flightStateRte.unlock();
-            }
-        }
-        vTaskDelayUntil(&lastWake, period);
-    }
+    barometerServiceTask.run();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2422,20 +2337,7 @@ static void taskBMP(void* /*pv*/)
 // ─────────────────────────────────────────────────────────────
 static void taskCPU(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(500);
-    TickType_t lastWake = xTaskGetTickCount();
-
-    for (;;) {
-        cpuUtilization.update();
-        CPUUtilizationData c = cpuUtilization.get();
-        if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
-            g_state.cpuCore0_pct = c.core0_pct;
-            g_state.cpuCore1_pct = c.core1_pct;
-            g_state.cpuValid     = c.valid;
-            flightStateRte.unlock();
-        }
-        vTaskDelayUntil(&lastWake, period);
-    }
+    cpuServiceTask.run();
 }
 
 
