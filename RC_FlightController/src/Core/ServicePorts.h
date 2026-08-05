@@ -101,6 +101,43 @@ public:
     virtual flight::ReceiverFrame ReadFrame() = 0;
 };
 
+struct ImuServiceSample {
+    float ax_g, ay_g, az_g;
+    float gx_dps, gy_dps, gz_dps;
+    float mx_uT, my_uT, mz_uT;
+    float temp_c;
+    bool magneticFieldValid;
+};
+
+class ImuServicePort {
+public:
+    virtual ~ImuServicePort() = default;
+    virtual bool InitSensor() = 0;
+    virtual bool ReadSample(ImuServiceSample& sample) = 0;
+    virtual bool HasMagnetometer() const = 0;
+    virtual bool LoadCalibration() = 0;
+    virtual void PrintCalibration() const = 0;
+};
+
+struct BatteryServiceSample {
+    float batteryVoltage_v;
+    float adcVoltage_v;
+    float cellVoltage_v;
+    float percent;
+    bool valid;
+    bool low;
+    bool critical;
+};
+
+class BatteryServicePort {
+public:
+    virtual ~BatteryServicePort() = default;
+    virtual bool InitMonitor() = 0;
+    virtual BatteryServiceSample ReadStatus(std::uint32_t nowMs,
+                                            bool force) = 0;
+    virtual float CalibrationScale() const = 0;
+};
+
 enum class CalibrationRequest : std::uint8_t {
     ImuAllGuided,
     Esc

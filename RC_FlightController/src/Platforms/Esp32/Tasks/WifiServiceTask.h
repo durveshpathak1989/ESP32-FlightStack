@@ -10,9 +10,9 @@
 // remain adapters; application services own validation and safety policy.
 class WifiServiceTask : public rte::SoftwareComponent {
 public:
-    WifiServiceTask(rte::WifiServicePort& service,
+    WifiServiceTask(rte::WifiServicePort& service, rte::ClockServicePort& clock,
                     volatile std::uint32_t& serviceTimeUs)
-        : service_(service), serviceTimeUs_(serviceTimeUs) {}
+        : service_(service), clock_(clock), serviceTimeUs_(serviceTimeUs) {}
 
     void configure(const char* ssid, const char* password) {
         ssid_ = ssid;
@@ -22,9 +22,9 @@ public:
     void Init() override { service_.InitAccessPoint(ssid_, password_); }
 
     void Periodic() override {
-        const std::uint32_t startUs = micros();
+        const std::uint32_t startUs = clock_.microseconds();
         service_.PeriodicService();
-        serviceTimeUs_ = micros() - startUs;
+        serviceTimeUs_ = clock_.microseconds() - startUs;
     }
 
     [[noreturn]] void run() {
@@ -37,6 +37,7 @@ public:
 
 private:
     rte::WifiServicePort& service_;
+    rte::ClockServicePort& clock_;
     volatile std::uint32_t& serviceTimeUs_;
     const char* ssid_ = "";
     const char* password_ = "";

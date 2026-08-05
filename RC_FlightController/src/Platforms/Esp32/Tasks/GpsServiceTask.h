@@ -9,9 +9,9 @@
 
 class GpsServiceTask : public rte::SoftwareComponent {
 public:
-    GpsServiceTask(rte::GpsServicePort& sensor, SnapshotRte<FlightState>& rte,
-                   FlightState& state)
-        : sensor_(sensor), rte_(rte), state_(state) {}
+    GpsServiceTask(rte::GpsServicePort& sensor, rte::ClockServicePort& clock,
+                   SnapshotRte<FlightState>& rte, FlightState& state)
+        : sensor_(sensor), clock_(clock), rte_(rte), state_(state) {}
 
     void Init() override {
         lastPrintMs_ = 0;
@@ -43,7 +43,7 @@ public:
             state_.gps.sentenceCount = data.sentenceCount;
             rte_.unlock();
         }
-        if (millis() - lastPrintMs_ < 5000) return;
+        if (clock_.milliseconds() - lastPrintMs_ < 5000) return;
         if (data.valid) {
             DBG_PRINTF("[GPS] Fix  Lat=%.6f  Lon=%.6f  Alt=%.1fm  Sats=%d"
                        "  HDOP=%.1f  Speed=%.1fkm/h  UTC=%02d:%02d:%02d\n",
@@ -55,7 +55,7 @@ public:
                        data.satellites,
                        static_cast<unsigned long>(data.sentenceCount));
         }
-        lastPrintMs_ = millis();
+        lastPrintMs_ = clock_.milliseconds();
     }
 
     [[noreturn]] void run() {
@@ -70,6 +70,7 @@ public:
 
 private:
     rte::GpsServicePort& sensor_;
+    rte::ClockServicePort& clock_;
     SnapshotRte<FlightState>& rte_;
     FlightState& state_;
     std::uint32_t lastPrintMs_ = 0;

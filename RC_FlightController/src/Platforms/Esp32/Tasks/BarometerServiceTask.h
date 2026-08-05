@@ -11,8 +11,9 @@
 class BarometerServiceTask : public rte::SoftwareComponent {
 public:
     BarometerServiceTask(rte::BarometerServicePort& sensor,
+                         rte::ClockServicePort& clock,
                          SnapshotRte<FlightState>& rte, FlightState& state)
-        : sensor_(sensor), rte_(rte), state_(state) {}
+        : sensor_(sensor), clock_(clock), rte_(rte), state_(state) {}
 
     void Init() override {
         initialized_ = false;
@@ -40,7 +41,7 @@ public:
 
 private:
     void publish(const rte::BarometerServiceSample& sample) {
-        const std::uint32_t nowMs = millis();
+        const std::uint32_t nowMs = clock_.milliseconds();
         float verticalSpeed = 0.0f;
         if (sample.valid && initialized_ && nowMs > previousMs_) {
             const float dt = (nowMs - previousMs_) * 0.001f;
@@ -70,6 +71,7 @@ private:
     }
 
     rte::BarometerServicePort& sensor_;
+    rte::ClockServicePort& clock_;
     SnapshotRte<FlightState>& rte_;
     FlightState& state_;
     bool initialized_ = false;

@@ -13,10 +13,11 @@ public:
 
     ReceiverServiceTask(rte::ReceiverServicePort& receiver,
                         rte::CalibrationServicePort& calibration,
+                        rte::ClockServicePort& clock,
                         rte::SenderReceiverPort<flight::ReceiverFrame>& outputPort,
                         LogFunction log, std::uint16_t escThreshold,
                         float throttleCut, std::uint8_t escChannelIndex)
-        : receiver_(receiver), calibration_(calibration), outputPort_(outputPort),
+        : receiver_(receiver), calibration_(calibration), clock_(clock), outputPort_(outputPort),
           log_(log), escThreshold_(escThreshold), throttleCut_(throttleCut),
           escChannelIndex_(escChannelIndex) {}
 
@@ -32,7 +33,7 @@ public:
     void Periodic() override {
         latestFrame_ = receiver_.ReadFrame();
         outputPort_.send(latestFrame_,
-                         static_cast<std::uint64_t>(millis()) * 1000ULL);
+                         static_cast<std::uint64_t>(clock_.milliseconds()) * 1000ULL);
         serviceImuCalibration(latestFrame_.command);
         serviceEscCalibration(latestFrame_.command);
         reportHealth(latestFrame_);
@@ -82,7 +83,7 @@ private:
     }
 
     void reportHealth(const flight::ReceiverFrame& frame) {
-        const std::uint32_t nowMs = millis();
+        const std::uint32_t nowMs = clock_.milliseconds();
         if (nowMs - lastReportMs_ < 1000) return;
         const std::uint32_t failures = frame.checksumFailureCount;
         const std::uint32_t failuresPerSecond = failures - lastFailureCount_;
@@ -96,6 +97,7 @@ private:
 
     rte::ReceiverServicePort& receiver_;
     rte::CalibrationServicePort& calibration_;
+    rte::ClockServicePort& clock_;
     rte::SenderReceiverPort<flight::ReceiverFrame>& outputPort_;
     LogFunction log_;
     std::uint16_t escThreshold_;

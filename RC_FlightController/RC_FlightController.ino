@@ -51,6 +51,7 @@
 #include "src/Submodules/DebugConfig/DebugConfig.h"
 #include "src/Submodules/MotorControl/MotorControl.h"
 #include "src/Platforms/Esp32/Imu/SelectedImu.h"
+#include "src/Platforms/Esp32/Imu/SelectedImuServiceAdapter.h"
 #include "src/Submodules/iFly/FlySkyiBUS.h"
 #include "src/Submodules/WiFiTelemetry/TelemetryWiFi.h"
 #include "src/Submodules/BatteryMonitor/BatteryMonitor.h"
@@ -97,10 +98,13 @@
 #include "src/Platforms/Esp32/Services/Esp32RangeServiceAdapter.h"
 #include "src/Platforms/Esp32/Services/Esp32ReceiverServiceAdapter.h"
 #include "src/Platforms/Esp32/Services/CalibrationServiceAdapter.h"
+#include "src/Platforms/Esp32/Services/Esp32BatteryServiceAdapter.h"
+#include "src/Platforms/Esp32/Services/Esp32SystemServiceAdapter.h"
 #include "src/Platforms/Esp32/Motor/Esp32MotorServiceAdapter.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 static Esp32MotorServiceAdapter motorServiceAdapter;
+static Esp32SystemServiceAdapter clockServiceAdapter;
 
 // ─────────────────────────────────────────────────────────────
 //  IMU loop timing instrumentation — Test 7.1
@@ -141,7 +145,8 @@ struct ExecTimingStats {
 static volatile ExecTimingStats g_execTiming = {0,0,0,0,0,0,0,0,0,0,0,0,0};
 static volatile uint32_t g_lastWifiServiceUs = 0;
 static TelemetryWifiServiceAdapter wifiServiceAdapter(telemetryWiFi);
-static WifiServiceTask wifiServiceTask(wifiServiceAdapter, g_lastWifiServiceUs);
+static WifiServiceTask wifiServiceTask(
+    wifiServiceAdapter, clockServiceAdapter, g_lastWifiServiceUs);
 
 static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
                                      uint32_t periodUs, uint32_t targetUs)
@@ -169,7 +174,7 @@ static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
 
     // Print only once per second so Serial does not dominate the control loop.
     static uint32_t lastPrintMs = 0;
-    uint32_t nowMs = millis();
+    uint32_t nowMs = clockServiceAdapter.milliseconds();
 
     if (nowMs - lastPrintMs >= 1000) {
         lastPrintMs = nowMs;
@@ -216,6 +221,7 @@ static void resetTimingStats()
 //  IMU + attitude estimator objects
 // ─────────────────────────────────────────────────────────────
 SelectedImu imu(PIN_MPU_CS);
+SelectedImuServiceAdapter imuServiceAdapter(imu);
 CalibrationManager calManager;
 MahonyAHRS mahony;
 AttitudeEstimate mahonyAtt;
@@ -230,6 +236,10 @@ NotchFilter notchAx, notchAy, notchAz;
 NotchFilter notchGx, notchGy, notchGz;
 static FlightToF_VL53L4CX tofSensor(Wire);
 static BatteryMonitor batteryMonitor;
+static Esp32BatteryServiceAdapter batteryServiceAdapter(
+    batteryMonitor, PIN_BATTERY_ADC, BATTERY_CELL_COUNT,
+    BATTERY_RTOP_OHMS, BATTERY_RBOTTOM_OHMS,
+    BATTERY_NOMINAL_V, BATTERY_ADC_CAL_SCALE);
 static float    g_dynamicNotchHz = TUNE_NOTCH_FREQ_HZ;
 static bool     g_dynamicNotchTracking = false;
 static uint32_t g_lastDynamicNotchUpdateMs = 0;
@@ -247,7 +257,8 @@ static FlightState       g_state;
 static SnapshotRte<FlightState> flightStateRte(g_state);
 static Esp32GpsServiceAdapter gpsServiceAdapter(
     gps, PIN_GPS_RX, PIN_GPS_TX, 9600);
-static GpsServiceTask gpsServiceTask(gpsServiceAdapter, flightStateRte, g_state);
+static GpsServiceTask gpsServiceTask(
+    gpsServiceAdapter, clockServiceAdapter, flightStateRte, g_state);
 static Esp32CpuLoadServiceAdapter cpuLoadServiceAdapter(cpuUtilization);
 static CpuServiceTask cpuServiceTask(cpuLoadServiceAdapter, flightStateRte, g_state);
 static SemaphoreHandle_t g_i2cMutex;
@@ -259,7 +270,7 @@ static Esp32BarometerServiceAdapter barometerServiceAdapter(
 static TofServiceTask tofServiceTask(
     rangeServiceAdapter, flightStateRte, g_state, TOF_TASK_PERIOD_MS);
 static BarometerServiceTask barometerServiceTask(
-    barometerServiceAdapter, flightStateRte, g_state);
+    barometerServiceAdapter, clockServiceAdapter, flightStateRte, g_state);
 
 static volatile uint32_t g_pidResetCount = 0;
 static volatile uint32_t g_modeTransitionCount = 0;
@@ -630,7 +641,7 @@ static void updateControlTransitionCounters(const flight::PilotCommand& cmd)
     const bool armedNow = cmd.valid &&
                           cmd.mode != flight::FlightMode::Disarmed &&
                           cmd.mode != flight::FlightMode::Failsafe;
-    const uint32_t nowMs = millis();
+    const uint32_t nowMs = clockServiceAdapter.milliseconds();
 
     if (!g_transitionTrackerInitialized) {
         g_transitionTrackerInitialized = true;
@@ -901,12 +912,13 @@ static void taskGPS(void* /*pv*/)
 //  taskRC — Core 0, priority 3
 //  Important: do NOT use vTaskDelayUntil(5 ms) here if the FreeRTOS tick
 //  is coarse. On this build, one tick is behaving like ~40 ms, which can
-//  starve the iBUS parser. Use micros() pacing + taskYIELD() instead.
+//  starve the iBUS parser. Use clockServiceAdapter.microseconds() pacing + taskYIELD() instead.
 // ─────────────────────────────────────────────────────────────
 static void taskRC(void* /*pv*/)
 {
     static ReceiverServiceTask receiverTask(
-        receiverServiceAdapter, calibrationServiceAdapter, receiverFramePort,
+        receiverServiceAdapter, calibrationServiceAdapter, clockServiceAdapter,
+        receiverFramePort,
         calLog, ESC_CALIB_VRB_THRESHOLD, TUNE_THROTTLE_CUT, RC_CH_AUX5);
     receiverTask.run();
 }
@@ -941,7 +953,7 @@ static void updateDynamicNotchFromFFT()
     if (!TUNE_DYNAMIC_NOTCH_ENABLE) return;
 
     static uint32_t lastUpdateMs = 0;
-    uint32_t nowMs = millis();
+    uint32_t nowMs = clockServiceAdapter.milliseconds();
 
     if (nowMs - lastUpdateMs < DYN_NOTCH_UPDATE_MS) {
         return;
@@ -1101,6 +1113,9 @@ class FlightControlSwc final : public rte::SoftwareComponent {
 public:
     void Init() override;
     void Periodic() override;
+    void SetActivationCount(uint32_t releases) { releases_ = releases; }
+private:
+    uint32_t releases_ = 1;
 };
 static FlightControlSwc flightControlSwc;
 
@@ -1119,21 +1134,17 @@ void FlightControlSwc::Periodic()
         static uint32_t lastUs = 0;
         if (g_tuning.dirty) applyTuningToObjects();
 
-        // Block until the high-resolution 400 Hz timer releases this task.
-        // pdTRUE clears any accumulated notifications, so if a previous cycle
-        // ran long we skip stale releases instead of trying to catch up.
-        uint32_t releases = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        if (releases > 1) {
-            g_execTiming.missedTimerReleases += (releases - 1);
+        if (releases_ > 1) {
+            g_execTiming.missedTimerReleases += (releases_ - 1);
         }
 
-        uint32_t nowUs = micros();
+        uint32_t nowUs = clockServiceAdapter.microseconds();
         uint32_t periodUs = (lastUs == 0) ? TARGET_US : (nowUs - lastUs);
         lastUs = nowUs;
 
         // Execution timer starts AFTER the period wait.
         // This measures actual control work, not intentional wait time.
-        uint32_t execStartUs = micros();
+        uint32_t execStartUs = clockServiceAdapter.microseconds();
 
         float dt = (float)periodUs * 1e-6f;
         if (dt <= 0.0f || dt > 0.05f) {
@@ -1141,8 +1152,8 @@ void FlightControlSwc::Periodic()
             periodUs = TARGET_US;
         }
 
-        batteryMonitor.update(millis());
-        const BatteryStatus bat = batteryMonitor.status();
+        const rte::BatteryServiceSample bat =
+            batteryServiceAdapter.ReadStatus(clockServiceAdapter.milliseconds(), false);
         const float batteryVoltageForRpm = bat.valid ? bat.batteryVoltage_v : BATTERY_NOMINAL_V;
 
         // ── Welford timing accumulator (Test 7.1) ────────────
@@ -1194,11 +1205,11 @@ void FlightControlSwc::Periodic()
         }
 
         // ── IMU read + EKF AHRS ───────────────────────────────
-        ImuSensorData s;
+        rte::ImuServiceSample s{};
         AttitudeEstimate   att;
-        uint32_t phaseStartUs = micros();
-        bool imuOk = imu.readScaled(s);
-        g_execTiming.lastImuUs = micros() - phaseStartUs;
+        uint32_t phaseStartUs = clockServiceAdapter.microseconds();
+        bool imuOk = imuServiceAdapter.ReadSample(s);
+        g_execTiming.lastImuUs = clockServiceAdapter.microseconds() - phaseStartUs;
 
         float gxf = 0, gyf = 0, gzf = 0;
         float filtAx = 0.0f, filtAy = 0.0f, filtAz = 0.0f;
@@ -1217,7 +1228,7 @@ void FlightControlSwc::Periodic()
 
             // Apply tunable motor-vibration notch before EKF and before PID.
             // Keep original `s` for raw telemetry/logging; use `sf` for control.
-            ImuSensorData sf = s;
+            rte::ImuServiceSample sf = s;
             sf.ax_g   = notchAx.apply(s.ax_g);
             sf.ay_g   = notchAy.apply(s.ay_g);
             sf.az_g   = notchAz.apply(s.az_g);
@@ -1238,7 +1249,7 @@ void FlightControlSwc::Periodic()
 
                 dynFftPushCount++;
 
-                uint32_t nowFftInputMs = millis();
+                uint32_t nowFftInputMs = clockServiceAdapter.milliseconds();
                 if (nowFftInputMs - lastDynFftInputPrintMs >= 1000) {
                     lastDynFftInputPrintMs = nowFftInputMs;
 
@@ -1268,7 +1279,7 @@ void FlightControlSwc::Periodic()
             ekfIn.ax_g = sf.ax_g; ekfIn.ay_g = sf.ay_g; ekfIn.az_g = sf.az_g;
             ekfIn.gx_dps = sf.gx_dps; ekfIn.gy_dps = sf.gy_dps; ekfIn.gz_dps = sf.gz_dps;
             ekfIn.mx_uT = s.mx_uT; ekfIn.my_uT = s.my_uT; ekfIn.mz_uT = s.mz_uT;
-            ekfIn.magValid = imu.isMagConnected();
+            ekfIn.magValid = s.magneticFieldValid;
 
             // Runtime-selectable attitude estimator SWC.
             uint8_t ahrsMode = 0;
@@ -1276,14 +1287,14 @@ void FlightControlSwc::Periodic()
                 ahrsMode = (uint8_t)constrain((int)roundf(g_tuning.ahrs_filter_mode), 0, 2);
                 tuningRte.unlock();
             }
-            uint32_t ahrsStartUs = micros();
+            uint32_t ahrsStartUs = clockServiceAdapter.microseconds();
             estimatorInputPort.send({ekfIn, dt, ahrsMode}, nowUs);
             attitudeEstimator.Periodic();
             rte::SignalSample<AttitudeEstimate> attitudeSignal{};
             estimatorOutputPort.receive(attitudeSignal);
             att = attitudeSignal.value;
             g_ahrsFilterModeActive = attitudeEstimator.activeMode();
-            g_execTiming.lastAhrsUs = micros() - ahrsStartUs;
+            g_execTiming.lastAhrsUs = clockServiceAdapter.microseconds() - ahrsStartUs;
 
             gxf = lpfGx.update(sf.gx_dps, dt, GYRO_LPF_HZ);
             gyf = lpfGy.update(sf.gy_dps, dt, GYRO_LPF_HZ);
@@ -1314,7 +1325,7 @@ void FlightControlSwc::Periodic()
             pitchAngleErrDeg = att.pitch_deg - accelPitchDeg;
         }
 
-        phaseStartUs = micros();
+        phaseStartUs = clockServiceAdapter.microseconds();
         rte::SignalSample<flight::ReceiverFrame> receiverSignal{};
         receiverFramePort.receive(receiverSignal);
         flight::ReceiverFrame receiverFrame = receiverSignal.value;
@@ -1324,7 +1335,7 @@ void FlightControlSwc::Periodic()
         }
         const flight::PilotCommand& cmd = receiverFrame.command;
         updateControlTransitionCounters(cmd);
-        g_execTiming.lastRcUs = micros() - phaseStartUs;
+        g_execTiming.lastRcUs = clockServiceAdapter.microseconds() - phaseStartUs;
  
         float rollCtrlDeg = 0.0f, pitchCtrlDeg = 0.0f, yawCtrlDeg = 0.0f;
         if (imuOk) computeControlAttitude(att, rollCtrlDeg, pitchCtrlDeg, yawCtrlDeg);
@@ -1334,7 +1345,7 @@ void FlightControlSwc::Periodic()
         const bool swbAcroHigh = (cmd.valid && cmd.raw[RC_CH_AUX2] >= LEVEL_ZERO_SWB_THRESHOLD);
         const bool canCaptureLevelZero = (cmd.mode == flight::FlightMode::Disarmed && imuOk && swbAcroHigh);
         levelTrimInputPort.send(
-            {swbAcroHigh, canCaptureLevelZero, millis(), LEVEL_ZERO_SAMPLE_MS,
+            {swbAcroHigh, canCaptureLevelZero, clockServiceAdapter.milliseconds(), LEVEL_ZERO_SAMPLE_MS,
              att.roll_deg, att.pitch_deg, att.yaw_deg},
             nowUs);
         levelTrim.Periodic();
@@ -1360,15 +1371,15 @@ void FlightControlSwc::Periodic()
                 cmd.mode == flight::FlightMode::Disarmed,
                 cmd.mode == flight::FlightMode::Failsafe,
                 false)) {
-            phaseStartUs = micros();
+            phaseStartUs = clockServiceAdapter.microseconds();
             if (g_motorOutputsActive) {
                 // One-shot stop only. Repeating motorOff() at 400 Hz was measured
                 // as ~40 ms in your log, which destroys the loop timing.
                 motorsOff();
                 g_motorOutputsActive = false;
             }
-            g_execTiming.lastMotorUs = micros() - phaseStartUs;
-            uint32_t controlDoneUs = micros();
+            g_execTiming.lastMotorUs = clockServiceAdapter.microseconds() - phaseStartUs;
+            uint32_t controlDoneUs = clockServiceAdapter.microseconds();
 
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
@@ -1378,7 +1389,7 @@ void FlightControlSwc::Periodic()
             pidAngleYaw.reset();
             flightController.reset();
 
-            phaseStartUs = micros();
+            phaseStartUs = clockServiceAdapter.microseconds();
             if (flightStateRte.lock(0)) {
                 g_state.armed   = false;
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
@@ -1451,7 +1462,7 @@ void FlightControlSwc::Periodic()
                     g_state.yaw_deg  = att.yaw_deg;
                     g_state.q0 = att.q0; g_state.q1 = att.q1; g_state.q2 = att.q2; g_state.q3 = att.q3;
                     g_state.imuValid = imuOk;
-                    g_state.magValid = imu.isMagConnected();
+                    g_state.magValid = s.magneticFieldValid;
                     g_state.ahrsFilterMode = g_ahrsFilterModeActive;
                     g_state.roll_ctrl_deg = rollCtrlDeg;
                     g_state.pitch_ctrl_deg = pitchCtrlDeg;
@@ -1474,9 +1485,9 @@ void FlightControlSwc::Periodic()
                 }
                 flightStateRte.unlock();
             }
-            g_execTiming.lastStateUs = micros() - phaseStartUs;
+            g_execTiming.lastStateUs = clockServiceAdapter.microseconds() - phaseStartUs;
 
-            uint32_t fullDoneUs = micros();
+            uint32_t fullDoneUs = clockServiceAdapter.microseconds();
             updateExecTimingAndPrint(controlDoneUs - execStartUs,
                                      fullDoneUs - execStartUs,
                                      periodUs,
@@ -1599,7 +1610,7 @@ void FlightControlSwc::Periodic()
 
         if (LOG_MOTOR_SATURATION && motorSaturated) {
             static uint32_t lastMotorSatPrintMs = 0;
-            uint32_t motorSatNowMs = millis();
+            uint32_t motorSatNowMs = clockServiceAdapter.milliseconds();
             if (motorSatNowMs - lastMotorSatPrintMs >= 250) {
                 lastMotorSatPrintMs = motorSatNowMs;
                 DBG_PRINTF("[MOTOR_SAT] thr=%.3f rO=%.3f pO=%.3f yO=%.3f "
@@ -1616,15 +1627,15 @@ void FlightControlSwc::Periodic()
         static uint32_t motorWriteCount = 0;
         static uint32_t lastMotorRatePrintMs = 0;
 
-        phaseStartUs = micros();
+        phaseStartUs = clockServiceAdapter.microseconds();
         writeMotors(fl, fr, rl, rr);
         g_motorOutputsActive = true;
         motorWriteCount++;
 
-        g_execTiming.lastMotorUs = micros() - phaseStartUs;
+        g_execTiming.lastMotorUs = clockServiceAdapter.microseconds() - phaseStartUs;
 
         if (LOG_MOTOR_WRITE_RATE) {
-            uint32_t motorRateNowMs = millis();
+            uint32_t motorRateNowMs = clockServiceAdapter.milliseconds();
             if (motorRateNowMs - lastMotorRatePrintMs >= 1000) {
                 lastMotorRatePrintMs = motorRateNowMs;
 
@@ -1638,7 +1649,7 @@ void FlightControlSwc::Periodic()
             motorWriteCount = 0;
         }
 
-        uint32_t controlDoneUs = micros();
+        uint32_t controlDoneUs = clockServiceAdapter.microseconds();
 
 
         const float magNorm_uT = imuOk ? sqrtf(s.mx_uT*s.mx_uT + s.my_uT*s.my_uT + s.mz_uT*s.mz_uT) : 0.0f;
@@ -1671,7 +1682,7 @@ void FlightControlSwc::Periodic()
             row.flags = ((cmd.mode != flight::FlightMode::Disarmed) ? 0x0001 : 0)
                       | (imuOk ? 0x0002 : 0)
                       | (cmd.valid ? 0x0004 : 0)
-                      | ((imuOk && imu.isMagConnected()) ? 0x0008 : 0)
+                      | ((imuOk && s.magneticFieldValid) ? 0x0008 : 0)
                       | (motorSaturated ? 0x0010 : 0)
                       | (g_state.rpmActualValid ? 0x0020 : 0);
 
@@ -1779,20 +1790,20 @@ void FlightControlSwc::Periodic()
             row.gps_sats = g_state.gps.satellites;
             row.gps_hdop = g_state.gps.hdop;
 
-            uint32_t logStartUs = micros();
+            uint32_t logStartUs = clockServiceAdapter.microseconds();
             flightLogger.push(row);
-            g_execTiming.lastLogUs = micros() - logStartUs;
+            g_execTiming.lastLogUs = clockServiceAdapter.microseconds() - logStartUs;
         }
 
         // ── Publish flight state (incl. true PID outputs) ─────
-        phaseStartUs = micros();
+        phaseStartUs = clockServiceAdapter.microseconds();
         if (flightStateRte.lock(0)){
             if (imuOk) {
                 g_state.roll_deg = att.roll_deg;  g_state.pitch_deg = att.pitch_deg;
                 g_state.yaw_deg  = att.yaw_deg;
                 g_state.q0=att.q0; g_state.q1=att.q1; g_state.q2=att.q2; g_state.q3=att.q3;
                 g_state.imuValid = imuOk;
-                g_state.magValid = imu.isMagConnected();
+                g_state.magValid = s.magneticFieldValid;
                 g_state.ahrsFilterMode = g_ahrsFilterModeActive;
                 g_state.roll_ctrl_deg = rollCtrlDeg;
                 g_state.pitch_ctrl_deg = pitchCtrlDeg;
@@ -1895,9 +1906,9 @@ void FlightControlSwc::Periodic()
             g_state.armed=true; g_state.rc=cmd;
             flightStateRte.unlock();
         }
-        g_execTiming.lastStateUs = micros() - phaseStartUs;
+        g_execTiming.lastStateUs = clockServiceAdapter.microseconds() - phaseStartUs;
 
-        uint32_t fullDoneUs = micros();
+        uint32_t fullDoneUs = clockServiceAdapter.microseconds();
         updateExecTimingAndPrint(controlDoneUs - execStartUs,
                                  fullDoneUs - execStartUs,
                                  periodUs,
@@ -1907,7 +1918,13 @@ void FlightControlSwc::Periodic()
 static void taskControl(void* /*pv*/)
 {
     flightControlSwc.Init();
-    for (;;) flightControlSwc.Periodic();
+    for (;;) {
+        // FreeRTOS activation stays in the platform task adapter; the SWC
+        // Periodic runnable contains no scheduler service call.
+        const uint32_t releases = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        flightControlSwc.SetActivationCount(releases);
+        flightControlSwc.Periodic();
+    }
 }
 
 
@@ -1965,10 +1982,10 @@ void SerialDiagnosticsSwc::Periodic()
         CalibrationStatus calStatus = calManager.status();
 
         if (calStatus.state != lastCalState ||
-            (calStatus.active && millis() - lastCalPrintMs >= 1000)) {
+            (calStatus.active && clockServiceAdapter.milliseconds() - lastCalPrintMs >= 1000)) {
 
             lastCalState = calStatus.state;
-            lastCalPrintMs = millis();
+            lastCalPrintMs = clockServiceAdapter.milliseconds();
 
             calLogf("[CAL-MGR] run=%lu mode=%s src=%s state=%s active=%d safe=%d confirm=%d progress=%.0f%% msg=%s",
                     (unsigned long)calStatus.runId,
@@ -2029,7 +2046,7 @@ void SerialDiagnosticsSwc::Periodic()
                           (unsigned int)s.tofObjectCount,
                           (unsigned long)((s.tofAge_ms == UINT32_MAX) ? 0 : s.tofAge_ms),
                           s.gps.valid ? "FIX" : "---", s.gps.satellites,
-                          imu.isMagConnected() ? "9DOF" : "6DOF",
+                          s.magValid ? "9DOF" : "6DOF",
                           (s.ahrsFilterMode == 1) ? "Mahony" : ((s.ahrsFilterMode == 2) ? "Madgwick" : "EKF"),
                           mahony.kp());
             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
@@ -2176,13 +2193,9 @@ void setup()
     motorMixer.Init();
     levelTrim.Init();
 
-    batteryMonitor.begin(PIN_BATTERY_ADC,
-                         BATTERY_CELL_COUNT,
-                         BATTERY_RTOP_OHMS,
-                         BATTERY_RBOTTOM_OHMS,
-                         BATTERY_NOMINAL_V,
-                         BATTERY_ADC_CAL_SCALE);
-    BatteryStatus bootBattery = batteryMonitor.forceRead();
+    batteryServiceAdapter.InitMonitor();
+    const rte::BatteryServiceSample bootBattery =
+        batteryServiceAdapter.ReadStatus(clockServiceAdapter.milliseconds(), true);
     g_state.batteryVoltage_v = bootBattery.batteryVoltage_v;
     g_state.batteryAdcVoltage_v = bootBattery.adcVoltage_v;
     g_state.batteryCellVoltage_v = bootBattery.cellVoltage_v;
@@ -2192,7 +2205,7 @@ void setup()
     g_state.batteryCritical = bootBattery.critical;
     DBG_PRINTF("[BOOT] Battery ADC pin=%u scale=%.4f adc=%.3fV batt=%.3fV cell=%.3fV valid=%d\n",
                (unsigned)PIN_BATTERY_ADC,
-               batteryMonitor.scale(),
+               batteryServiceAdapter.CalibrationScale(),
                bootBattery.adcVoltage_v,
                bootBattery.batteryVoltage_v,
                bootBattery.cellVoltage_v,
@@ -2207,7 +2220,7 @@ void setup()
     delay(10);
 
     DBG_PRINTF("[BOOT] IMU backend: %s... ", SelectedImu::backendName());
-    if (!imu.begin()) {
+    if (!imuServiceAdapter.InitSensor()) {
         DBG_PRINTLN(F("FAILED. Check SPI wiring. Halting."));
         while (true) delay(1000);
     }
@@ -2218,7 +2231,7 @@ void setup()
     calManager.attachMotorOutputs(writeMotors, motorsOff);
     DBG_PRINTLN(F("[BOOT] CalibrationManager ready."));
 
-    if (imu.hasMag()) {
+    if (imuServiceAdapter.HasMagnetometer()) {
         DBG_PRINTLN(F("[BOOT] AK8963 magnetometer: DETECTED — 9-DOF AHRS"));
     } else {
         DBG_PRINTLN(F("[BOOT] AK8963 magnetometer: NOT FOUND — 6-DOF AHRS"));
@@ -2233,9 +2246,9 @@ void setup()
     DBG_PRINTLN(F("[BOOT] GPS initialization delegated to GpsServiceTask::Init."));
 
     DBG_PRINT(F("[BOOT] NVS calibration... "));
-    if (imu.loadCalibration()) {
+    if (imuServiceAdapter.LoadCalibration()) {
         DBG_PRINTLN(F("loaded."));
-        imu.printCalibration();
+        imuServiceAdapter.PrintCalibration();
     } else {
         DBG_PRINTLN(F("none — flip SWD UP (disarmed) to calibrate."));
     }
