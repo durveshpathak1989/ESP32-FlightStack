@@ -61,7 +61,7 @@ Option:        Flash Size                                                       
                2MB (16Mb)                                                           FlashSize=2M
                16MB (128Mb)                                                         FlashSize=16M
 Option:        Partition Scheme                                                     PartitionScheme
-               [32mDefault 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)[0m [32m✔[0m                      [32mPartitionScheme=default[0m
+               Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)                        PartitionScheme=default
                Default 4MB with ffat (1.2MB APP/1.5MB FATFS)                        PartitionScheme=defaultffat
                8M with spiffs (3MB APP/1.5MB SPIFFS)                                PartitionScheme=default_8MB
                Minimal (1.3MB APP/700KB SPIFFS)                                     PartitionScheme=minimal
@@ -71,7 +71,7 @@ Option:        Partition Scheme                                                 
                No OTA (2MB APP/2MB FATFS)                                           PartitionScheme=noota_ffat
                No OTA (1MB APP/3MB FATFS)                                           PartitionScheme=noota_3gffat
                Huge APP (3MB No OTA/1MB SPIFFS)                                     PartitionScheme=huge_app
-               Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS)                        PartitionScheme=min_spiffs
+               [32mMinimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS)[0m [32m✔[0m                      [32mPartitionScheme=min_spiffs[0m
                16M Flash (2MB APP/12.5MB FATFS)                                     PartitionScheme=fatflash
                16M Flash (3MB APP/9.9MB FATFS)                                      PartitionScheme=app3M_fat9M_16MB
                RainMaker 4MB                                                        PartitionScheme=rainmaker
