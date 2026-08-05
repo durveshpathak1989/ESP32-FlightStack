@@ -2,11 +2,13 @@ name: ESP32 Arduino Build
 
 on:
   push:
+    paths-ignore:
+      - "RC_FlightController/build/**"
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: esp32-arduino-${{ github.workflow }}-${{ github.ref }}
@@ -21,7 +23,8 @@ env:
   FQBN: "esp32:esp32:esp32"
   EXPECTED_BOARD_NAME: "ESP32 Dev Module"
   SKETCH_PATH: "RC_FlightController"
-  BUILD_PATH: "build/esp32-dev-module"
+  CI_BUILD_PATH: ".ci-build/esp32-dev-module"
+  PUBLISH_PATH: "RC_FlightController/build"
 
 jobs:
   compile:
@@ -63,32 +66,161 @@ jobs:
         run: |
           set -euo pipefail
           test -f "${SKETCH_PATH}/RC_FlightController.ino"
-          git submodule status --recursive
+          git submodule status --recursive | tee submodules.txt
 
       - name: Compile firmware
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "${BUILD_PATH}"
+          rm -rf "${CI_BUILD_PATH}"
+          mkdir -p "${CI_BUILD_PATH}"
           arduino-cli compile \
             --fqbn "${FQBN}" \
             --warnings all \
             --jobs 0 \
-            --output-dir "${BUILD_PATH}" \
-            "${SKETCH_PATH}"
+            --output-dir "${CI_BUILD_PATH}" \
+            "${SKETCH_PATH}" 2>&1 | tee compile-output.txt
 
-      - name: Show generated firmware files
-        if: success()
+      - name: Prepare repository firmware bundle and metrics
         shell: bash
         run: |
           set -euo pipefail
-          find "${BUILD_PATH}" -maxdepth 1 -type f -printf '%f\t%k KB\n' | sort
+          rm -rf "${PUBLISH_PATH}"
+          mkdir -p "${PUBLISH_PATH}"
 
-      - name: Upload compiled firmware
-        if: success()
+          find "${CI_BUILD_PATH}" -maxdepth 1 -type f -name '*.bin' \
+            -exec cp '{}' "${PUBLISH_PATH}/" ';'
+
+          bin_count=$(find "${PUBLISH_PATH}" -maxdepth 1 -type f -name '*.bin' | wc -l)
+          if [ "${bin_count}" -eq 0 ]; then
+            echo "No firmware .bin files were generated." >&2
+            exit 1
+          fi
+
+          cp compile-output.txt "${PUBLISH_PATH}/compile-output.txt"
+          cp board-details.txt "${PUBLISH_PATH}/board-details.txt"
+          cp submodules.txt "${PUBLISH_PATH}/submodules.txt"
+
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import re
+          from datetime import datetime, timezone
+
+          publish = pathlib.Path(os.environ["PUBLISH_PATH"])
+          compile_text = pathlib.Path("compile-output.txt").read_text(
+              encoding="utf-8", errors="replace"
+          )
+
+          def parse_int(value):
+              return int(value.replace(",", "")) if value is not None else None
+
+          flash_match = re.search(
+              r"Sketch uses ([\d,]+) bytes \(([\d.]+)%\) of program storage space\. "
+              r"Maximum is ([\d,]+) bytes\.",
+              compile_text,
+          )
+          ram_match = re.search(
+              r"Global variables use ([\d,]+) bytes \(([\d.]+)%\) of dynamic memory, "
+              r"leaving ([\d,]+) bytes for local variables\. Maximum is ([\d,]+) bytes\.",
+              compile_text,
+          )
+
+          artifacts = []
+          for file_path in sorted(publish.glob("*.bin")):
+              data = file_path.read_bytes()
+              artifacts.append(
+                  {
+                      "file": file_path.name,
+                      "size_bytes": len(data),
+                      "sha256": hashlib.sha256(data).hexdigest(),
+                      "application_image": file_path.name.endswith(".ino.bin"),
+                  }
+              )
+
+          metrics = {
+              "schema_version": 1,
+              "build": {
+                  "status": "success",
+                  "generated_utc": datetime.now(timezone.utc).isoformat(),
+                  "repository": os.environ.get("GITHUB_REPOSITORY"),
+                  "source_branch": os.environ.get("GITHUB_REF_NAME"),
+                  "source_commit": os.environ.get("GITHUB_SHA"),
+                  "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+                  "workflow_run_number": os.environ.get("GITHUB_RUN_NUMBER"),
+                  "workflow_run_url": (
+                      f"{os.environ.get('GITHUB_SERVER_URL')}/"
+                      f"{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/"
+                      f"{os.environ.get('GITHUB_RUN_ID')}"
+                  ),
+              },
+              "target": {
+                  "board_name": os.environ["EXPECTED_BOARD_NAME"],
+                  "fqbn": os.environ["FQBN"],
+                  "arduino_cli_version": os.environ["ARDUINO_CLI_VERSION"],
+                  "esp32_core_version": os.environ["ESP32_CORE_VERSION"],
+              },
+              "resource_usage": {
+                  "flash_used_bytes": parse_int(flash_match.group(1)) if flash_match else None,
+                  "flash_used_percent": float(flash_match.group(2)) if flash_match else None,
+                  "flash_max_bytes": parse_int(flash_match.group(3)) if flash_match else None,
+                  "flash_free_bytes": (
+                      parse_int(flash_match.group(3)) - parse_int(flash_match.group(1))
+                      if flash_match
+                      else None
+                  ),
+                  "ram_global_bytes": parse_int(ram_match.group(1)) if ram_match else None,
+                  "ram_used_percent": float(ram_match.group(2)) if ram_match else None,
+                  "ram_remaining_bytes": parse_int(ram_match.group(3)) if ram_match else None,
+                  "ram_max_bytes": parse_int(ram_match.group(4)) if ram_match else None,
+              },
+              "artifacts": artifacts,
+              "total_binary_bytes": sum(item["size_bytes"] for item in artifacts),
+          }
+
+          (publish / "build-metrics.json").write_text(
+              json.dumps(metrics, indent=2) + "\n", encoding="utf-8"
+          )
+          with (publish / "SHA256SUMS.txt").open("w", encoding="utf-8") as sums:
+              for artifact in artifacts:
+                  sums.write(f"{artifact['sha256']}  {artifact['file']}\n")
+          PY
+
+          echo "Generated repository bundle:"
+          find "${PUBLISH_PATH}" -maxdepth 1 -type f -printf '%f\t%s bytes\n' | sort
+          cat "${PUBLISH_PATH}/build-metrics.json"
+
+      - name: Upload compiled firmware and metrics
         uses: actions/upload-artifact@v7
         with:
           name: esp32-flight-controller-${{ github.sha }}
-          path: ${{ env.BUILD_PATH }}
+          path: ${{ env.PUBLISH_PATH }}
           if-no-files-found: error
           retention-days: 14
+
+      - name: Commit firmware bundle to master
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          remote_sha=$(git ls-remote origin refs/heads/master | cut -f1)
+          if [ "${remote_sha}" != "${GITHUB_SHA}" ]; then
+            echo "Master advanced during this build; skipping stale firmware publication."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "${PUBLISH_PATH}"
+
+          if git diff --cached --quiet; then
+            echo "Firmware bundle is unchanged; nothing to commit."
+            exit 0
+          fi
+
+          short_sha="${GITHUB_SHA:0:12}"
+          git commit -m "ci: publish ESP32 firmware for ${short_sha} [skip ci]"
+          git push origin HEAD:master
