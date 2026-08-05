@@ -71,9 +71,13 @@
 #include "esp_timer.h"
 #include "src/Submodules/CalManager/CalibrationManager.h"
 #include "src/Application/FlightConfig.h"
+#include "src/Application/Control/CascadedController.h"
+#include "src/Application/Control/LowPassFilter.h"
 #include "src/Application/Control/MotorMixer.h"
 #include "src/Application/Control/PidController.h"
 #include "src/Application/Configuration/TuningState.h"
+#include "src/Application/Estimation/AttitudeEstimatorRouter.h"
+#include "src/Application/State/FlightState.h"
 #include "src/Platforms/Esp32/Storage/PreferencesTuningStore.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
@@ -195,6 +199,7 @@ MahonyAHRS mahony;
 AttitudeEstimate mahonyAtt;
 AttitudeEKF attitudeEKF;
 MadgwickAHRS madgwickAHRS;
+AttitudeEstimatorRouter attitudeEstimator(attitudeEKF, mahony, madgwickAHRS);
 NotchFilter notchAx, notchAy, notchAz;
 NotchFilter notchGx, notchGy, notchGz;
 static FlightToF_VL53L4CX tofSensor(Wire);
@@ -212,99 +217,6 @@ SpectrumAnalyzer spectrumAnalyzer(NOTCH_SAMPLE_HZ);
 // ─────────────────────────────────────────────────────────────
 //  Shared flight state
 // ─────────────────────────────────────────────────────────────
-struct FlightState {
-    // Raw estimator attitude from EKF/Mahony/Madgwick. Keep untouched for telemetry/debug.
-    float roll_deg, pitch_deg, yaw_deg;
-    float q0, q1, q2, q3;
-    bool imuValid;
-    bool magValid;
-    uint8_t ahrsFilterMode;
-
-    // Post-AHRS control attitude. PID uses these values after level-zero offset.
-    float roll_ctrl_deg, pitch_ctrl_deg, yaw_ctrl_deg;
-
-    // Captured software level-zero offsets subtracted from raw AHRS.
-    float roll_offset_deg, pitch_offset_deg, yaw_offset_deg;
-    float ax_g, ay_g, az_g;
-    float gx_dps, gy_dps, gz_dps;
-    float mx_uT, my_uT, mz_uT;
-    float imuTemp_c;
-    float bmpTemp_c, bmpPressure_hpa, bmpAltitude_m;
-    bool  bmpValid;
-    float tofDistance_m;
-    uint16_t tofDistance_mm;
-    uint8_t tofRangeStatus;
-    uint8_t tofObjectCount;
-    uint8_t tofStreamCount;
-    float tofSignalMcps;
-    float tofAmbientMcps;
-    uint32_t tofAge_ms;
-    uint32_t tofLastUpdate_ms;
-    bool  tofReady;
-    bool  tofValid;
-    float cpuCore0_pct, cpuCore1_pct;
-    bool  cpuValid;
-    float motorFL, motorFR, motorRL, motorRR;
-    float batteryVoltage_v;
-    float batteryAdcVoltage_v;
-    float batteryCellVoltage_v;
-    float batteryPercent;
-    bool  batteryValid;
-    bool  batteryLow;
-    bool  batteryCritical;
-    float pidRollOut, pidPitchOut, pidYawOut;   // true PID outputs for tuning trace
-    float motorFLPreSat, motorFRPreSat, motorRLPreSat, motorRRPreSat;
-    uint32_t loopPeriod_us, imuRead_us, rcRead_us, ahrsUpdate_us;
-    uint32_t controlUpdate_us, motorWrite_us, wifiService_us, onboardLogWrite_us;
-    int16_t loopJitter_us;
-    uint32_t missedLoopCount;
-
-    // Extended flight-log / telemetry debug fields
-    float rawAx_g, rawAy_g, rawAz_g;
-    float rawGx_dps, rawGy_dps, rawGz_dps;
-    float filtAx_g, filtAy_g, filtAz_g;
-    float filtGx_dps, filtGy_dps, filtGz_dps;
-    float magNorm_uT;
-    bool  ekfMagUsed;
-    float ekfBgx_dps, ekfBgy_dps, ekfBgz_dps;
-    float targetRollDeg, targetPitchDeg, targetYawDeg;
-    float targetRollRateDps, targetPitchRateDps, targetYawRateDps;
-    float rollRateError_dps, pitchRateError_dps, yawRateError_dps;
-    float yawError_deg;
-    bool  motorSaturated;
-    bool  angleModeActive, acroModeActive;
-    uint32_t rcFailsafeCount;
-    uint16_t modeSwitchRaw_us, armSwitchRaw_us;
-    uint16_t auxTune1Raw_us, auxTune2Raw_us;
-    bool  angleLoopEnabled, rateLoopEnabled;
-    float actualRollRate_dps, actualPitchRate_dps, actualYawRate_dps;
-    float angleRollP, angleRollI, angleRollD;
-    float anglePitchP, anglePitchI, anglePitchD;
-    float rateRollP, rateRollI, rateRollD;
-    float ratePitchP, ratePitchI, ratePitchD;
-    float rateYawP, rateYawI, rateYawD;
-    float angleRollIterm, anglePitchIterm;
-    uint32_t pidResetCount;
-    uint32_t modeTransitionCount, lastModeChange_ms;
-    uint32_t armingTransitionCount, lastArmChange_ms;
-    bool  throttleLow;
-    float controlAuthorityRemaining;
-    bool  rollOutputLimited, pitchOutputLimited, yawOutputLimited, rateOutputLimited;
-    float cmdRpmFL, cmdRpmFR, cmdRpmRL, cmdRpmRR;
-    float actualRpmFL, actualRpmFR, actualRpmRL, actualRpmRR;
-    bool  rpmActualValid;
-    float bmpVerticalSpeed_mps;
-
-    // Diagnostic attitude sources for PID/AHRS review
-    float accelRoll_deg, accelPitch_deg;        // accel-only tilt estimate
-    float gyroRoll_deg,  gyroPitch_deg, gyroYaw_deg; // integrated gyro-only estimate
-    float rollAngleError_deg, pitchAngleError_deg;   // AHRS - accel estimate
-
-    RCCommand rc;
-    bool  armed;
-    uint32_t loopCount;
-    GPSData gps;
-};
 static FlightState       g_state;
 static SemaphoreHandle_t g_flightMutex;
 static SemaphoreHandle_t g_i2cMutex;
@@ -386,6 +298,9 @@ static PidController pidAngleRoll(
 static PidController pidAnglePitch(
     TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
 static PidController pidAngleYaw(TUNE_ANGLE_YAW_KP, 0.0f, 0.0f);
+static CascadedController flightController(
+    pidRateRoll, pidRatePitch, pidRateYaw,
+    pidAngleRoll, pidAnglePitch, pidAngleYaw);
 static MotorMixer motorMixer;
 
 // ─────────────────────────────────────────────────────────────
@@ -1322,33 +1237,7 @@ static void computeControlAttitude(const AttitudeEstimate& att,
     yawCtrl   = wrapDeg180(att.yaw_deg - g_levelYawOffsetDeg);
 }
 
-// First-order gyro/setpoint low-pass (one state per axis)
-struct LPF {
-    float y = 0.0f;
-    bool initialized = false;
-
-    float apply(float x, float dt, float fc) {
-        if (dt <= 0.0f || fc <= 0.0f) return x;
-        if (!initialized) {
-            y = x;
-            initialized = true;
-            return y;
-        }
-        float rc = 1.0f / (2.0f * 3.14159265f * fc);
-        float a  = dt / (dt + rc);
-        y += a * (x - y);
-        return y;
-    }
-
-    void reset() {
-        y = 0.0f;
-        initialized = false;
-    }
-};
-static LPF lpfGx, lpfGy, lpfGz, lpfSpRoll, lpfSpPitch, lpfSpYaw;
-
-static float g_yawSetpoint   = 0.0f;
-static bool  g_yawHoldActive = false;
+static LowPassFilter lpfGx, lpfGy, lpfGz;
 
 // Diagnostic-only attitude estimates published to telemetry.
 // These are not used for control; they help compare AHRS fusion vs raw accel
@@ -1539,8 +1428,8 @@ static void taskControl(void* /*pv*/)
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
     pidAngleYaw.reset();
-    attitudeEKF.reset();
-    g_yawHoldActive = false;
+    attitudeEstimator.resetEkf();
+    flightController.reset();
 
     for (;;) {
         if (g_tuning.dirty) applyTuningToObjects();
@@ -1553,8 +1442,8 @@ static void taskControl(void* /*pv*/)
             pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
             pidAngleRoll.reset(); pidAnglePitch.reset();
             pidAngleYaw.reset();
-            attitudeEKF.reset();
-            g_yawHoldActive = false;
+            attitudeEstimator.resetEkf();
+            flightController.reset();
             runAutonomousCalibration();
             g_calibState = CalibState::IDLE;
             ulTaskNotifyTake(pdTRUE, 0);  // discard stale timer releases
@@ -1628,7 +1517,7 @@ static void taskControl(void* /*pv*/)
             pidAnglePitch.reset();
             pidAngleYaw.reset();
 
-            g_yawHoldActive = false;
+            flightController.reset();
 
             updateExecTimingAndPrint(0, 0, periodUs, TARGET_US);
 
@@ -1712,40 +1601,20 @@ static void taskControl(void* /*pv*/)
             ekfIn.mx_uT = s.mx_uT; ekfIn.my_uT = s.my_uT; ekfIn.mz_uT = s.mz_uT;
             ekfIn.magValid = imu.isMagConnected();
 
-            // Runtime-selectable attitude estimator.
-            // 0 = EKF, 1 = Mahony, 2 = Madgwick.
-            static uint8_t lastAhrsMode = 255;
+            // Runtime-selectable attitude estimator SWC.
             uint8_t ahrsMode = 0;
             if (xSemaphoreTake(g_tuneMutex, 0) == pdTRUE) {
                 ahrsMode = (uint8_t)constrain((int)roundf(g_tuning.ahrs_filter_mode), 0, 2);
                 xSemaphoreGive(g_tuneMutex);
             }
-            if (ahrsMode != lastAhrsMode) {
-                attitudeEKF.reset();
-                madgwickAHRS.reset();
-                lastAhrsMode = ahrsMode;
-            }
-            g_ahrsFilterModeActive = ahrsMode;
-
             uint32_t ahrsStartUs = micros();
-            if (ahrsMode == 1) {
-                mahony.update(ekfIn, dt, att);
-            } else if (ahrsMode == 2) {
-                AttitudeEstimate madOut;
-                madgwickAHRS.update(ekfIn, dt, madOut);
-                att.roll_deg = madOut.roll_deg; att.pitch_deg = madOut.pitch_deg; att.yaw_deg = madOut.yaw_deg;
-                att.q0 = madOut.q0; att.q1 = madOut.q1; att.q2 = madOut.q2; att.q3 = madOut.q3;
-            } else {
-                AttitudeEstimate ekfOut;
-                attitudeEKF.update(ekfIn, dt, ekfOut);
-                att.roll_deg = ekfOut.roll_deg; att.pitch_deg = ekfOut.pitch_deg; att.yaw_deg = ekfOut.yaw_deg;
-                att.q0 = ekfOut.q0; att.q1 = ekfOut.q1; att.q2 = ekfOut.q2; att.q3 = ekfOut.q3;
-            }
+            att = attitudeEstimator.update(ekfIn, dt, ahrsMode);
+            g_ahrsFilterModeActive = attitudeEstimator.activeMode();
             g_execTiming.lastAhrsUs = micros() - ahrsStartUs;
 
-            gxf = lpfGx.apply(sf.gx_dps, dt, GYRO_LPF_HZ);
-            gyf = lpfGy.apply(sf.gy_dps, dt, GYRO_LPF_HZ);
-            gzf = lpfGz.apply(sf.gz_dps, dt, GYRO_LPF_HZ);
+            gxf = lpfGx.update(sf.gx_dps, dt, GYRO_LPF_HZ);
+            gyf = lpfGy.update(sf.gy_dps, dt, GYRO_LPF_HZ);
+            gzf = lpfGz.update(sf.gz_dps, dt, GYRO_LPF_HZ);
 
             // Accel-only tilt estimate. This is noisy under vibration/acceleration,
             // but useful as an independent reference for AHRS roll/pitch.
@@ -1847,9 +1716,8 @@ static void taskControl(void* /*pv*/)
             lpfGx.reset(); lpfGy.reset(); lpfGz.reset();
             notchAx.reset(); notchAy.reset(); notchAz.reset();
             notchGx.reset(); notchGy.reset(); notchGz.reset();
-            lpfSpRoll.reset(); lpfSpPitch.reset(); lpfSpYaw.reset();
             pidAngleYaw.reset();
-            g_yawHoldActive = false;
+            flightController.reset();
 
             phaseStartUs = micros();
             if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
@@ -2005,75 +1873,34 @@ static void taskControl(void* /*pv*/)
             tune.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
         }
 
-        const float MAX_ANGLE_DEG      = tune.max_angle_deg;
-        const float MAX_RATE_DPS       = tune.max_rate_dps;
-        const float MAX_PITCH_RATE_DPS = tune.max_pitch_rate_dps;
-        float rO=0, pO=0, yO=0;
-        float targetRollDeg = 0.0f, targetPitchDeg = 0.0f, targetYawDeg = 0.0f;
-        float targetRollRateDps = 0.0f, targetPitchRateDps = 0.0f, targetYawRateDps = 0.0f;
-        float angleErrRollDeg = 0.0f, angleErrPitchDeg = 0.0f, yawErrDeg = 0.0f;
-        float rateErrRollDps = 0.0f, rateErrPitchDps = 0.0f, rateErrYawDps = 0.0f;
-        float rateRollFf = 0.0f, ratePitchFf = 0.0f, rateYawFf = 0.0f;
-
-        float rollCmd  = lpfSpRoll .apply(cmd.roll,  dt, RC_LPF_HZ);
-        float pitchCmd = lpfSpPitch.apply(cmd.pitch, dt, RC_LPF_HZ);
-        float yawCmd   = lpfSpYaw  .apply(cmd.yaw,   dt, RC_LPF_HZ);
-
-        if (cmd.mode == FlightMode::ANGLE) {
-            targetRollDeg = rollCmd * MAX_ANGLE_DEG;
-            targetPitchDeg = pitchCmd * MAX_ANGLE_DEG;
-            angleErrRollDeg = targetRollDeg - roll;
-            angleErrPitchDeg = targetPitchDeg - pitch;
-            targetRollRateDps = pidAngleRoll.update(angleErrRollDeg, dt);
-            targetPitchRateDps = pidAnglePitch.update(angleErrPitchDeg, dt);
-            rateErrRollDps = targetRollRateDps - gx;
-            rateErrPitchDps = targetPitchRateDps - gy;
-            rateRollFf = tune.pid_roll_ff * targetRollRateDps;
-            ratePitchFf = tune.pid_pitch_ff * targetPitchRateDps;
-            rO = rateRollFf + pidRateRoll.updateDOnMeasurement(rateErrRollDps, gx, dt, tune.pid_roll_d_lpf_hz);
-            pO = ratePitchFf + pidRatePitch.updateDOnMeasurement(rateErrPitchDps, gy, dt, tune.pid_pitch_d_lpf_hz);
-        } else {   // ACRO
-            targetRollRateDps = rollCmd * MAX_RATE_DPS;
-            targetPitchRateDps = pitchCmd * MAX_PITCH_RATE_DPS;
-            rateErrRollDps = targetRollRateDps - gx;
-            rateErrPitchDps = targetPitchRateDps - gy;
-            rateRollFf = tune.pid_roll_ff * targetRollRateDps;
-            ratePitchFf = tune.pid_pitch_ff * targetPitchRateDps;
-            rO = rateRollFf + pidRateRoll.updateDOnMeasurement(rateErrRollDps, gx, dt, tune.pid_roll_d_lpf_hz);
-            pO = ratePitchFf + pidRatePitch.updateDOnMeasurement(rateErrPitchDps, gy, dt, tune.pid_pitch_d_lpf_hz);
-        }
-
-        // Yaw: heading-hold when stick centered, rate when moving.
-        if (imuOk && fabsf(yawCmd) < tune.yaw_deadband) {
-            if (!g_yawHoldActive) {
-                g_yawSetpoint   = yawCtrlDeg;
-                g_yawHoldActive = true;
-                pidAngleYaw.reset();
-            }
-            targetYawDeg = g_yawSetpoint;
-            yawErrDeg = wrapDeg180(g_yawSetpoint - yawCtrlDeg);
-            targetYawRateDps = pidAngleYaw.update(yawErrDeg, dt);
-            targetYawRateDps = constrain(targetYawRateDps, -tune.yaw_max_rate_dps, tune.yaw_max_rate_dps);
-            rateErrYawDps = targetYawRateDps - gz;
-            rateYawFf = tune.pid_yaw_ff * targetYawRateDps;
-            yO = rateYawFf + pidRateYaw.updateDOnMeasurement(rateErrYawDps, gz, dt, tune.pid_yaw_d_lpf_hz);
-        } else {
-            g_yawHoldActive = false;
-            targetYawDeg = yawCtrlDeg;
-            targetYawRateDps = -yawCmd * tune.yaw_max_rate_dps;
-            rateErrYawDps = targetYawRateDps - gz;
-            rateYawFf = tune.pid_yaw_ff * targetYawRateDps;
-            yO = rateYawFf + pidRateYaw.updateDOnMeasurement(rateErrYawDps, gz, dt, tune.pid_yaw_d_lpf_hz);
-        }
-
-        const bool rollOutputLimited = (rO > tune.roll_output_limit) || (rO < -tune.roll_output_limit);
-        const bool pitchOutputLimited = (pO > tune.pitch_output_limit) || (pO < -tune.pitch_output_limit);
-        const bool yawOutputLimited = (yO > tune.yaw_output_limit) || (yO < -tune.yaw_output_limit);
-        const bool rateOutputLimited = rollOutputLimited || pitchOutputLimited || yawOutputLimited;
-
-        rO = constrain(rO, -tune.roll_output_limit,  tune.roll_output_limit);
-        pO = constrain(pO, -tune.pitch_output_limit, tune.pitch_output_limit);
-        yO = constrain(yO, -tune.yaw_output_limit,   tune.yaw_output_limit);
+        const CascadedControlOutput control = flightController.update(
+            {cmd.roll, cmd.pitch, cmd.yaw,
+             roll, pitch, yawCtrlDeg,
+             gx, gy, gz, dt, RC_LPF_HZ,
+             cmd.mode == FlightMode::ANGLE, imuOk},
+            tune);
+        const float rollCmd = control.filteredRollCommand;
+        const float pitchCmd = control.filteredPitchCommand;
+        const float yawCmd = control.filteredYawCommand;
+        const float targetRollDeg = control.targetRollDeg;
+        const float targetPitchDeg = control.targetPitchDeg;
+        const float targetYawDeg = control.targetYawDeg;
+        const float targetRollRateDps = control.targetRollRateDps;
+        const float targetPitchRateDps = control.targetPitchRateDps;
+        const float targetYawRateDps = control.targetYawRateDps;
+        const float angleErrRollDeg = control.rollAngleErrorDeg;
+        const float angleErrPitchDeg = control.pitchAngleErrorDeg;
+        const float yawErrDeg = control.yawErrorDeg;
+        const float rateErrRollDps = control.rollRateErrorDps;
+        const float rateErrPitchDps = control.pitchRateErrorDps;
+        const float rateErrYawDps = control.yawRateErrorDps;
+        const float rO = control.rollCorrection;
+        const float pO = control.pitchCorrection;
+        const float yO = control.yawCorrection;
+        const bool rollOutputLimited = control.rollLimited;
+        const bool pitchOutputLimited = control.pitchLimited;
+        const bool yawOutputLimited = control.yawLimited;
+        const bool rateOutputLimited = control.anyRateOutputLimited;
 
         // The application mixer owns throttle shaping and the Quad-X equations.
         const float MOTOR_MAX                  = tune.motor_max;
@@ -2214,11 +2041,11 @@ static void taskControl(void* /*pv*/)
             row.accel_norm_g = sqrtf(row.ax_g*row.ax_g + row.ay_g*row.ay_g + row.az_g*row.az_g);
             row.gyro_norm_dps = sqrtf(row.gx_dps*row.gx_dps + row.gy_dps*row.gy_dps + row.gz_dps*row.gz_dps);
             row.mag_norm_uT = sqrtf(row.mx_uT*row.mx_uT + row.my_uT*row.my_uT + row.mz_uT*row.mz_uT);
-            row.ekf_bgx_dps = attitudeEKF.rollBiasDps();
-            row.ekf_bgy_dps = attitudeEKF.pitchBiasDps();
-            row.ekf_bgz_dps = attitudeEKF.yawBiasDps();
+            row.ekf_bgx_dps = attitudeEstimator.ekfRollBiasDps();
+            row.ekf_bgy_dps = attitudeEstimator.ekfPitchBiasDps();
+            row.ekf_bgz_dps = attitudeEstimator.ekfYawBiasDps();
             row.ahrs_mode = g_ahrsFilterModeActive;
-            row.ekf_mag_used = attitudeEKF.lastMagAccepted() ? 1 : 0;
+            row.ekf_mag_used = attitudeEstimator.ekfMagAccepted() ? 1 : 0;
 
             row.angle_roll_error_deg = angleErrRollDeg;
             row.angle_pitch_error_deg = angleErrPitchDeg;
@@ -2315,10 +2142,10 @@ static void taskControl(void* /*pv*/)
                 g_state.filtAx_g=filtAx; g_state.filtAy_g=filtAy; g_state.filtAz_g=filtAz;
                 g_state.filtGx_dps=gx; g_state.filtGy_dps=gy; g_state.filtGz_dps=gz;
                 g_state.magNorm_uT=magNorm_uT;
-                g_state.ekfMagUsed=attitudeEKF.lastMagAccepted();
-                g_state.ekfBgx_dps=attitudeEKF.rollBiasDps();
-                g_state.ekfBgy_dps=attitudeEKF.pitchBiasDps();
-                g_state.ekfBgz_dps=attitudeEKF.yawBiasDps();
+                g_state.ekfMagUsed=attitudeEstimator.ekfMagAccepted();
+                g_state.ekfBgx_dps=attitudeEstimator.ekfRollBiasDps();
+                g_state.ekfBgy_dps=attitudeEstimator.ekfPitchBiasDps();
+                g_state.ekfBgz_dps=attitudeEstimator.ekfYawBiasDps();
                 g_state.targetRollDeg=targetRollDeg; g_state.targetPitchDeg=targetPitchDeg; g_state.targetYawDeg=targetYawDeg;
                 g_state.targetRollRateDps=targetRollRateDps; g_state.targetPitchRateDps=targetPitchRateDps; g_state.targetYawRateDps=targetYawRateDps;
                 g_state.rollRateError_dps=rateErrRollDps; g_state.pitchRateError_dps=rateErrPitchDps; g_state.yawRateError_dps=rateErrYawDps;
@@ -2557,7 +2384,8 @@ static void taskSerial(void* /*pv*/)
                           s.roll_ctrl_deg, s.pitch_ctrl_deg, s.yaw_ctrl_deg,
                           s.gx_dps, s.gy_dps, s.gz_dps,
                           s.pidRollOut, s.pidPitchOut, s.pidYawOut,
-                          g_yawSetpoint, (int)g_yawHoldActive);
+                          flightController.yawSetpointDeg(),
+                          (int)flightController.yawHoldActive());
         }
 
         tick++;

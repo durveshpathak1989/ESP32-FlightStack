@@ -1,5 +1,51 @@
 # Architecture V4 Composition and Runtime Flows
 
+## AUTOSAR-inspired drone stack
+
+This project uses AUTOSAR's separation principles without claiming AUTOSAR
+Classic conformance. The RTE is a small typed runtime contract, and the ESP32/
+Arduino/FreeRTOS implementation remains replaceable below that boundary.
+
+```mermaid
+flowchart TB
+    subgraph APP["Application software components"]
+        direction LR
+        MODE["Flight mode + safety"]
+        EST["Attitude estimator router"]
+        CTRL["Cascaded controller"]
+        MIX["Quad-X motor mixer"]
+        CAL["Calibration service"]
+        TUNE["Tuning service"]
+        DIAG["Flight logging + diagnostics"]
+    end
+
+    RTE["Drone Runtime Environment — typed snapshots, ports, scheduling contracts"]
+
+    subgraph BSW["Basic software / platform services"]
+        direction LR
+        SYS["FreeRTOS scheduling, clock, watchdog"]
+        MEM["NVS configuration + calibration storage"]
+        COM["Wi-Fi HTTP, OTA, serial, GPS, iBUS"]
+        IO["SPI, I2C, UART, PWM, ADC"]
+        HAL["IMU, barometer, ToF, battery, receiver, motor HAL"]
+        COMPLEX["EKF, Mahony, Madgwick, FFT, notch filtering"]
+    end
+
+    MCU["ESP32 microcontroller / replaceable MCU target"]
+    HW["Drone hardware — MPU9250 or BNO085, BMP280, VL53L4CX, GPS, RC, ESCs"]
+
+    APP --> RTE
+    RTE --> BSW
+    BSW --> MCU
+    MCU --> HW
+```
+
+Dependency direction is downward only. Application components cannot include
+ESP32, Arduino, FreeRTOS, buses, or concrete board pins. Platform adapters
+implement application-owned ports. The `.ino` file is the composition root: it
+constructs the selected implementations and starts the runtime, but contains no
+flight-control equations.
+
 ## Static composition
 
 ```mermaid
