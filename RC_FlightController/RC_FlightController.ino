@@ -88,6 +88,7 @@
 #include "src/Platforms/Esp32/Tasks/ReceiverServiceTask.h"
 #include "src/Platforms/Esp32/Tasks/BarometerServiceTask.h"
 #include "src/Platforms/Esp32/Tasks/TofServiceTask.h"
+#include "src/Platforms/Esp32/Tasks/WifiServiceTask.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
@@ -129,6 +130,7 @@ struct ExecTimingStats {
 
 static volatile ExecTimingStats g_execTiming = {0,0,0,0,0,0,0,0,0,0,0,0,0};
 static volatile uint32_t g_lastWifiServiceUs = 0;
+static WifiServiceTask wifiServiceTask(telemetryWiFi, g_lastWifiServiceUs);
 
 static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
                                      uint32_t periodUs, uint32_t targetUs)
@@ -2325,32 +2327,13 @@ static bool otaIsSafeToStart()
 // ─────────────────────────────────────────────────────────────
 static void taskWiFi(void* /*pv*/)
 {
-    telemetryWiFi.setTelemetryProvider(provideTelemetry);
-    telemetryWiFi.setTuneHandler(handleTune);
-    telemetryWiFi.setOtaAllowedProvider(otaIsSafeToStart);
-
-    telemetryWiFi.setTimingProvider(provideTimingJson);
-    telemetryWiFi.setTimingCsvProvider(provideTimingCsv);
-    telemetryWiFi.setTimingResetHandler(resetTimingStats);
-    telemetryWiFi.setSpectrumProvider(provideSpectrumJson);
-    telemetryWiFi.setIdentityProvider(provideIdentityJson);
-
-// High-speed flight log (chunked streaming — no giant String)
-    telemetryWiFi.setFlightLogCountProvider(flightLogCount);
-    telemetryWiFi.setFlightLogHeaderProvider(flightLogHeader);
-    telemetryWiFi.setFlightLogRowProvider(flightLogRowCsv);
-    telemetryWiFi.setFlightLogResetHandler(resetFlightLog);
-
-    telemetryWiFi.begin("ESP32-DRONE", "12345678");
-
-    for (;;) {
-        uint32_t wifiStartUs = micros();
-        telemetryWiFi.update();
-        g_lastWifiServiceUs = micros() - wifiStartUs;
-        // Give Core 0 idle time. 10 ms still supports 10–50 Hz GCS polling
-        // but avoids pegging Core 0 when Wi-Fi + RC are active.
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+    const WifiServiceBindings bindings{
+        provideTelemetry, handleTune, otaIsSafeToStart,
+        provideTimingJson, provideTimingCsv, resetTimingStats,
+        provideSpectrumJson, provideIdentityJson,
+        flightLogCount, flightLogHeader, flightLogRowCsv, resetFlightLog
+    };
+    wifiServiceTask.run(bindings, "ESP32-DRONE", "12345678");
 }
 
 // ═════════════════════════════════════════════════════════════
