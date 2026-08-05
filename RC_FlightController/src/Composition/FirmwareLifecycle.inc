@@ -94,8 +94,8 @@ void setup()
 
     const Esp32TaskDefinition serviceTasks[] = {
         {taskRC,     "RC",     6144,  3, 0},
-        {taskSerial, "Serial", 4096,  1, 0},
-        {taskWiFi,   "WiFi",   12288, 1, 0},
+        {taskSerial, "Serial", 8192,  1, 0},
+        {taskWiFi,   "WiFi",   16384, 1, 0},
         {taskBMP,    "BMP280", 3072,  1, 0},
         {taskToF,    "ToF",    4096,  1, 0},
         {taskCPU,    "CPU",    3072,  1, 0},

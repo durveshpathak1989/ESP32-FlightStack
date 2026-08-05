@@ -2,15 +2,15 @@
 //  1 Hz status line; optional ~4 Hz [PID] trace (Serial 'p' toggles).
 // ─────────────────────────────────────────────────────────────
 static SerialDiagnosticsSwc serialDiagnosticsSwc;
+static char g_diagnosticMessage[512];
 
 static void diagnosticPrintf(const char* format, ...)
 {
-    char message[512];
     va_list args;
     va_start(args, format);
-    vsnprintf(message, sizeof(message), format, args);
+    vsnprintf(g_diagnosticMessage, sizeof(g_diagnosticMessage), format, args);
     va_end(args);
-    diagnosticServiceAdapter.Write(message);
+    diagnosticServiceAdapter.Write(g_diagnosticMessage);
 }
 
 void SerialDiagnosticsSwc::Init()
@@ -159,9 +159,16 @@ static void taskSerial(void* /*pv*/)
 {
     const TickType_t period = pdMS_TO_TICKS(50);
     TickType_t lastWake = xTaskGetTickCount();
+    std::uint32_t stackReportDivider = 0;
     serialDiagnosticsSwc.Init();
     for (;;) {
         serialDiagnosticsSwc.Periodic();
+        if (++stackReportDivider >= 100) {
+            stackReportDivider = 0;
+            diagnosticPrintf("[STACK] Serial minimum free stack: %u bytes\n",
+                             static_cast<unsigned>(
+                                 uxTaskGetStackHighWaterMark(nullptr)));
+        }
         vTaskDelayUntil(&lastWake, period);
     }
 }
