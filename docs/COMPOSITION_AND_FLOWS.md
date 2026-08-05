@@ -75,8 +75,10 @@ flowchart LR
     SAFE --> MOTOR["MotorPort / ESCs"]
 ```
 
-At present these responsibilities are still partially co-located in the main control task;
-the diagram is the required decomposition target and preserves the current signal path.
+`MotorMixer` is now an active application component called by the production control path.
+The estimator, mode, safety, and remaining controller orchestration are still partially
+co-located in the main control task; the diagram is the required decomposition target and
+preserves the current signal path during migration.
 
 ## Runtime tuning and permanent save flow
 

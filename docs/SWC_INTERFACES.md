@@ -98,6 +98,30 @@ must not cause a controller to observe a partially updated snapshot.
 **State owner:** one instance per control axis/loop; never shared across axes.  
 **Failure policy:** near-zero `dt` produces zero derivative rather than division by zero.
 
+## Application SWC: `MotorMixer`
+
+**Provided interface:** `update(MotorMixerInput, MotorMixerConfig)` returns one complete
+`MotorMixerOutput`; `reset()` explicitly clears its throttle-slew history.
+
+| Input | Unit/range | Meaning |
+| --- | --- | --- |
+| throttle | normalized `[0, 1]` | requested collective throttle |
+| roll/pitch/yaw correction | normalized motor command | bounded controller outputs |
+| dt | seconds, positive | elapsed control-cycle time |
+| configuration | normalized values and rates/second | expo, slew, idle, cut, ramp, maximum |
+
+The output contains shaped throttle, all four pre-saturation values, final bounded Quad-X
+motor values, saturation status, pre-desaturation maximum, and remaining high-side authority.
+
+**Execution:** called synchronously by the 400 Hz control task. **Allocation/blocking/I/O:**
+none. **State owner:** the component exclusively owns the prior shaped throttle used by its
+slew limiter. The composition root owns one mixer instance. The instance is intentionally not
+reset by disarm in this migration because the former function-local state also survived disarm;
+changing that policy requires a separately reviewed safety change.
+
+**Failure policy:** external tuning validation must keep rates nonnegative and
+`idleRampEnd > throttleCut`. The component clamps normalized throttle and final motor commands.
+
 ## Infrastructure SWC: `PreferencesTuningStore`
 
 **Layer:** ESP32 platform services.  

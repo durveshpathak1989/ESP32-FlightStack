@@ -71,6 +71,7 @@
 #include "esp_timer.h"
 #include "src/Submodules/CalManager/CalibrationManager.h"
 #include "src/Application/FlightConfig.h"
+#include "src/Application/Control/MotorMixer.h"
 #include "src/Application/Control/PidController.h"
 #include "src/Application/Configuration/TuningState.h"
 #include "src/Platforms/Esp32/Storage/PreferencesTuningStore.h"
@@ -385,6 +386,7 @@ static PidController pidAngleRoll(
 static PidController pidAnglePitch(
     TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
 static PidController pidAngleYaw(TUNE_ANGLE_YAW_KP, 0.0f, 0.0f);
+static MotorMixer motorMixer;
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -1303,20 +1305,6 @@ static void taskRC(void* /*pv*/)
     }
 }
 
-// throttle smoothening
-static float throttleExpo(float x, float expo)
-{
-    x = constrain(x, 0.0f, 1.0f);
-    expo = constrain(expo, 0.0f, 1.0f);
-    return expo * x * x * x +(1.0f - expo) * x;
-}
-
-static float smoothStep01(float x)
-{
-    x = constrain(x, 0.0f, 1.0f);
-    return x * x * (3.0f - 2.0f * x);
-}
-
 static float wrapDeg180(float a)
 {
     while (a >  180.0f) a -= 360.0f;
@@ -2087,54 +2075,33 @@ static void taskControl(void* /*pv*/)
         pO = constrain(pO, -tune.pitch_output_limit, tune.pitch_output_limit);
         yO = constrain(yO, -tune.yaw_output_limit,   tune.yaw_output_limit);
 
-        // ── Throttle expo + smoothing ─────────────────────────
-        static float thrSmooth = 0.0f;
-
-        const float THROTTLE_EXPO              = tune.throttle_expo;
-        const float THROTTLE_UP_RATE_PER_SEC   = tune.throttle_up_rate_per_sec;
-        const float THROTTLE_DOWN_RATE_PER_SEC = tune.throttle_down_rate_per_sec;
-        const float MOTOR_IDLE                 = tune.motor_idle;
+        // The application mixer owns throttle shaping and the Quad-X equations.
         const float MOTOR_MAX                  = tune.motor_max;
         const float THROTTLE_CUT               = tune.throttle_cut;
-        const float IDLE_RAMP_END              = tune.idle_ramp_end;
-
-        float thrRaw = constrain(cmd.throttle, 0.0f, 1.0f);
-
-        float thrTarget = 0.0f;
-        if (thrRaw > THROTTLE_CUT) {
-            thrTarget = throttleExpo(thrRaw, THROTTLE_EXPO);
-        }
-
-        float maxStepUp   = THROTTLE_UP_RATE_PER_SEC * dt;
-        float maxStepDown = THROTTLE_DOWN_RATE_PER_SEC * dt;
-
-        if (thrTarget > thrSmooth) {
-            thrSmooth += min(thrTarget - thrSmooth, maxStepUp);
-        } else {
-            thrSmooth -= min(thrSmooth - thrTarget, maxStepDown);
-        }
-
-        float thr = constrain(thrSmooth, 0.0f, 1.0f);
-
-        float flPre = thr + rO - pO - yO;
-        float frPre = thr - rO - pO + yO;
-        float rlPre = thr + rO + pO + yO;
-        float rrPre = thr - rO + pO - yO;
-
-        float fl = flPre;
-        float fr = frPre;
-        float rl = rlPre;
-        float rr = rrPre;
-
-        // Desaturate high side first
-        bool motorSaturated = false;
-        float maxMotor = max(max(fl, fr), max(rl, rr));
-        const float controlAuthorityRemaining = max(0.0f, MOTOR_MAX - maxMotor);
-        if (maxMotor > MOTOR_MAX) {
-            motorSaturated = true;
-            float excess = maxMotor - MOTOR_MAX;
-            fl -= excess; fr -= excess; rl -= excess; rr -= excess;
-        }
+        const float thrRaw                     = constrain(cmd.throttle, 0.0f, 1.0f);
+        const MotorMixerConfig mixerConfig{
+            tune.throttle_expo,
+            tune.throttle_up_rate_per_sec,
+            tune.throttle_down_rate_per_sec,
+            tune.motor_idle,
+            tune.motor_max,
+            tune.throttle_cut,
+            tune.idle_ramp_end
+        };
+        const MotorMixerOutput mixed = motorMixer.update(
+            {cmd.throttle, rO, pO, yO, dt}, mixerConfig);
+        const float thr = mixed.shapedThrottle;
+        const float flPre = mixed.frontLeftPreSaturation;
+        const float frPre = mixed.frontRightPreSaturation;
+        const float rlPre = mixed.rearLeftPreSaturation;
+        const float rrPre = mixed.rearRightPreSaturation;
+        float fl = mixed.frontLeft;
+        float fr = mixed.frontRight;
+        float rl = mixed.rearLeft;
+        float rr = mixed.rearRight;
+        const bool motorSaturated = mixed.saturated;
+        const float maxMotor = mixed.maximumBeforeDesaturation;
+        const float controlAuthorityRemaining = mixed.controlAuthorityRemaining;
 
         if (LOG_MOTOR_SATURATION && motorSaturated) {
             static uint32_t lastMotorSatPrintMs = 0;
@@ -2148,18 +2115,6 @@ static void taskControl(void* /*pv*/)
                               maxMotor, MOTOR_MAX,
                               fl, fr, rl, rr);
             }
-        }
-
-        float idleBlend = smoothStep01((thr - THROTTLE_CUT) / (IDLE_RAMP_END - THROTTLE_CUT));
-        float motorMin = MOTOR_IDLE * idleBlend;
-
-        if (thr > THROTTLE_CUT) {
-            fl = constrain(fl, motorMin, MOTOR_MAX);
-            fr = constrain(fr, motorMin, MOTOR_MAX);
-            rl = constrain(rl, motorMin, MOTOR_MAX);
-            rr = constrain(rr, motorMin, MOTOR_MAX);
-        } else {
-            fl = fr = rl = rr = 0.0f;
         }
 
         // ── Motor PWM update ───────────────────────────────────
