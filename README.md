@@ -4,7 +4,7 @@ ESP32-FlightStack is an open-source quadcopter flight-control stack for DIY dron
 
 A custom quadcopter flight controller built around the **Adafruit HUZZAH32 / ESP32-WROOM-32E**, written in Arduino C++ on top of FreeRTOS. The project targets both stable flight and rigorous embedded-systems research: real-time scheduling, sensor fusion, Wi-Fi telemetry, onboard logging, runtime PID tuning, autonomous calibration, and over-the-air firmware updates, all on a $10 microcontroller.
 
-**Firmware version:** v6.0.0<br>
+**Firmware version:** v6.1.0<br>
 **Control loop:** 400 Hz, `esp_timer`-driven, pinned to Core 1<br>
 **AHRS default:** Attitude EKF (switchable at runtime to Mahony or Madgwick)
 
@@ -893,7 +893,7 @@ OTA is gated on disarmed + throttle low + motors off. Confirm all three in the G
 
 ---
 
-## Known Firmware Issues (v6.0.0)
+## Known Firmware Issues (v6.1.0)
 
 The following issues are identified and tracked for the next release:
 
