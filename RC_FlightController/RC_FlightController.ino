@@ -85,6 +85,7 @@
 #include "src/Platforms/Esp32/Runtime/SnapshotRte.h"
 #include "src/Platforms/Esp32/Tasks/CpuServiceTask.h"
 #include "src/Platforms/Esp32/Tasks/GpsServiceTask.h"
+#include "src/Platforms/Esp32/Tasks/ReceiverServiceTask.h"
 #include "src/Platforms/Esp32/Tasks/BarometerServiceTask.h"
 #include "src/Platforms/Esp32/Tasks/TofServiceTask.h"
 
@@ -1121,65 +1122,10 @@ static void taskGPS(void* /*pv*/)
 // ─────────────────────────────────────────────────────────────
 static void taskRC(void* /*pv*/)
 {
-    const TickType_t period = pdMS_TO_TICKS(5);
-    TickType_t lastWake = xTaskGetTickCount();
-    bool swdPrev = false;
-    bool vrbEscPrev = false;
-
-
-    for (;;) {
-        rcReceiver.update();
-        RCCommand cmd = rcReceiver.getCommand();
-
-        if (cmd.swdHigh && !swdPrev) {
-            if (cmd.mode == FlightMode::DISARMED) {
-                calManager.request(CalibrationMode::IMU_ALL_GUIDED,CalibrationSource::RC);        
-                calLog("[RC] Calibration Manager request — IMU All GUIDED.");
-            } else if (cmd.mode != FlightMode::DISARMED) {
-                calLog("[RC] Cannot calibrate while armed.");
-            }
-        }
-        swdPrev = cmd.swdHigh;
-        // CH6 / VrB rising edge requests ESC calibration.
-        // SWC still confirms the dangerous step inside CalibrationManager.
-        const bool vrbEscHigh = cmd.valid &&
-                                (cmd.raw[RC_CH_AUX5] >= ESC_CALIB_VRB_THRESHOLD);
-
-        if (vrbEscHigh && !vrbEscPrev) {
-            if (cmd.mode == FlightMode::DISARMED && cmd.throttle <= TUNE_THROTTLE_CUT) {
-                calManager.request(CalibrationMode::ESC, CalibrationSource::RC);
-                calLog("[RC] ESC calibration requested by VrB. Use SWC to confirm.");
-            } else {
-                calLog("[RC] ESC calibration rejected — disarm and set throttle low first.");
-            }
-        }
-
-        vrbEscPrev = vrbEscHigh;
-
-        // Optional safety cancel: lowering VrB cancels ESC calibration.
-        CalibrationStatus rcCalStatus = calManager.status();
-        if (rcCalStatus.active &&
-            rcCalStatus.mode == CalibrationMode::ESC &&
-            !vrbEscHigh) {
-            calManager.cancel();
-            calLog("[RC] ESC calibration cancelled — VrB lowered.");
-        }
-        // ── Per-second iBUS health: good rate vs checksum failures ──
-        static uint32_t lastReportMs = 0;
-        static uint32_t lastCsumFail = 0;
-        uint32_t nowMs = millis();
-        if (nowMs - lastReportMs >= 1000) {
-            uint32_t fails    = rcReceiver.getChecksumFailCount();
-            uint32_t failPerS = fails - lastCsumFail;
-            lastCsumFail = fails;
-            lastReportMs = nowMs;
-            DBG_PRINTF("[iBUS] %.0f Hz good | %lu bad/s | %lu bad total\n",
-                          rcReceiver.getFrameRate(),
-                          (unsigned long)failPerS,
-                          (unsigned long)fails);
-        }
-        vTaskDelayUntil(&lastWake, period);
-    }
+    static ReceiverServiceTask receiverTask(
+        rcReceiver, calManager, calLog,
+        ESC_CALIB_VRB_THRESHOLD, TUNE_THROTTLE_CUT);
+    receiverTask.run();
 }
 
 static void computeControlAttitude(const AttitudeEstimate& att,
