@@ -2,7 +2,7 @@
  * Name: Logger.h
  * Use: High-speed diagnostic flight logger for EKF, target tracking,
  *      PID terms, motor saturation, sensor quality, timing, and Paper A data.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Baseline: ESP32-FlightStack firmware v5.0.0
  */
 
@@ -14,9 +14,54 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
+#include "../EKF/AttitudeEKF.h"
 
 #ifndef LOGGER_DEFAULT_CAPACITY
 #define LOGGER_DEFAULT_CAPACITY 600U   // 100 Hz x 6 s default
+#endif
+
+// Latest EKF rate-state snapshot. It is published immediately after each
+// AttitudeEKF::update() and copied into the 100 Hz LoggerRow at push time.
+struct LoggerEkfRateSnapshot {
+    float roll_rate_dps;
+    float pitch_rate_dps;
+    float yaw_rate_dps;
+    uint32_t sequence;
+    bool valid;
+};
+
+void loggerPublishEkfRateSnapshot(float rollRateDps,
+                                  float pitchRateDps,
+                                  float yawRateDps,
+                                  bool valid);
+LoggerEkfRateSnapshot loggerReadEkfRateSnapshot();
+
+// Instrument only the flight-controller-owned EKF object without changing the
+// EKF math or control signal. Logger.h is included before the global EKF object
+// declaration in RC_FlightController.ino, so the alias below makes that object
+// this thin derived type. Calls remain API-compatible with AttitudeEKF.
+class LoggerInstrumentedAttitudeEKF : public AttitudeEKF {
+public:
+    bool update(const AHRSInput& in, float dt, AttitudeEstimate& out) {
+        const bool ok = AttitudeEKF::update(in, dt, out);
+        const BodyRateEstimate& rates = bodyRates();
+        loggerPublishEkfRateSnapshot(rollRateDps(),
+                                     pitchRateDps(),
+                                     yawRateDps(),
+                                     ok && rates.valid);
+        return ok;
+    }
+
+    void reset() {
+        AttitudeEKF::reset();
+        loggerPublishEkfRateSnapshot(0.0f, 0.0f, 0.0f, false);
+    }
+};
+
+// Deliberately scoped to the flight-controller translation unit. This does not
+// replace or modify the EKF implementation; it only records its public outputs.
+#ifndef LOGGER_DISABLE_EKF_RATE_INSTRUMENTATION
+#define AttitudeEKF LoggerInstrumentedAttitudeEKF
 #endif
 
 struct LoggerRow {
@@ -72,6 +117,21 @@ struct LoggerRow {
     float ekf_bgx_dps;
     float ekf_bgy_dps;
     float ekf_bgz_dps;
+
+    // Rate-signal comparison. The feedback signal is reconstructed exactly as
+    // targetRate - rateError from the same control cycle. With the current
+    // feedback gate disabled, it is the notch + 50 Hz LPF gyro signal.
+    float feedback_roll_rate_dps;
+    float feedback_pitch_rate_dps;
+    float feedback_yaw_rate_dps;
+    float bias_corrected_roll_rate_dps;
+    float bias_corrected_pitch_rate_dps;
+    float bias_corrected_yaw_rate_dps;
+    float ekf_roll_rate_dps;
+    float ekf_pitch_rate_dps;
+    float ekf_yaw_rate_dps;
+    uint8_t ekf_rate_valid;
+
     uint8_t ahrs_mode;
     uint8_t ekf_mag_used;
 
