@@ -710,7 +710,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="data-row"><span class="dn">Notch</span><span class="dv" id="sNotch">—</span></div>
     <div class="data-row"><span class="dn">EKF R</span><span class="dv" id="sEkfR">—</span></div>
     <div id="tuneStatusTune" style="margin-top:8px;font-size:11px;color:var(--t3)">Wi-Fi only · DISARM first</div>
-    <button class="apply-all-btn" onclick="sendAllGains()">⬆ APPLY ALL TUNING LEVERS</button>
+    <button class="apply-all-btn" onclick="sendAllGains()">💾 SAVE ALL TUNING TO DRONE (NVS)</button>
   </div>
 </section>
 
@@ -936,7 +936,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="panel cfg-actions">
       <div id="cfgStatus">No unsaved changes</div>
       <button class="cfg-btn-primary" onclick="saveConfig()">💾 SAVE TO BROWSER</button>
-      <button class="cfg-btn-push" onclick="pushConfigToDrone()">⬆ PUSH TO DRONE (Wi-Fi)</button>
+      <button class="cfg-btn-push" onclick="pushConfigToDrone()">⬆ PUSH CONFIG TO DRONE (Wi-Fi)</button>
       <button class="cfg-btn-reset" onclick="resetConfig()">↺ RESET DEFAULTS</button>
       <div style="font-size:10px;color:var(--t3);line-height:1.6;margin-top:4px">
         <span style="color:var(--green)">●</span> ESP32 params require Wi-Fi connection<br>
@@ -1125,7 +1125,7 @@ async function pushConfigToDrone(){
     ekf_mag_yaw_sign:        CFG.ekfMagYawSign
   };
   await postTune(payload);
-  el.textContent='✓ Pushed to drone';el.style.color='var(--green)';
+  el.textContent='✓ Saved permanently to drone';el.style.color='var(--green)';
   setTimeout(()=>{el.textContent='Config active';el.style.color='var(--t3)';},3000);
 }
 function resetConfig(){
@@ -1743,7 +1743,7 @@ async function postTune(payload){
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   const s=document.getElementById('tuneStatusTune');s.textContent='Sending...';s.style.color='var(--orange)';
   try{const r=await fetch(tuneUrl2,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j=await r.json();
-    if(j.ok){s.textContent='✓ Applied';s.style.color='var(--green)';addCalLog('[TUNE] Gains applied: '+JSON.stringify(payload),'lTUNE');}
+    if(j.ok){s.textContent='✓ Applied + saved';s.style.color='var(--green)';addCalLog('[TUNE] Gains applied and saved permanently: '+JSON.stringify(payload),'lTUNE');}
     else{s.textContent='ESP32 error';s.style.color='var(--red)';}}
   catch(e){s.textContent='POST failed';s.style.color='var(--red)';}
   setTimeout(()=>{s.textContent='Ready';s.style.color='var(--t3)';},3000);

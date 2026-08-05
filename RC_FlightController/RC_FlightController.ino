@@ -47,6 +47,7 @@
  */
 
 #include <SPI.h>
+#include <Preferences.h>
 #include <stdarg.h>
 #include "src/Submodules/DebugConfig/DebugConfig.h"
 #include "src/Submodules/MotorControl/MotorControl.h"
@@ -538,6 +539,85 @@ struct TuningState {
 };
 static TuningState       g_tuning;
 static SemaphoreHandle_t g_tuneMutex;
+
+// Versioned NVS record for runtime tuning. The size and CRC checks make a
+// firmware update or interrupted flash write fall back safely to defaults.
+static constexpr uint32_t TUNING_NVS_MAGIC   = 0x54554E45UL; // "TUNE"
+static constexpr uint16_t TUNING_NVS_SCHEMA  = 1;
+static constexpr char     TUNING_NVS_NS[]    = "flightTune";
+static constexpr char     TUNING_NVS_KEY[]   = "state";
+
+struct PersistedTuningRecord {
+    uint32_t magic;
+    uint16_t schema;
+    uint16_t stateSize;
+    TuningState state;
+    uint32_t crc32;
+};
+
+static uint32_t tuningCrc32(const uint8_t* data, size_t length)
+{
+    uint32_t crc = 0xFFFFFFFFUL;
+    for (size_t i = 0; i < length; ++i) {
+        crc ^= data[i];
+        for (uint8_t bit = 0; bit < 8; ++bit)
+            crc = (crc >> 1) ^ (0xEDB88320UL & (0UL - (crc & 1UL)));
+    }
+    return ~crc;
+}
+
+static bool tuningRecordValid(const void* recordData)
+{
+    const PersistedTuningRecord& record =
+        *static_cast<const PersistedTuningRecord*>(recordData);
+    if (record.magic != TUNING_NVS_MAGIC ||
+        record.schema != TUNING_NVS_SCHEMA ||
+        record.stateSize != sizeof(TuningState)) return false;
+    return record.crc32 == tuningCrc32(
+        reinterpret_cast<const uint8_t*>(&record.state), sizeof(record.state));
+}
+
+// Caller holds g_tuneMutex. Writes occur only after /tune has confirmed the
+// aircraft is disarmed and constrained all incoming values.
+static bool saveTuningToNvsLocked()
+{
+    PersistedTuningRecord record{};
+    record.magic = TUNING_NVS_MAGIC;
+    record.schema = TUNING_NVS_SCHEMA;
+    record.stateSize = sizeof(TuningState);
+    record.state = g_tuning;
+    record.state.dirty = false;
+    record.crc32 = tuningCrc32(
+        reinterpret_cast<const uint8_t*>(&record.state), sizeof(record.state));
+
+    Preferences prefs;
+    if (!prefs.begin(TUNING_NVS_NS, false)) return false;
+    const size_t written = prefs.putBytes(TUNING_NVS_KEY, &record, sizeof(record));
+    PersistedTuningRecord verify{};
+    const size_t read = prefs.getBytes(TUNING_NVS_KEY, &verify, sizeof(verify));
+    prefs.end();
+    return written == sizeof(record) && read == sizeof(verify) &&
+           tuningRecordValid(&verify) && verify.crc32 == record.crc32;
+}
+
+// Defaults must already be present in g_tuning. Invalid, missing, or obsolete
+// records are ignored, leaving those firmware defaults intact.
+static bool loadTuningFromNvs()
+{
+    Preferences prefs;
+    if (!prefs.begin(TUNING_NVS_NS, true)) return false;
+    if (prefs.getBytesLength(TUNING_NVS_KEY) != sizeof(PersistedTuningRecord)) {
+        prefs.end();
+        return false;
+    }
+    PersistedTuningRecord record{};
+    const size_t read = prefs.getBytes(TUNING_NVS_KEY, &record, sizeof(record));
+    prefs.end();
+    if (read != sizeof(record) || !tuningRecordValid(&record)) return false;
+    g_tuning = record.state;
+    g_tuning.dirty = true;
+    return true;
+}
 
 // Tune transaction diagnostics for GCS verification.
 // request_seq increments when /tune accepts a payload while disarmed.
@@ -1255,11 +1335,19 @@ static bool handleTune(const TunePacket& in)
     g_tuning.dirty = true;
     applyTuningToObjectsLocked();
     g_notchResetPending = true;
+    const bool persisted = saveTuningToNvsLocked();
     uint32_t appliedSeq = g_tuneApplySeq;
     xSemaphoreGive(g_tuneMutex);
 
-    DBG_PRINTF("[TUNE] Applied immediately seq=%lu.\n", (unsigned long)appliedSeq);
-    calLogf("[TUNE] Applied seq=%lu.", (unsigned long)appliedSeq);
+    if (!persisted) {
+        DBG_PRINTF("[TUNE] Applied seq=%lu but NVS save verification FAILED.\n",
+                   (unsigned long)appliedSeq);
+        calLogf("[TUNE][ERROR] Applied seq=%lu but permanent save failed.",
+                (unsigned long)appliedSeq);
+        return false;
+    }
+    DBG_PRINTF("[TUNE] Applied and saved to NVS seq=%lu.\n", (unsigned long)appliedSeq);
+    calLogf("[TUNE] Applied and saved permanently seq=%lu.", (unsigned long)appliedSeq);
     return true;
 }
 
@@ -3151,6 +3239,13 @@ void setup()
     DBG_PRINTLN(F("[BOOT] iBUS ready."));
 
     syncTuningFromObjects();
+    DBG_PRINT(F("[BOOT] NVS tuning... "));
+    if (loadTuningFromNvs()) {
+        applyTuningToObjects();
+        DBG_PRINTLN(F("loaded and applied."));
+    } else {
+        DBG_PRINTLN(F("none/invalid — using firmware defaults."));
+    }
 
     xTaskCreatePinnedToCore(taskRC,      "RC",     6144,  nullptr, 3, &hTaskRC,      0);
     xTaskCreatePinnedToCore(taskSerial,  "Serial", 4096,  nullptr, 1, &hTaskSerial,  0);
