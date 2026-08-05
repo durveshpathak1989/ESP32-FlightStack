@@ -23,6 +23,9 @@ For example, every IMU adapter must return acceleration in g, angular rate in
 degrees per second, magnetic field in microtesla, and an explicit validity flag.
 Controllers never need to know which IMU produced the sample.
 
+The first interchangeable backend is BNO085. See `docs/BNO085.md` for its build
+flag, wiring, estimator behavior, and validation checklist.
+
 ## Port to another microcontroller
 
 Do not copy and edit flight-control equations. Implement the platform services

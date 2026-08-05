@@ -51,7 +51,7 @@
 #include <stdarg.h>
 #include "src/Submodules/DebugConfig/DebugConfig.h"
 #include "src/Submodules/MotorControl/MotorControl.h"
-#include "src/Submodules/IMU/MPU9250.h"
+#include "src/Platforms/Esp32/Imu/SelectedImu.h"
 #include "src/Submodules/iFly/FlySkyiBUS.h"
 #include "src/Submodules/WiFiTelemetry/TelemetryWiFi.h"
 #include "src/Submodules/BatteryMonitor/BatteryMonitor.h"
@@ -187,7 +187,7 @@ static void resetTimingStats()
 // ─────────────────────────────────────────────────────────────
 //  IMU + attitude estimator objects
 // ─────────────────────────────────────────────────────────────
-MPU9250 imu(PIN_MPU_CS);
+SelectedImu imu(PIN_MPU_CS);
 CalibrationManager calManager;
 MahonyAHRS mahony;
 AttitudeEstimate mahonyAtt;
@@ -1163,13 +1163,20 @@ static void runAutonomousCalibration()
 {
     calLog("[CAL] ═══ AUTONOMOUS CALIBRATION STARTED ═══");
 
+    if (!SelectedImu::supportsManualCalibration()) {
+        calLog("[CAL] Manual calibration is not used by this IMU backend.");
+        calLog("[CAL] Follow the BNO085 calibration procedure and save DCD in the sensor adapter.");
+        g_calibState = CalibState::DONE;
+        return;
+    }
+
     // ── Stage 1: Gyro ────────────────────────────────────────
     g_calibState = CalibState::RUNNING_GYRO;
     calLogf("[CAL] 1/3 GYRO — flat + still. Settle %ds, sample %ds...",
             GYRO_SETTLE_MS/1000, GYRO_SAMPLE_MS/1000);
     silentWait(GYRO_SETTLE_MS);
     {
-        MPU_SensorData avg;
+        ImuSensorData avg;
         imu.sampleAvg(GYRO_SAMPLE_MS / 2, avg);
         imu.cal.gx_b = avg.gx_dps;
         imu.cal.gy_b = avg.gy_dps;
@@ -1226,7 +1233,7 @@ static void runAutonomousCalibration()
 
         silentWait(ACCEL_HOLD_MS);
 
-        MPU_SensorData avg;
+        ImuSensorData avg;
         imu.sampleAvg(ACCEL_HOLD_MS / 2, avg);
 
         float axisValue[3] = { avg.ax_g, avg.ay_g, avg.az_g };
@@ -1297,7 +1304,7 @@ static void runAutonomousCalibration()
         float xn=1e9f,yn=1e9f,zn=1e9f,xx=-1e9f,yx=-1e9f,zx=-1e9f;
         uint32_t end=millis()+MAG_DURATION_MS, lp=0;
         while (millis() < end) {
-            MPU_SensorData s;
+            ImuSensorData s;
             if (imu.readScaled(s)) {
                 if (fabsf(s.mx_uT)>0.1f || fabsf(s.my_uT)>0.1f || fabsf(s.mz_uT)>0.1f) {
                     if(s.mx_uT<xn)xn=s.mx_uT; if(s.mx_uT>xx)xx=s.mx_uT;
@@ -1779,7 +1786,7 @@ static void taskControl(void* /*pv*/)
         }
 
         // ── IMU read + EKF AHRS ───────────────────────────────
-        MPU_SensorData s;
+        ImuSensorData s;
         AttitudeEstimate   att;
         uint32_t phaseStartUs = micros();
         bool imuOk = imu.readScaled(s);
@@ -1802,7 +1809,7 @@ static void taskControl(void* /*pv*/)
 
             // Apply tunable motor-vibration notch before EKF and before PID.
             // Keep original `s` for raw telemetry/logging; use `sf` for control.
-            MPU_SensorData sf = s;
+            ImuSensorData sf = s;
             sf.ax_g   = notchAx.apply(s.ax_g);
             sf.ay_g   = notchAy.apply(s.ay_g);
             sf.az_g   = notchAz.apply(s.az_g);
@@ -2977,13 +2984,15 @@ void setup()
     SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_MPU_CS);
     delay(10);
 
-    DBG_PRINT(F("[BOOT] IMU... "));
+    DBG_PRINTF("[BOOT] IMU backend: %s... ", SelectedImu::backendName());
     if (!imu.begin()) {
         DBG_PRINTLN(F("FAILED. Check SPI wiring. Halting."));
         while (true) delay(1000);
     }
     DBG_PRINTLN(F("OK"));
+#if FLIGHT_IMU_BACKEND == FLIGHT_IMU_BACKEND_MPU9250
     calManager.begin(imu);
+#endif
     calManager.attachMotorOutputs(writeMotors, motorsOff);
     DBG_PRINTLN(F("[BOOT] CalibrationManager ready."));
 

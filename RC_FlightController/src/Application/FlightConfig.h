@@ -8,6 +8,15 @@
 #include <cstddef>
 #include <cstdint>
 
+// IMU backend selection. The default requires no new dependency. To use a
+// BNO085, install Adafruit BNO08x and compile with
+// -DFLIGHT_IMU_BACKEND=FLIGHT_IMU_BACKEND_BNO085.
+#define FLIGHT_IMU_BACKEND_MPU9250 1
+#define FLIGHT_IMU_BACKEND_BNO085 2
+#ifndef FLIGHT_IMU_BACKEND
+#define FLIGHT_IMU_BACKEND FLIGHT_IMU_BACKEND_MPU9250
+#endif
+
 // Hardware pins -------------------------------------------------------------
 constexpr uint8_t PIN_SPI_SCK = 5;
 constexpr uint8_t PIN_SPI_MISO = 19;
@@ -25,6 +34,8 @@ constexpr uint8_t PIN_BMP_SCL = 22;
 constexpr uint8_t PIN_GPS_RX = 23;
 constexpr uint8_t PIN_GPS_TX = 17;
 constexpr uint8_t PIN_BATTERY_ADC = 34;
+constexpr uint8_t BNO085_I2C_ADDRESS = 0x4A;
+constexpr uint32_t BNO085_REPORT_INTERVAL_US = 2500;
 
 // Control-loop timing and filtering -----------------------------------------
 constexpr size_t TIMING_BUF_SIZE = 800;
