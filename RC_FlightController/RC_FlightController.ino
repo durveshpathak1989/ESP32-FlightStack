@@ -71,14 +71,17 @@
 #include "esp_timer.h"
 #include "src/Submodules/CalManager/CalibrationManager.h"
 #include "src/Application/FlightConfig.h"
+#include "src/Application/Calibration/LevelTrimService.h"
 #include "src/Application/Control/CascadedController.h"
 #include "src/Application/Control/LowPassFilter.h"
 #include "src/Application/Control/MotorMixer.h"
 #include "src/Application/Control/PidController.h"
 #include "src/Application/Configuration/TuningState.h"
 #include "src/Application/Estimation/AttitudeEstimatorRouter.h"
+#include "src/Application/Safety/FlightSafetyPolicy.h"
 #include "src/Application/State/FlightState.h"
 #include "src/Platforms/Esp32/Storage/PreferencesTuningStore.h"
+#include "src/Platforms/Esp32/Runtime/Esp32FlightScheduler.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
@@ -230,10 +233,7 @@ static bool g_transitionTrackerInitialized = false;
 static FlightMode g_lastObservedMode = FlightMode::DISARMED;
 static bool g_lastObservedArmed = false;
 
-// Software level-zero trim state. Offset is post-AHRS only.
-static float g_levelRollOffsetDeg  = 0.0f;
-static float g_levelPitchOffsetDeg = 0.0f;
-static float g_levelYawOffsetDeg   = 0.0f;
+static LevelTrimService levelTrim;
 
 // PID-trace toggle (Serial 'p'). Off at boot so the log stays clean.
 static volatile bool g_pidTrace = false;
@@ -260,31 +260,7 @@ enum class CalibState : uint8_t {
 };
 static volatile CalibState g_calibState = CalibState::IDLE;
 
-// ─────────────────────────────────────────────────────────────
-//  Task handles
-// ─────────────────────────────────────────────────────────────
-static TaskHandle_t hTaskIMU    = nullptr;
-static TaskHandle_t hTaskControl= nullptr;
-static TaskHandle_t hTaskRC     = nullptr;
-static TaskHandle_t hTaskSerial = nullptr;
-static TaskHandle_t hTaskWiFi   = nullptr;
-static TaskHandle_t hTaskBMP    = nullptr;
-static TaskHandle_t hTaskToF    = nullptr;
-static TaskHandle_t hTaskCPU    = nullptr;
-static TaskHandle_t hTaskGPS    = nullptr;
-
-// High-resolution 400 Hz release timer.
-// This is better than vTaskDelayUntil() when the FreeRTOS tick is coarse,
-// and better than a busy-wait because the control task blocks between releases
-// so the watchdog/idle task still gets CPU time.
-static esp_timer_handle_t g_controlTimer = nullptr;
-
-static void controlTimerCallback(void* /*arg*/)
-{
-    if (hTaskControl != nullptr) {
-        xTaskNotifyGive(hTaskControl);
-    }
-}
+static Esp32FlightScheduler flightScheduler;
 
 static PidController pidRateRoll(
     TUNE_RATE_ROLL_KP, TUNE_RATE_ROLL_KI, TUNE_RATE_ROLL_KD);
@@ -1220,21 +1196,14 @@ static void taskRC(void* /*pv*/)
     }
 }
 
-static float wrapDeg180(float a)
-{
-    while (a >  180.0f) a -= 360.0f;
-    while (a < -180.0f) a += 360.0f;
-    return a;
-}
-
 static void computeControlAttitude(const AttitudeEstimate& att,
                                    float& rollCtrl,
                                    float& pitchCtrl,
                                    float& yawCtrl)
 {
-    rollCtrl  = att.roll_deg  - g_levelRollOffsetDeg;
-    pitchCtrl = att.pitch_deg - g_levelPitchOffsetDeg;
-    yawCtrl   = wrapDeg180(att.yaw_deg - g_levelYawOffsetDeg);
+    rollCtrl  = levelTrim.controlRollDeg(att.roll_deg);
+    pitchCtrl = levelTrim.controlPitchDeg(att.pitch_deg);
+    yawCtrl   = levelTrim.controlYawDeg(att.yaw_deg);
 }
 
 static LowPassFilter lpfGx, lpfGy, lpfGz;
@@ -1503,7 +1472,8 @@ static void taskControl(void* /*pv*/)
         }
 
         // ── Calibration active: keep motors off and skip flight control ──
-        if (calManager.shouldBlockFlight()) {
+        if (FlightSafetyPolicy::controlMustStop(
+                false, false, calManager.shouldBlockFlight())) {
             if (!calManager.ownsMotors() && g_motorOutputsActive) {
                 motorsOff();
                 g_motorOutputsActive = false;
@@ -1651,56 +1621,30 @@ static void taskControl(void* /*pv*/)
 
         // Level-zero capture: DISARMED + SWB/ACRO high.
         // Uses raw CH8 because cmd.mode is DISARMED while disarmed, even if SWB is high.
-        static bool levelZeroWasHigh = false;
-        static bool levelZeroCapturing = false;
-        static uint16_t levelZeroCount = 0;
-        static uint32_t levelZeroStartMs = 0;
-        static double levelRollSum = 0.0, levelPitchSum = 0.0, levelYawSum = 0.0;
         const bool swbAcroHigh = (cmd.valid && cmd.raw[RC_CH_AUX2] >= LEVEL_ZERO_SWB_THRESHOLD);
         const bool canCaptureLevelZero = (cmd.mode == FlightMode::DISARMED && imuOk && swbAcroHigh);
-
-        if (!swbAcroHigh) {
-            levelZeroWasHigh = false;
-            levelZeroCapturing = false;
-            levelZeroCount = 0;
-            levelZeroStartMs = 0;
-            levelRollSum = levelPitchSum = levelYawSum = 0.0;
-        } else if (canCaptureLevelZero && !levelZeroWasHigh) {
-            if (!levelZeroCapturing) {
-                levelZeroCapturing = true;
-                levelZeroCount = 0;
-                levelZeroStartMs = millis();
-                levelRollSum = levelPitchSum = levelYawSum = 0.0;
-                DBG_PRINTLN(F("[LEVEL] Capturing software zero — keep drone still..."));
-                calLog("[LEVEL] Capturing software zero — keep drone still...");
-            }
-
-            levelRollSum  += att.roll_deg;
-            levelPitchSum += att.pitch_deg;
-            levelYawSum   += att.yaw_deg;
-            levelZeroCount++;
-
-            if ((millis() - levelZeroStartMs) >= LEVEL_ZERO_SAMPLE_MS && levelZeroCount > 0) {
-                g_levelRollOffsetDeg  = (float)(levelRollSum  / (double)levelZeroCount);
-                g_levelPitchOffsetDeg = (float)(levelPitchSum / (double)levelZeroCount);
-                g_levelYawOffsetDeg   = (float)(levelYawSum   / (double)levelZeroCount);
-                computeControlAttitude(att, rollCtrlDeg, pitchCtrlDeg, yawCtrlDeg);
-
-                DBG_PRINTF("[LEVEL] Zero saved: rollOff=%+.2f pitchOff=%+.2f yawOff=%+.2f deg\n",
-                              g_levelRollOffsetDeg, g_levelPitchOffsetDeg, g_levelYawOffsetDeg);
-                calLogf("[LEVEL] Zero saved: R=%+.2f P=%+.2f Y=%+.2f deg",
-                        g_levelRollOffsetDeg, g_levelPitchOffsetDeg, g_levelYawOffsetDeg);
-
-                levelZeroWasHigh = true;
-                levelZeroCapturing = false;
-                levelZeroCount = 0;
-                levelZeroStartMs = 0;
-                levelRollSum = levelPitchSum = levelYawSum = 0.0;
-            }
+        const LevelTrimUpdate levelEvent = levelTrim.update(
+            swbAcroHigh, canCaptureLevelZero, millis(), LEVEL_ZERO_SAMPLE_MS,
+            att.roll_deg, att.pitch_deg, att.yaw_deg);
+        if (levelEvent.captureStarted) {
+            DBG_PRINTLN(F("[LEVEL] Capturing software zero — keep drone still..."));
+            calLog("[LEVEL] Capturing software zero — keep drone still...");
+        }
+        if (levelEvent.captureCompleted) {
+            computeControlAttitude(att, rollCtrlDeg, pitchCtrlDeg, yawCtrlDeg);
+            DBG_PRINTF("[LEVEL] Zero saved: rollOff=%+.2f pitchOff=%+.2f yawOff=%+.2f deg\n",
+                       levelTrim.rollOffsetDeg(), levelTrim.pitchOffsetDeg(),
+                       levelTrim.yawOffsetDeg());
+            calLogf("[LEVEL] Zero saved: R=%+.2f P=%+.2f Y=%+.2f deg",
+                    levelTrim.rollOffsetDeg(), levelTrim.pitchOffsetDeg(),
+                    levelTrim.yawOffsetDeg());
         }
 
         // ── DISARMED / FAILSAFE ───────────────────────────────
-        if (cmd.mode == FlightMode::DISARMED || cmd.mode == FlightMode::FAILSAFE) {
+        if (FlightSafetyPolicy::controlMustStop(
+                cmd.mode == FlightMode::DISARMED,
+                cmd.mode == FlightMode::FAILSAFE,
+                false)) {
             phaseStartUs = micros();
             if (g_motorOutputsActive) {
                 // One-shot stop only. Repeating motorOff() at 400 Hz was measured
@@ -1796,9 +1740,9 @@ static void taskControl(void* /*pv*/)
                     g_state.roll_ctrl_deg = rollCtrlDeg;
                     g_state.pitch_ctrl_deg = pitchCtrlDeg;
                     g_state.yaw_ctrl_deg = yawCtrlDeg;
-                    g_state.roll_offset_deg = g_levelRollOffsetDeg;
-                    g_state.pitch_offset_deg = g_levelPitchOffsetDeg;
-                    g_state.yaw_offset_deg = g_levelYawOffsetDeg;
+                    g_state.roll_offset_deg = levelTrim.rollOffsetDeg();
+                    g_state.pitch_offset_deg = levelTrim.pitchOffsetDeg();
+                    g_state.yaw_offset_deg = levelTrim.yawOffsetDeg();
                     g_state.ax_g=s.ax_g; g_state.ay_g=s.ay_g; g_state.az_g=s.az_g;
                     g_state.gx_dps=s.gx_dps; g_state.gy_dps=s.gy_dps; g_state.gz_dps=s.gz_dps;
                     g_state.mx_uT=s.mx_uT; g_state.my_uT=s.my_uT; g_state.mz_uT=s.mz_uT;
@@ -2025,9 +1969,9 @@ static void taskControl(void* /*pv*/)
             row.ctrl_roll_deg = roll;
             row.ctrl_pitch_deg = pitch;
             row.ctrl_yaw_deg = imuOk ? yawCtrlDeg : 0.0f;
-            row.zero_roll_deg = g_levelRollOffsetDeg;
-            row.zero_pitch_deg = g_levelPitchOffsetDeg;
-            row.zero_yaw_deg = g_levelYawOffsetDeg;
+            row.zero_roll_deg = levelTrim.rollOffsetDeg();
+            row.zero_pitch_deg = levelTrim.pitchOffsetDeg();
+            row.zero_yaw_deg = levelTrim.yawOffsetDeg();
 
             row.ax_g = imuOk ? s.ax_g : 0.0f;
             row.ay_g = imuOk ? s.ay_g : 0.0f;
@@ -2130,9 +2074,9 @@ static void taskControl(void* /*pv*/)
                 g_state.roll_ctrl_deg = rollCtrlDeg;
                 g_state.pitch_ctrl_deg = pitchCtrlDeg;
                 g_state.yaw_ctrl_deg = yawCtrlDeg;
-                g_state.roll_offset_deg = g_levelRollOffsetDeg;
-                g_state.pitch_offset_deg = g_levelPitchOffsetDeg;
-                g_state.yaw_offset_deg = g_levelYawOffsetDeg;
+                g_state.roll_offset_deg = levelTrim.rollOffsetDeg();
+                g_state.pitch_offset_deg = levelTrim.pitchOffsetDeg();
+                g_state.yaw_offset_deg = levelTrim.yawOffsetDeg();
                 g_state.ax_g=s.ax_g; g_state.ay_g=s.ay_g; g_state.az_g=s.az_g;
                 g_state.gx_dps=s.gx_dps; g_state.gy_dps=s.gy_dps; g_state.gz_dps=s.gz_dps;
                 g_state.mx_uT=s.mx_uT; g_state.my_uT=s.my_uT; g_state.mz_uT=s.mz_uT;
@@ -2536,11 +2480,8 @@ static bool otaIsSafeToStart()
     s = g_state;
     xSemaphoreGive(g_flightMutex);
 
-    const float motorMax = max(max(s.motorFL, s.motorFR), max(s.motorRL, s.motorRR));
-    const bool throttleLow = s.rc.throttle <= 0.03f;
-    const bool motorsOff   = motorMax <= 0.001f;
-
-    return (!s.armed) && throttleLow && motorsOff;
+    return FlightSafetyPolicy::otaAllowed(
+        {s.armed, s.rc.throttle, s.motorFL, s.motorFR, s.motorRL, s.motorRR});
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2693,26 +2634,20 @@ void setup()
         DBG_PRINTLN(F("none/invalid — using firmware defaults."));
     }
 
-    xTaskCreatePinnedToCore(taskRC,      "RC",     6144,  nullptr, 3, &hTaskRC,      0);
-    xTaskCreatePinnedToCore(taskSerial,  "Serial", 4096,  nullptr, 1, &hTaskSerial,  0);
-    xTaskCreatePinnedToCore(taskWiFi,    "WiFi",   12288, nullptr, 1, &hTaskWiFi,    0);
-    xTaskCreatePinnedToCore(taskBMP,     "BMP280", 3072,  nullptr, 1, &hTaskBMP,     0);
-    xTaskCreatePinnedToCore(taskToF,     "ToF",    4096,  nullptr, 1, &hTaskToF,     0);
-    xTaskCreatePinnedToCore(taskCPU,     "CPU",    3072,  nullptr, 1, &hTaskCPU,     0);
-    xTaskCreatePinnedToCore(taskGPS,     "GPS",    4096,  nullptr, 1, &hTaskGPS,     0);
-    xTaskCreatePinnedToCore(taskControl, "Ctrl",   10240, nullptr, 5, &hTaskControl, 1);
-    hTaskIMU = hTaskControl;
-
-    esp_timer_create_args_t controlTimerArgs;
-    memset(&controlTimerArgs, 0, sizeof(controlTimerArgs));
-    controlTimerArgs.callback = &controlTimerCallback;
-    controlTimerArgs.arg = nullptr;
-    controlTimerArgs.dispatch_method = ESP_TIMER_TASK;
-    controlTimerArgs.name = "ctrl400";
-
-    if (esp_timer_create(&controlTimerArgs, &g_controlTimer) != ESP_OK ||
-        esp_timer_start_periodic(g_controlTimer, TIMING_TARGET_US) != ESP_OK) {
-        DBG_PRINTLN(F("[BOOT][ERROR] Failed to start 400 Hz control timer."));
+    const Esp32TaskDefinition serviceTasks[] = {
+        {taskRC,     "RC",     6144,  3, 0},
+        {taskSerial, "Serial", 4096,  1, 0},
+        {taskWiFi,   "WiFi",   12288, 1, 0},
+        {taskBMP,    "BMP280", 3072,  1, 0},
+        {taskToF,    "ToF",    4096,  1, 0},
+        {taskCPU,    "CPU",    3072,  1, 0},
+        {taskGPS,    "GPS",    4096,  1, 0}
+    };
+    const Esp32TaskDefinition controlTask{taskControl, "Ctrl", 10240, 5, 1};
+    if (!flightScheduler.start(
+            serviceTasks, sizeof(serviceTasks) / sizeof(serviceTasks[0]),
+            controlTask, TIMING_TARGET_US)) {
+        DBG_PRINTLN(F("[BOOT][ERROR] Failed to start flight scheduler."));
         while (true) delay(1000);
     }
 

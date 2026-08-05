@@ -122,6 +122,51 @@ changing that policy requires a separately reviewed safety change.
 **Failure policy:** external tuning validation must keep rates nonnegative and
 `idleRampEnd > throttleCut`. The component clamps normalized throttle and final motor commands.
 
+## Application SWC: `CascadedController`
+
+**Inputs:** normalized pilot roll/pitch/yaw commands, control attitude in degrees,
+filtered angular rates in degrees/second, elapsed seconds, ANGLE/ACRO selection,
+attitude-valid flag, and one immutable `TuningState` snapshot.
+
+**Outputs:** filtered commands; angle/rate targets and errors; feed-forward terms;
+bounded roll/pitch/yaw corrections; and per-axis saturation diagnostics.
+
+**Execution:** synchronous at 400 Hz. **Owned state:** three command LPFs and yaw-heading
+hold/setpoint. The six injected PID instances own their integral and derivative histories.
+`reset()` clears all control histories at the existing disarm/calibration boundaries.
+**I/O/allocation/blocking:** none. ACRO bypasses attitude feedback for roll/pitch and closes
+the inner loop directly on conditioned gyro rates.
+
+## Application SWC: `AttitudeEstimatorRouter`
+
+**Inputs:** common `AHRSInput`, elapsed seconds, estimator mode `0..2`.
+**Output:** common quaternion/Euler `AttitudeEstimate` plus read-only EKF diagnostics.
+**Algorithms:** EKF, Mahony, or Madgwick. **Execution:** 400 Hz after IMU conditioning.
+**Transition policy:** changing mode resets EKF and Madgwick exactly as the original runtime
+did; Mahony state remains intact. **I/O/allocation/blocking:** none.
+
+## Application SWC: `LevelTrimService`
+
+**Inputs:** validated switch/capture eligibility, monotonic milliseconds, capture duration,
+and raw estimator attitude in degrees. **Outputs:** capture-start/completion events and
+roll/pitch/yaw offsets. **Owned state:** edge latch, accumulator, timing, offsets.
+**Side effects:** none; the runtime adapter performs logging. A held switch is one-shot and
+must be lowered before another capture.
+
+## Application SWC: `FlightSafetyPolicy`
+
+Pure decisions for control shutdown and OTA authorization. OTA requires disarmed state,
+throttle at/below cut, and every motor output at/below the off threshold. It performs no
+motor I/O; the motor adapter executes the resulting stop command.
+
+## Platform SWC: `Esp32FlightScheduler`
+
+**Required interface:** FreeRTOS task creation/notification and ESP high-resolution timer.
+**Input:** declarative service-task table, control-task definition, control period in µs.
+**Output:** started/not-started result. **Owned state:** control task handle and timer handle.
+The timer only releases the control task; it never runs flight logic in timer context.
+Task creation or timer failure prevents boot from declaring the flight runtime ready.
+
 ## Infrastructure SWC: `PreferencesTuningStore`
 
 **Layer:** ESP32 platform services.  
