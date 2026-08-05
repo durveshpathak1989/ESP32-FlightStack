@@ -6,6 +6,9 @@ The flight algorithms should be understandable and testable without knowing
 ESP32, Arduino, FreeRTOS, Wi-Fi, or a particular sensor library. Hardware and
 microcontrollers are replaceable adapters around a portable C++ flight core.
 
+Detailed contracts are cataloged in `docs/SWC_INTERFACES.md`; composition and
+runtime sequences are maintained in `docs/COMPOSITION_AND_FLOWS.md`.
+
 ## Dependency rule
 
 Dependencies point inward:

@@ -1,5 +1,7 @@
 #pragma once
 
+// Inputs, outputs, units, and failure behavior: docs/SWC_INTERFACES.md
+
 #include "../../../Application/FlightConfig.h"
 
 #if FLIGHT_IMU_BACKEND == FLIGHT_IMU_BACKEND_MPU9250

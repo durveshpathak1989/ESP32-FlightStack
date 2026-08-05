@@ -9,6 +9,7 @@ namespace flight {
 
 // Ports are stable contracts owned by the portable flight core. A new board,
 // sensor, receiver, or motor protocol is added by implementing these contracts.
+// Contract details: docs/SWC_INTERFACES.md
 
 class ClockPort {
 public:

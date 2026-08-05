@@ -38,6 +38,24 @@ Every module should have:
 - host tests when it belongs to Core/Application;
 - a board build when it belongs to a platform or driver.
 
+## Required interface documentation
+
+Every new or changed SWC/module must be added to `docs/SWC_INTERFACES.md` and
+must document:
+
+1. responsibility and owning layer;
+2. provided interfaces (outputs/services);
+3. required interfaces (inputs/services);
+4. data type, unit, range, validity, and update rate for each port;
+5. caller/callee execution context and concurrency assumptions;
+6. state ownership and lifetime;
+7. errors, fallback behavior, and side effects;
+8. permitted dependencies and prohibited dependencies;
+9. verification method and safety notes.
+
+A module extraction is incomplete until its interface contract and its place in
+the composition/runtime-flow diagrams are documented.
+
 ## Main-file target
 
 The final `.ino` should contain only:

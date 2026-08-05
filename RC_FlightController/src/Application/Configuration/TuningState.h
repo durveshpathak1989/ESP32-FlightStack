@@ -3,6 +3,7 @@
 // Plain runtime configuration shared by controllers and estimators. This file
 // is platform-independent: validation happens at input boundaries and storage
 // is supplied by a platform adapter.
+// Contract details: docs/SWC_INTERFACES.md
 struct TuningState {
     float max_angle_deg;
     float max_rate_dps;

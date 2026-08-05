@@ -8,6 +8,7 @@
 
 // ESP32 infrastructure adapter. Application code sees save/load operations;
 // Preferences, namespaces, record layout, and integrity checks remain here.
+// Contract details: docs/SWC_INTERFACES.md
 class PreferencesTuningStore {
 public:
     bool save(const TuningState& state) {
