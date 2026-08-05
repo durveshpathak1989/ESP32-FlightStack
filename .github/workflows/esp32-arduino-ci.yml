@@ -332,15 +332,18 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Commit firmware bundle and identity to master
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      - name: Commit firmware bundle and identity to source branch
+        if: >-
+          github.event_name == 'push' &&
+          (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/Arch/V4')
         shell: bash
         run: |
           set -euo pipefail
 
-          remote_sha=$(git ls-remote origin refs/heads/master | cut -f1)
+          publish_branch="${GITHUB_REF_NAME}"
+          remote_sha=$(git ls-remote origin "refs/heads/${publish_branch}" | cut -f1)
           if [ "${remote_sha}" != "${GITHUB_SHA}" ]; then
-            echo "Master advanced during this build; skipping stale firmware publication."
+            echo "${publish_branch} advanced during this build; skipping stale firmware publication."
             exit 0
           fi
 
@@ -355,4 +358,4 @@ jobs:
 
           short_sha="${GITHUB_SHA:0:12}"
           git commit -m "ci: publish ESP32 release and debug firmware for ${short_sha} [skip ci]"
-          git push origin HEAD:master
+          git push origin "HEAD:${publish_branch}"

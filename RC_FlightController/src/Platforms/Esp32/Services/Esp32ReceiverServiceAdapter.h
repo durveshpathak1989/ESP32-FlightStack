@@ -21,7 +21,10 @@ public:
         output.command.roll = input.roll;
         output.command.pitch = input.pitch;
         output.command.yaw = input.yaw;
-        for (std::size_t i = 0; i < 14; ++i)
+        // The portable command reserves 14 channels, while this iBUS driver
+        // provides IBUS_CHANNELS (10). Value-initialization above keeps the
+        // unsupported portable channels at zero.
+        for (std::size_t i = 0; i < IBUS_CHANNELS; ++i)
             output.command.raw[i] = input.raw[i];
         output.command.mode = convertMode(input.mode);
         output.command.swdHigh = input.swdHigh;
