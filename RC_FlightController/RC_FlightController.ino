@@ -82,6 +82,7 @@
 #include "src/Application/State/FlightState.h"
 #include "src/Platforms/Esp32/Storage/PreferencesTuningStore.h"
 #include "src/Platforms/Esp32/Runtime/Esp32FlightScheduler.h"
+#include "src/Platforms/Esp32/Runtime/SnapshotRte.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
@@ -183,13 +184,13 @@ static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
 }
 
 static TimingStats       g_timing;
-static SemaphoreHandle_t g_timingMutex;
+static SnapshotRte<TimingStats> timingRte(g_timing);
 
 static void resetTimingStats()
 {
-    if (xSemaphoreTake(g_timingMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+    if (timingRte.lock(pdMS_TO_TICKS(20))) {
         memset(&g_timing, 0, sizeof(g_timing));
-        xSemaphoreGive(g_timingMutex);
+        timingRte.unlock();
     }
 }
 
@@ -221,7 +222,7 @@ SpectrumAnalyzer spectrumAnalyzer(NOTCH_SAMPLE_HZ);
 //  Shared flight state
 // ─────────────────────────────────────────────────────────────
 static FlightState       g_state;
-static SemaphoreHandle_t g_flightMutex;
+static SnapshotRte<FlightState> flightStateRte(g_state);
 static SemaphoreHandle_t g_i2cMutex;
 
 static volatile uint32_t g_pidResetCount = 0;
@@ -239,7 +240,7 @@ static LevelTrimService levelTrim;
 static volatile bool g_pidTrace = false;
 
 static TuningState       g_tuning;
-static SemaphoreHandle_t g_tuneMutex;
+static SnapshotRte<TuningState> tuningRte(g_tuning);
 static PreferencesTuningStore g_tuningStore;
 
 // Tune transaction diagnostics for GCS verification.
@@ -344,7 +345,7 @@ static void syncTuningFromObjects()
     g_tuning.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
     g_tuning.dirty                      = false;
 }
-// Copy g_tuning into live PID/AHRS objects. Caller already holds g_tuneMutex.
+// Copy g_tuning into live PID/AHRS objects. Caller already holds tuningRte.
 static void applyTuningToObjectsLocked()
 {
     pidRateRoll.kp         = g_tuning.pid_roll_kp;
@@ -400,10 +401,10 @@ static void applyTuningToObjectsLocked()
 
 static void applyTuningToObjects()
 {
-    if (xSemaphoreTake(g_tuneMutex, 0) != pdTRUE) return;
+    if (!tuningRte.lock(0)) return;
     applyTuningToObjectsLocked();
     g_notchResetPending = true;
-    xSemaphoreGive(g_tuneMutex);
+    tuningRte.unlock();
 }
 // ─────────────────────────────────────────────────────────────
 //  Log helpers (push to WiFi ring buffer + Serial)
@@ -461,7 +462,7 @@ static const char* calSourceName(CalibrationSource source)
 // ─────────────────────────────────────────────────────────────
 static String provideTimingJson()
 {
-    if (xSemaphoreTake(g_timingMutex, pdMS_TO_TICKS(20)) != pdTRUE) {
+    if (!timingRte.lock(pdMS_TO_TICKS(20))) {
         return F("{\"ok\":false,\"error\":\"mutex timeout\"}");
     }
 
@@ -482,7 +483,7 @@ static String provideTimingJson()
         if (jit < 0) jit = -jit;
         sortBuf[i] = (uint16_t)min((uint32_t)jit, (uint32_t)65535);
     }
-    xSemaphoreGive(g_timingMutex);
+    timingRte.unlock();
 
     for (uint16_t i = 1; i < n; i++) {
         uint16_t key = sortBuf[i]; int j = i - 1;
@@ -544,7 +545,7 @@ static String provideIdentityJson()
 // ─────────────────────────────────────────────────────────────
 static String provideTimingCsv()
 {
-    if (xSemaphoreTake(g_timingMutex, pdMS_TO_TICKS(20)) != pdTRUE) {
+    if (!timingRte.lock(pdMS_TO_TICKS(20))) {
         return F("error,mutex_timeout\n");
     }
     uint16_t n    = g_timing.bufFull ? TIMING_BUF_SIZE : g_timing.bufHead;
@@ -554,7 +555,7 @@ static String provideTimingCsv()
     for (uint16_t i = 0; i < n; i++) {
         tmp[i] = g_timing.buf[(head + i) % TIMING_BUF_SIZE];
     }
-    xSemaphoreGive(g_timingMutex);
+    timingRte.unlock();
 
     String csv;
     csv.reserve((size_t)n * 18 + 32);
@@ -617,14 +618,11 @@ static void updateControlTransitionCounters(const RCCommand& cmd)
 static bool provideTelemetry(TelemetryPacket& out)
 {
     FlightState s;
-    if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(15)) != pdTRUE) return false;
-    s = g_state;
-    xSemaphoreGive(g_flightMutex);
+    if (!flightStateRte.read(s, pdMS_TO_TICKS(15))) return false;
 
     TuningState t;
     memset(&t, 0, sizeof(t));
-    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-        t = g_tuning; xSemaphoreGive(g_tuneMutex);
+    if (tuningRte.read(t, pdMS_TO_TICKS(5))) {
     }
 
     out.tick      = s.loopCount;
@@ -800,8 +798,8 @@ static bool provideTelemetry(TelemetryPacket& out)
 static bool handleTune(const TunePacket& in)
 {
     bool armed = false;
-    if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-        armed = g_state.armed; xSemaphoreGive(g_flightMutex);
+    if (flightStateRte.lock(pdMS_TO_TICKS(5))) {
+        armed = g_state.armed; flightStateRte.unlock();
     }
     if (armed) {
         g_tuneRejectSeq++;
@@ -809,7 +807,7 @@ static bool handleTune(const TunePacket& in)
         return false;
     }
 
-    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+    if (!tuningRte.lock(pdMS_TO_TICKS(10))) {
         g_tuneRejectSeq++;
         calLog("[TUNE] REJECTED — tune mutex timeout.");
         return false;
@@ -884,7 +882,7 @@ static bool handleTune(const TunePacket& in)
     g_notchResetPending = true;
     const bool persisted = g_tuningStore.save(g_tuning);
     uint32_t appliedSeq = g_tuneApplySeq;
-    xSemaphoreGive(g_tuneMutex);
+    tuningRte.unlock();
 
     if (!persisted) {
         DBG_PRINTF("[TUNE] Applied seq=%lu but NVS save verification FAILED.\n",
@@ -1108,8 +1106,8 @@ static void taskGPS(void* /*pv*/)
     for (;;) {
         gps.update();
         GPSData d = gps.get();
-        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
-            g_state.gps = d; xSemaphoreGive(g_flightMutex);
+        if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
+            g_state.gps = d; flightStateRte.unlock();
         }
         if (millis() - lastPrintMs >= 5000) {
             if (d.valid)
@@ -1237,10 +1235,7 @@ static void updateDynamicNotchFromFFT()
     // Snapshot flight state inside this function.
     // This avoids Arduino prototype issues with FlightState in the function argument.
     FlightState s;
-    if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-        s = g_state;
-        xSemaphoreGive(g_flightMutex);
-    } else {
+    if (!flightStateRte.read(s, pdMS_TO_TICKS(5))) {
         return;
     }
 
@@ -1270,10 +1265,10 @@ static void updateDynamicNotchFromFFT()
     bool notchEnabled = false;
     float currentHz = TUNE_NOTCH_FREQ_HZ;
 
-    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+    if (tuningRte.lock(pdMS_TO_TICKS(5))) {
         notchEnabled = g_tuning.notch_enable;
         currentHz = g_tuning.notch_freq_hz;
-        xSemaphoreGive(g_tuneMutex);
+        tuningRte.unlock();
     } else {
         return;
     }
@@ -1326,10 +1321,10 @@ static void updateDynamicNotchFromFFT()
         return;
     }
 
-    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+    if (tuningRte.lock(pdMS_TO_TICKS(5))) {
         g_tuning.notch_freq_hz = requestedHz;
         g_tuning.dirty = true;   // taskControl applies notch safely
-        xSemaphoreGive(g_tuneMutex);
+        tuningRte.unlock();
     }
 
     if (LOG_DYNAMIC_NOTCH_DEBUG) {
@@ -1447,7 +1442,7 @@ static void taskControl(void* /*pv*/)
         const float batteryVoltageForRpm = bat.valid ? bat.batteryVoltage_v : BATTERY_NOMINAL_V;
 
         // ── Welford timing accumulator (Test 7.1) ────────────
-        if (xSemaphoreTake(g_timingMutex, 0) == pdTRUE) {
+        if (timingRte.lock(0)) {
             uint32_t n = ++g_timing.count;
             double delta  = (double)periodUs - g_timing.wMean;
             g_timing.wMean += delta / n;
@@ -1468,7 +1463,7 @@ static void taskControl(void* /*pv*/)
             g_timing.bufHead = (g_timing.bufHead + 1) % TIMING_BUF_SIZE;
             if (g_timing.bufHead == 0) g_timing.bufFull = true;
 
-            xSemaphoreGive(g_timingMutex);
+            timingRte.unlock();
         }
 
         // ── Calibration active: keep motors off and skip flight control ──
@@ -1573,9 +1568,9 @@ static void taskControl(void* /*pv*/)
 
             // Runtime-selectable attitude estimator SWC.
             uint8_t ahrsMode = 0;
-            if (xSemaphoreTake(g_tuneMutex, 0) == pdTRUE) {
+            if (tuningRte.lock(0)) {
                 ahrsMode = (uint8_t)constrain((int)roundf(g_tuning.ahrs_filter_mode), 0, 2);
-                xSemaphoreGive(g_tuneMutex);
+                tuningRte.unlock();
             }
             uint32_t ahrsStartUs = micros();
             att = attitudeEstimator.update(ekfIn, dt, ahrsMode);
@@ -1664,7 +1659,7 @@ static void taskControl(void* /*pv*/)
             flightController.reset();
 
             phaseStartUs = micros();
-            if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
+            if (flightStateRte.lock(0)) {
                 g_state.armed   = false;
                 g_state.motorFL = g_state.motorFR = g_state.motorRL = g_state.motorRR = 0;
                 g_state.motorFLPreSat = g_state.motorFRPreSat = g_state.motorRLPreSat = g_state.motorRRPreSat = 0;
@@ -1756,7 +1751,7 @@ static void taskControl(void* /*pv*/)
                     g_state.pitchAngleError_deg = pitchAngleErrDeg;
                     g_state.loopCount++;
                 }
-                xSemaphoreGive(g_flightMutex);
+                flightStateRte.unlock();
             }
             g_execTiming.lastStateUs = micros() - phaseStartUs;
 
@@ -1776,9 +1771,7 @@ static void taskControl(void* /*pv*/)
         float gz    = imuOk ? gzf : 0.0f;
 
         TuningState tune;
-        if (xSemaphoreTake(g_tuneMutex, 0) == pdTRUE) {
-            tune = g_tuning;
-            xSemaphoreGive(g_tuneMutex);
+        if (tuningRte.read(tune, 0)) {
         } else {
             // Extremely rare: keep flying with compile-time safe defaults for this cycle.
             memset(&tune, 0, sizeof(tune));
@@ -2063,7 +2056,7 @@ static void taskControl(void* /*pv*/)
 
         // ── Publish flight state (incl. true PID outputs) ─────
         phaseStartUs = micros();
-        if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE){
+        if (flightStateRte.lock(0)){
             if (imuOk) {
                 g_state.roll_deg = att.roll_deg;  g_state.pitch_deg = att.pitch_deg;
                 g_state.yaw_deg  = att.yaw_deg;
@@ -2169,7 +2162,7 @@ static void taskControl(void* /*pv*/)
             g_state.yawOutputLimited = yawOutputLimited;
             g_state.rateOutputLimited = rateOutputLimited;
             g_state.armed=true; g_state.rc=cmd;
-            xSemaphoreGive(g_flightMutex);
+            flightStateRte.unlock();
         }
         g_execTiming.lastStateUs = micros() - phaseStartUs;
 
@@ -2264,9 +2257,7 @@ static void taskSerial(void* /*pv*/)
 
         // Snapshot once per loop; both blocks below use it.
         FlightState s;
-        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-            s = g_state; xSemaphoreGive(g_flightMutex);
-        }
+        flightStateRte.read(s, pdMS_TO_TICKS(5));
         updateDynamicNotchFromFFT();
         const char* ms = "???";
         switch(s.rc.mode) {
@@ -2357,7 +2348,7 @@ static void taskToF(void* /*pv*/)
         uint32_t ageMs = ready ? tofSensor.ageMs() : UINT32_MAX;
         bool valid = ready && r.valid && (ageMs <= TOF_STALE_MS);
 
-        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+        if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
             g_state.tofReady         = ready;
             g_state.tofValid         = valid;
             g_state.tofDistance_mm   = r.distanceMm;
@@ -2369,7 +2360,7 @@ static void taskToF(void* /*pv*/)
             g_state.tofAmbientMcps   = r.ambientMcps;
             g_state.tofAge_ms        = ageMs;
             g_state.tofLastUpdate_ms = r.lastUpdateMs;
-            xSemaphoreGive(g_flightMutex);
+            flightStateRte.unlock();
         }
 
         vTaskDelayUntil(&lastWake, period);
@@ -2407,19 +2398,19 @@ static void taskBMP(void* /*pv*/)
             }
             if (b.valid) { prevBmpAltM = b.altitude_m; prevBmpMs = nowMsBmp; bmpVzInit = true; }
 
-            if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+            if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
                 g_state.bmpTemp_c      = b.temperature_c;
                 g_state.bmpPressure_hpa = b.pressure_hpa;
                 g_state.bmpAltitude_m  = b.altitude_m;
                 g_state.bmpVerticalSpeed_mps = bmpVz;
                 g_state.bmpValid       = b.valid;
-                xSemaphoreGive(g_flightMutex);
+                flightStateRte.unlock();
             }
         } else if (haveBmpSample) {
-            if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+            if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
                 g_state.bmpValid = false;
                 g_state.bmpVerticalSpeed_mps = 0.0f;
-                xSemaphoreGive(g_flightMutex);
+                flightStateRte.unlock();
             }
         }
         vTaskDelayUntil(&lastWake, period);
@@ -2437,11 +2428,11 @@ static void taskCPU(void* /*pv*/)
     for (;;) {
         cpuUtilization.update();
         CPUUtilizationData c = cpuUtilization.get();
-        if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+        if (flightStateRte.lock(pdMS_TO_TICKS(2))) {
             g_state.cpuCore0_pct = c.core0_pct;
             g_state.cpuCore1_pct = c.core1_pct;
             g_state.cpuValid     = c.valid;
-            xSemaphoreGive(g_flightMutex);
+            flightStateRte.unlock();
         }
         vTaskDelayUntil(&lastWake, period);
     }
@@ -2455,9 +2446,9 @@ static String provideSpectrumJson()
 {
     TuningState t;
     memset(&t, 0, sizeof(t));
-    if (xSemaphoreTake(g_tuneMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+    if (tuningRte.lock(pdMS_TO_TICKS(5))) {
         t = g_tuning;
-        xSemaphoreGive(g_tuneMutex);
+        tuningRte.unlock();
     } else {
         t.notch_enable  = TUNE_NOTCH_ENABLE;
         t.notch_freq_hz = TUNE_NOTCH_FREQ_HZ;
@@ -2475,10 +2466,7 @@ static bool otaIsSafeToStart()
     FlightState s;
     memset(&s, 0, sizeof(s));
 
-    if (!g_flightMutex) return false;
-    if (xSemaphoreTake(g_flightMutex, pdMS_TO_TICKS(5)) != pdTRUE) return false;
-    s = g_state;
-    xSemaphoreGive(g_flightMutex);
+    if (!flightStateRte.read(s, pdMS_TO_TICKS(5))) return false;
 
     return FlightSafetyPolicy::otaAllowed(
         {s.armed, s.rc.throttle, s.motorFL, s.motorFR, s.motorRL, s.motorRR});
@@ -2525,13 +2513,10 @@ void setup()
     Serial.begin(115200);
     delay(600);
 
-    g_flightMutex = xSemaphoreCreateMutex();
-    g_tuneMutex   = xSemaphoreCreateMutex();
-    g_timingMutex = xSemaphoreCreateMutex();
+    configASSERT(flightStateRte.begin());
+    configASSERT(tuningRte.begin());
+    configASSERT(timingRte.begin());
     g_i2cMutex    = xSemaphoreCreateMutex();
-    configASSERT(g_flightMutex);
-    configASSERT(g_tuneMutex);
-    configASSERT(g_timingMutex);
     configASSERT(g_i2cMutex);
     if (!flightLogger.begin()) {
         DBG_PRINTLN(F("[BOOT][WARN] FlightLogger allocation failed; /flightlog/csv disabled."));
