@@ -16,7 +16,10 @@ env:
   ARDUINO_CLI_VERSION: "1.5.1"
   ESP32_CORE_VERSION: "3.3.8"
   ESP32_PACKAGE_INDEX: "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+  # Official Arduino-ESP32 target for a generic ESP32 Dev Module using
+  # the original dual-core ESP32 / ESP32-WROOM-32E family.
   FQBN: "esp32:esp32:esp32"
+  EXPECTED_BOARD_NAME: "ESP32 Dev Module"
   SKETCH_PATH: "RC_FlightController"
   BUILD_PATH: "build/esp32-dev-module"
 
@@ -47,6 +50,13 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install "esp32:esp32@${ESP32_CORE_VERSION}"
           arduino-cli core list
+
+      - name: Verify exact ESP32 board definition
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli board details --fqbn "${FQBN}" | tee board-details.txt
+          grep -Fq "${EXPECTED_BOARD_NAME}" board-details.txt
 
       - name: Verify sketch and submodules
         shell: bash
