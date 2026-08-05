@@ -1,0 +1,84 @@
+name: ESP32 Arduino Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esp32-arduino-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ARDUINO_CLI_VERSION: "1.5.1"
+  ESP32_CORE_VERSION: "3.3.8"
+  ESP32_PACKAGE_INDEX: "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+  FQBN: "esp32:esp32:esp32"
+  SKETCH_PATH: "RC_FlightController"
+  BUILD_PATH: "build/esp32-dev-module"
+
+jobs:
+  compile:
+    name: Compile ESP32 Dev Module firmware
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository and submodules
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: ${{ env.ARDUINO_CLI_VERSION }}
+
+      - name: Configure ESP32 board package
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls "${ESP32_PACKAGE_INDEX}"
+          arduino-cli core update-index
+          arduino-cli core install "esp32:esp32@${ESP32_CORE_VERSION}"
+          arduino-cli core list
+
+      - name: Verify sketch and submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${SKETCH_PATH}/RC_FlightController.ino"
+          git submodule status --recursive
+
+      - name: Compile firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${BUILD_PATH}"
+          arduino-cli compile \
+            --fqbn "${FQBN}" \
+            --warnings all \
+            --jobs 0 \
+            --output-dir "${BUILD_PATH}" \
+            "${SKETCH_PATH}"
+
+      - name: Show generated firmware files
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          find "${BUILD_PATH}" -maxdepth 1 -type f -printf '%f\t%k KB\n' | sort
+
+      - name: Upload compiled firmware
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: esp32-flight-controller-${{ github.sha }}
+          path: ${{ env.BUILD_PATH }}
+          if-no-files-found: error
+          retention-days: 14
