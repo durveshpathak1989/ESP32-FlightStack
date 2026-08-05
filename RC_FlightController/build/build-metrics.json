@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "build": {
+    "status": "success",
+    "generated_utc": "2026-08-05T16:29:06.392657+00:00",
+    "repository": "durveshpathak1989/ESP32-FlightStack",
+    "source_branch": "master",
+    "source_commit": "1feab15f65f48f6e42e35e8a3c59a348fdb8da5f",
+    "workflow_run_id": "31025297114",
+    "workflow_run_number": "8",
+    "workflow_run_url": "https://github.com/durveshpathak1989/ESP32-FlightStack/actions/runs/31025297114"
+  },
+  "target": {
+    "board_name": "ESP32 Dev Module",
+    "fqbn": "esp32:esp32:esp32",
+    "arduino_cli_version": "1.5.1",
+    "esp32_core_version": "3.3.8"
+  },
+  "resource_usage": {
+    "flash_used_bytes": 1149363,
+    "flash_used_percent": 87.0,
+    "flash_max_bytes": 1310720,
+    "flash_free_bytes": 161357,
+    "ram_global_bytes": 76252,
+    "ram_used_percent": 23.0,
+    "ram_remaining_bytes": 251428,
+    "ram_max_bytes": 327680
+  },
+  "artifacts": [
+    {
+      "file": "RC_FlightController.ino.bin",
+      "size_bytes": 1149504,
+      "sha256": "f7ca792aa448b9a9781a3be96729e47171d1f631f6b2ffc1d7de084e7c3c49e4",
+      "application_image": true
+    },
+    {
+      "file": "RC_FlightController.ino.bootloader.bin",
+      "size_bytes": 25024,
+      "sha256": "1191eb3d913873c709c2fa100f829f4b824971000c0b8831b33f05f98be3282a",
+      "application_image": false
+    },
+    {
+      "file": "RC_FlightController.ino.merged.bin",
+      "size_bytes": 4194304,
+      "sha256": "55cbbe2a1aa18cdd48268ac2462950208c0703d21d3e2f149479c85771a5c65d",
+      "application_image": false
+    },
+    {
+      "file": "RC_FlightController.ino.partitions.bin",
+      "size_bytes": 3072,
+      "sha256": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1",
+      "application_image": false
+    }
+  ],
+  "total_binary_bytes": 5371904
+}
