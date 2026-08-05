@@ -71,161 +71,9 @@
 #include "freertos/semphr.h"
 #include "esp_timer.h"
 #include "src/Submodules/CalManager/CalibrationManager.h"
+#include "src/Application/FlightConfig.h"
+#include "src/Application/Control/PidController.h"
 
-// ─────────────────────────────────────────────────────────────
-//  Pin assignments
-// ─────────────────────────────────────────────────────────────
-#define PIN_SPI_SCK   5
-#define PIN_SPI_MISO  19
-#define PIN_SPI_MOSI  18
-#define PIN_MPU_CS    33
-#define PIN_MPU_INT   27   // optional, not driven by firmware
-
-#define PIN_MOTOR_FL  25
-#define PIN_MOTOR_FR  4
-#define PIN_MOTOR_RL  26
-#define PIN_MOTOR_RR  32
-#define PIN_IBUS_RX   16
-#define PIN_IBUS_TX   2    // spare GPIO, not connected — keeps GPIO12-15 reserved for JTAG
-#define PIN_BMP_SDA   21
-#define PIN_BMP_SCL   22
-#define PIN_GPS_RX    23
-#define PIN_GPS_TX    17   // GPS module RXD (optional for read-only operation)
-#define PIN_BATTERY_ADC 34
-
-// ═════════════════════════════════════════════════════════════
-//  TUNING DASHBOARD — edit flight behavior here first
-// ═════════════════════════════════════════════════════════════
-
-// ── Loop timing + software filtering ────────────────────────
-#define TIMING_BUF_SIZE       800     // ring buffer depth (samples)
-#define TIMING_TARGET_US      2500     // nominal control period (400 Hz = 2500 µs)
-#define JITTER_VIOLATION_US    100     // threshold: counts as a violation
-#define GYRO_LPF_HZ           50.0f    // lower = smoother but more lag
-#define RC_LPF_HZ             70.0f    // stick setpoint smoothing
-
-static constexpr uint8_t  TOF_ST_ADDRESS            = 0x12;
-static constexpr uint32_t TOF_I2C_HZ                = 400000;
-static constexpr uint32_t TOF_TIMING_BUDGET_US      = 20000;
-static constexpr uint32_t TOF_INTER_MEASUREMENT_MS  = 25;
-static constexpr uint32_t TOF_TASK_PERIOD_MS        = 25;      // 40 Hz poll, matches 25 ms ranging cadence
-static constexpr uint32_t TOF_STALE_MS              = 200;
-
-// ── Pilot command limits ────────────────────────────────────
-static constexpr float TUNE_MAX_ANGLE_DEG = 5.0f;
-static constexpr float TUNE_MAX_RATE_DPS  = 200.0f;
-
-// ── PID output authority limits before motor mixing ─────────
-static constexpr float TUNE_ROLL_OUTPUT_LIMIT  = 0.120f;
-static constexpr float TUNE_PITCH_OUTPUT_LIMIT = 0.120f;
-static constexpr float TUNE_YAW_OUTPUT_LIMIT   = 0.120f;
-
-// ── Throttle shaping + motor output limits ──────────────────
-static constexpr float TUNE_THROTTLE_EXPO              = 0.70f;
-static constexpr float TUNE_THROTTLE_UP_RATE_PER_SEC   = 0.50f;
-static constexpr float TUNE_THROTTLE_DOWN_RATE_PER_SEC = 0.50f;
-static constexpr float TUNE_MOTOR_IDLE                 = 0.08f;
-static constexpr float TUNE_MOTOR_MAX                  = 1.00f;
-static constexpr float TUNE_THROTTLE_CUT               = 0.03f;
-static constexpr float TUNE_IDLE_RAMP_END              = 0.15f;
-
-// ── Initial PID gains loaded at boot ────────────────────────
-// Inner Loop
-static constexpr float TUNE_RATE_ROLL_KP   = 0.001300f;
-static constexpr float TUNE_RATE_ROLL_KI   = 0.000700f;
-static constexpr float TUNE_RATE_ROLL_KD   = 0.000000010f;
-static constexpr float TUNE_RATE_ROLL_FF   = 0.000000f;
-static constexpr float TUNE_RATE_ROLL_D_LPF_HZ = 100.0f;
-static constexpr float TUNE_RATE_PITCH_KP  = 0.001300f;
-static constexpr float TUNE_RATE_PITCH_KI  = 0.000700f;
-static constexpr float TUNE_RATE_PITCH_KD  = 0.000000010f;
-static constexpr float TUNE_RATE_PITCH_FF  = 0.000000f;
-static constexpr float TUNE_RATE_PITCH_D_LPF_HZ = 100.0f;
-static constexpr float TUNE_RATE_YAW_KP    = 0.008000f;
-static constexpr float TUNE_RATE_YAW_KI    = 0.001000f;
-static constexpr float TUNE_RATE_YAW_KD    = 0.0000000f;
-static constexpr float TUNE_RATE_YAW_FF    = 0.000000f;
-static constexpr float TUNE_RATE_YAW_D_LPF_HZ = 100.0f;
-// Outer Loop
-static constexpr float TUNE_ANGLE_ROLL_KP  = 1.50f;
-static constexpr float TUNE_ANGLE_ROLL_KI  = 0.000f;
-static constexpr float TUNE_ANGLE_ROLL_KD  = 0.000000f;
-static constexpr float TUNE_ANGLE_PITCH_KP = 1.00f;
-static constexpr float TUNE_ANGLE_PITCH_KI = 0.000f;
-static constexpr float TUNE_ANGLE_PITCH_KD = 0.000000f;
-// Outer Loop — Yaw heading hold
-static constexpr float TUNE_ANGLE_YAW_KP     = 1.00f;   // heading-hold Kp (tune up if soft)
-static constexpr float TUNE_YAW_DEADBAND     = 0.02f;   // |yaw stick| below this = hold
-static constexpr float TUNE_YAW_MAX_RATE_DPS = 20.0f;   // cap on commanded yaw rate
-
-// ── Motor vibration notch filter ────────────────────────────
-// Runs before EKF and before rate PID. Keep center below 0.45*sample rate.
-static constexpr bool  TUNE_NOTCH_ENABLE    = true;
-static constexpr float TUNE_NOTCH_FREQ_HZ   = 105.38f;  // measured motor-vibration peak
-static constexpr float TUNE_NOTCH_Q         = 10.0f;   // higher = narrower notch
-static constexpr float NOTCH_SAMPLE_HZ      = 400.0f;  // control loop sample rate
-// ── Dynamic FFT-driven notch tracking ───────────────────────
-// Start conservative. The notch should track slowly, not chase noise.
-static constexpr bool     TUNE_DYNAMIC_NOTCH_ENABLE = true;
-static constexpr float    DYN_NOTCH_MIN_HZ          = 45.0f;
-static constexpr float    DYN_NOTCH_MAX_HZ          = 170.0f;  // below 0.45 * 400 Hz
-static constexpr uint32_t DYN_NOTCH_UPDATE_MS       = 1000;    // 1 Hz coefficient update; avoid in-flight reconfig thrash
-static constexpr float    DYN_NOTCH_ALPHA           = 0.25f;   // smoothing
-static constexpr float    DYN_NOTCH_MAX_STEP_HZ     = 8.0f;    // max movement per update
-static constexpr float    DYN_NOTCH_MIN_THROTTLE    = 0.15f;
-static constexpr float    DYN_NOTCH_MIN_SCORE       = 3.5f;    // adjust based on your FFT output
-//static constexpr float DYN_NOTCH_MIN_GYRO_MAG    = 0.30f;
-//static constexpr float DYN_NOTCH_SMOOTH_ALPHA    = 0.20f;
-
-// ── Runtime diagnostics ────────────────────────────────────
-// Keep flight-critical paths quiet by default. Serial writes can block long
-// enough to add control-loop jitter on ESP32, especially while armed.
-static constexpr bool LOG_CONTROL_TIMING      = true;
-static constexpr bool LOG_MOTOR_SATURATION    = false;
-static constexpr bool LOG_MOTOR_WRITE_RATE    = false;
-static constexpr bool LOG_DYNAMIC_NOTCH_DEBUG = false;
-// ── EKF tuning knobs ────────────────────────────────────────
-// These are runtime-tunable from /tune while DISARMED.
-// Higher R = trust that sensor less. Higher Q = allow faster EKF state motion.
-static constexpr float TUNE_EKF_ANGLE_Q        = 0.0008f;
-static constexpr float TUNE_EKF_BIAS_Q         = 0.000001f;
-static constexpr float TUNE_EKF_ACCEL_R        = 0.400f;
-static constexpr float TUNE_EKF_MAG_R          = 0.200f;
-static constexpr float TUNE_EKF_MAG_DECL_DEG   = 0.0f;
-static constexpr float TUNE_EKF_MAG_YAW_OFF_DEG= 0.0f;
-static constexpr float TUNE_EKF_MAG_YAW_SIGN   = 1.0f;
-static constexpr float TUNE_AHRS_FILTER_MODE    = 0.0f;   // 0=EKF, 1=Mahony, 2=Madgwick
-static constexpr float TUNE_MADGWICK_BETA       = 0.080f;
-
-// ── Software level-zero trim ───────────────────────────────
-// DISARMED + SWB/ACRO high captures the current AHRS attitude
-// as the control zero. This is applied AFTER AHRS; it does not
-// modify MPU calibration or the Mahony quaternion state.
-static constexpr uint32_t LEVEL_ZERO_SAMPLE_MS = 1200;
-static constexpr uint16_t LEVEL_ZERO_SWB_THRESHOLD = 1700;
-
-// ─────────────────────────────────────────────────────────────
-//  Calibration timing
-// ─────────────────────────────────────────────────────────────
-#define SWC_THRESHOLD      1700
-#define ESC_CALIB_VRB_THRESHOLD 1900   // CH6 / VrB almost full-right = ESC calibration request
-#define GYRO_SETTLE_MS     3000
-#define GYRO_SAMPLE_MS     5000
-#define ACCEL_HOLD_MS      3000
-#define ACCEL_WAIT_MAX_MS 30000
-#define MAG_DURATION_MS   30000
-
-// ─────────────────────────────────────────────────────────────
-//  Motor RPM estimation constants
-// ─────────────────────────────────────────────────────────────
-#define MOTOR_KV         920.0f
-static constexpr float BATTERY_NOMINAL_V = 11.1f;
-static constexpr uint8_t BATTERY_CELL_COUNT = 3;
-static constexpr float BATTERY_RTOP_OHMS = 235000.0f;
-static constexpr float BATTERY_RBOTTOM_OHMS = 35000.0f;
-static constexpr float BATTERY_ADC_CAL_SCALE = 1.0f;
-
-static constexpr uint16_t FLIGHT_LOGGER_CAPACITY = 120;  // 100 Hz x 1.2 s, heap-safe on ESP32
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
 // ─────────────────────────────────────────────────────────────
@@ -663,74 +511,18 @@ static void controlTimerCallback(void* /*arg*/)
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  PID controller
-// ─────────────────────────────────────────────────────────────
-struct PID {
-    float kp, ki, kd, integral=0, prevError=0, iLimit=50.0f;
-    float prevMeasurement=0.0f;
-    float filteredMeasurementRate=0.0f;
-    bool hasPrevMeasurement=false;
-    bool hasFilteredMeasurementRate=false;
-    float lastP=0.0f, lastI=0.0f, lastD=0.0f, lastOut=0.0f;
+static PidController pidRateRoll(
+    TUNE_RATE_ROLL_KP, TUNE_RATE_ROLL_KI, TUNE_RATE_ROLL_KD);
+static PidController pidRatePitch(
+    TUNE_RATE_PITCH_KP, TUNE_RATE_PITCH_KI, TUNE_RATE_PITCH_KD);
+static PidController pidRateYaw(
+    TUNE_RATE_YAW_KP, TUNE_RATE_YAW_KI, TUNE_RATE_YAW_KD);
 
-    PID(float p,float i,float d,float il=50.0f):kp(p),ki(i),kd(d),iLimit(il){}
-
-    float update(float err,float dt){
-        integral=constrain(integral+err*dt,-iLimit,iLimit);
-        float d2=(dt > 0.000001f) ? ((err-prevError)/dt) : 0.0f;
-        prevError=err;
-        lastP = kp * err;
-        lastI = ki * integral;
-        lastD = kd * d2;
-        lastOut = lastP + lastI + lastD;
-        return lastOut;
-    }
-
-    float updateDOnMeasurement(float err, float measurement, float dt, float dLpfHz){
-        integral=constrain(integral+err*dt,-iLimit,iLimit);
-        float measurementRate = 0.0f;
-        if (hasPrevMeasurement && dt > 0.000001f) {
-            measurementRate = (measurement - prevMeasurement) / dt;
-        }
-        if (dLpfHz > 0.0f && dt > 0.000001f) {
-            const float tau = 1.0f / (2.0f * PI * dLpfHz);
-            const float alpha = constrain(dt / (tau + dt), 0.0f, 1.0f);
-            if (!hasFilteredMeasurementRate) {
-                filteredMeasurementRate = measurementRate;
-                hasFilteredMeasurementRate = true;
-            } else {
-                filteredMeasurementRate += alpha * (measurementRate - filteredMeasurementRate);
-            }
-        } else {
-            filteredMeasurementRate = measurementRate;
-            hasFilteredMeasurementRate = true;
-        }
-        prevError=err;
-        prevMeasurement=measurement;
-        hasPrevMeasurement=true;
-        lastP = kp * err;
-        lastI = ki * integral;
-        lastD = -kd * filteredMeasurementRate;
-        lastOut = lastP + lastI + lastD;
-        return lastOut;
-    }
-
-    void reset(){
-        integral=0; prevError=0; prevMeasurement=0.0f; filteredMeasurementRate=0.0f;
-        hasPrevMeasurement=false; hasFilteredMeasurementRate=false;
-        lastP=lastI=lastD=lastOut=0.0f;
-    }
-};
-
-static PID pidRateRoll  (TUNE_RATE_ROLL_KP,   TUNE_RATE_ROLL_KI,   TUNE_RATE_ROLL_KD);
-static PID pidRatePitch (TUNE_RATE_PITCH_KP,  TUNE_RATE_PITCH_KI,  TUNE_RATE_PITCH_KD);
-static PID pidRateYaw   (TUNE_RATE_YAW_KP,    TUNE_RATE_YAW_KI,    TUNE_RATE_YAW_KD);
-
-static PID pidAngleRoll (TUNE_ANGLE_ROLL_KP,  TUNE_ANGLE_ROLL_KI,  TUNE_ANGLE_ROLL_KD);
-static PID pidAnglePitch(TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
-// Yaw Control
-static PID pidAngleYaw  (TUNE_ANGLE_YAW_KP,   0.0f,                0.0f);
+static PidController pidAngleRoll(
+    TUNE_ANGLE_ROLL_KP, TUNE_ANGLE_ROLL_KI, TUNE_ANGLE_ROLL_KD);
+static PidController pidAnglePitch(
+    TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
+static PidController pidAngleYaw(TUNE_ANGLE_YAW_KP, 0.0f, 0.0f);
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
