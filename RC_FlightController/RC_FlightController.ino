@@ -47,7 +47,6 @@
  */
 
 #include <SPI.h>
-#include <Preferences.h>
 #include <stdarg.h>
 #include "src/Submodules/DebugConfig/DebugConfig.h"
 #include "src/Submodules/MotorControl/MotorControl.h"
@@ -73,6 +72,8 @@
 #include "src/Submodules/CalManager/CalibrationManager.h"
 #include "src/Application/FlightConfig.h"
 #include "src/Application/Control/PidController.h"
+#include "src/Application/Configuration/TuningState.h"
+#include "src/Platforms/Esp32/Storage/PreferencesTuningStore.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
@@ -324,148 +325,9 @@ static float g_levelYawOffsetDeg   = 0.0f;
 // PID-trace toggle (Serial 'p'). Off at boot so the log stays clean.
 static volatile bool g_pidTrace = false;
 
-// ─────────────────────────────────────────────────────────────
-//  Tuning state
-// ─────────────────────────────────────────────────────────────
-struct TuningState {
-    // Pilot command limits
-    float max_angle_deg;
-    float max_rate_dps;
-    float max_pitch_rate_dps;
-
-    // PID output authority limits before motor mixing
-    float roll_output_limit;
-    float pitch_output_limit;
-    float yaw_output_limit;
-
-    // Throttle shaping + motor output limits
-    float throttle_expo;
-    float throttle_up_rate_per_sec;
-    float throttle_down_rate_per_sec;
-    float motor_idle;
-    float motor_max;
-    float throttle_cut;
-    float idle_ramp_end;
-    float pid_ilimit;
-
-    // Inner rate loop PID
-    float pid_roll_kp,  pid_roll_ki,  pid_roll_kd;
-    float pid_pitch_kp, pid_pitch_ki, pid_pitch_kd;
-    float pid_yaw_kp,   pid_yaw_ki,   pid_yaw_kd;
-    float pid_roll_ff,  pid_pitch_ff,  pid_yaw_ff;
-    float pid_roll_d_lpf_hz, pid_pitch_d_lpf_hz, pid_yaw_d_lpf_hz;
-
-    // Outer angle loop PID
-    float pid_angle_roll_kp,  pid_angle_roll_ki,  pid_angle_roll_kd;
-    float pid_angle_pitch_kp, pid_angle_pitch_ki, pid_angle_pitch_kd;
-
-    // Outer yaw heading-hold loop
-    float pid_angle_yaw_kp;
-    float yaw_deadband;
-    float yaw_max_rate_dps;
-
-    // AHRS / estimator selection
-    float mahony_kp, mahony_ki;
-    float ahrs_filter_mode;
-    float madgwick_beta;
-
-    // Motor vibration notch filter
-    bool  notch_enable;
-    float notch_freq_hz;
-    float notch_q;
-
-    // Attitude EKF tuning
-    float ekf_angle_q;
-    float ekf_bias_q;
-    float ekf_accel_r;
-    float ekf_mag_r;
-    float ekf_mag_declination_deg;
-    float ekf_mag_yaw_offset_deg;
-    float ekf_mag_yaw_sign;
-
-    volatile bool dirty;
-};
 static TuningState       g_tuning;
 static SemaphoreHandle_t g_tuneMutex;
-
-// Versioned NVS record for runtime tuning. The size and CRC checks make a
-// firmware update or interrupted flash write fall back safely to defaults.
-static constexpr uint32_t TUNING_NVS_MAGIC   = 0x54554E45UL; // "TUNE"
-static constexpr uint16_t TUNING_NVS_SCHEMA  = 1;
-static constexpr char     TUNING_NVS_NS[]    = "flightTune";
-static constexpr char     TUNING_NVS_KEY[]   = "state";
-
-struct PersistedTuningRecord {
-    uint32_t magic;
-    uint16_t schema;
-    uint16_t stateSize;
-    TuningState state;
-    uint32_t crc32;
-};
-
-static uint32_t tuningCrc32(const uint8_t* data, size_t length)
-{
-    uint32_t crc = 0xFFFFFFFFUL;
-    for (size_t i = 0; i < length; ++i) {
-        crc ^= data[i];
-        for (uint8_t bit = 0; bit < 8; ++bit)
-            crc = (crc >> 1) ^ (0xEDB88320UL & (0UL - (crc & 1UL)));
-    }
-    return ~crc;
-}
-
-static bool tuningRecordValid(const void* recordData)
-{
-    const PersistedTuningRecord& record =
-        *static_cast<const PersistedTuningRecord*>(recordData);
-    if (record.magic != TUNING_NVS_MAGIC ||
-        record.schema != TUNING_NVS_SCHEMA ||
-        record.stateSize != sizeof(TuningState)) return false;
-    return record.crc32 == tuningCrc32(
-        reinterpret_cast<const uint8_t*>(&record.state), sizeof(record.state));
-}
-
-// Caller holds g_tuneMutex. Writes occur only after /tune has confirmed the
-// aircraft is disarmed and constrained all incoming values.
-static bool saveTuningToNvsLocked()
-{
-    PersistedTuningRecord record{};
-    record.magic = TUNING_NVS_MAGIC;
-    record.schema = TUNING_NVS_SCHEMA;
-    record.stateSize = sizeof(TuningState);
-    record.state = g_tuning;
-    record.state.dirty = false;
-    record.crc32 = tuningCrc32(
-        reinterpret_cast<const uint8_t*>(&record.state), sizeof(record.state));
-
-    Preferences prefs;
-    if (!prefs.begin(TUNING_NVS_NS, false)) return false;
-    const size_t written = prefs.putBytes(TUNING_NVS_KEY, &record, sizeof(record));
-    PersistedTuningRecord verify{};
-    const size_t read = prefs.getBytes(TUNING_NVS_KEY, &verify, sizeof(verify));
-    prefs.end();
-    return written == sizeof(record) && read == sizeof(verify) &&
-           tuningRecordValid(&verify) && verify.crc32 == record.crc32;
-}
-
-// Defaults must already be present in g_tuning. Invalid, missing, or obsolete
-// records are ignored, leaving those firmware defaults intact.
-static bool loadTuningFromNvs()
-{
-    Preferences prefs;
-    if (!prefs.begin(TUNING_NVS_NS, true)) return false;
-    if (prefs.getBytesLength(TUNING_NVS_KEY) != sizeof(PersistedTuningRecord)) {
-        prefs.end();
-        return false;
-    }
-    PersistedTuningRecord record{};
-    const size_t read = prefs.getBytes(TUNING_NVS_KEY, &record, sizeof(record));
-    prefs.end();
-    if (read != sizeof(record) || !tuningRecordValid(&record)) return false;
-    g_tuning = record.state;
-    g_tuning.dirty = true;
-    return true;
-}
+static PreferencesTuningStore g_tuningStore;
 
 // Tune transaction diagnostics for GCS verification.
 // request_seq increments when /tune accepts a payload while disarmed.
@@ -1127,7 +989,7 @@ static bool handleTune(const TunePacket& in)
     g_tuning.dirty = true;
     applyTuningToObjectsLocked();
     g_notchResetPending = true;
-    const bool persisted = saveTuningToNvsLocked();
+    const bool persisted = g_tuningStore.save(g_tuning);
     uint32_t appliedSeq = g_tuneApplySeq;
     xSemaphoreGive(g_tuneMutex);
 
@@ -3041,7 +2903,7 @@ void setup()
 
     syncTuningFromObjects();
     DBG_PRINT(F("[BOOT] NVS tuning... "));
-    if (loadTuningFromNvs()) {
+    if (g_tuningStore.load(g_tuning)) {
         applyTuningToObjects();
         DBG_PRINTLN(F("loaded and applied."));
     } else {

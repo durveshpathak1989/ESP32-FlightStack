@@ -1,4 +1,5 @@
 #include "Application/Control/PidController.h"
+#include "Application/Configuration/TuningState.h"
 #include "Core/FlightTypes.h"
 #include "Core/Ports.h"
 
@@ -11,6 +12,11 @@ public:
 int main() {
     FakeClock clock;
     PidController controller(1.0f, 0.1f, 0.01f);
+    TuningState tuning{};
+    tuning.max_angle_deg = 5.0f;
     const float output = controller.update(0.5f, 0.01f);
-    return clock.microseconds() == 1000 && output > 0.0f ? 0 : 1;
+    return clock.microseconds() == 1000 && output > 0.0f &&
+                   tuning.max_angle_deg == 5.0f
+               ? 0
+               : 1;
 }
