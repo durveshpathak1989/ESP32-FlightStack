@@ -28,9 +28,10 @@ ESP32 runtime are not an AUTOSAR operating environment.
 
 ## Module contract
 
-Every module should have:
+Every SWC shall have:
 
 - one responsibility;
+- exactly one Init runnable and one Periodic runnable;
 - an explicit public header;
 - owned state rather than unrelated globals;
 - documented units and validity rules;
@@ -56,24 +57,12 @@ must document:
 A module extraction is incomplete until its interface contract and its place in
 the composition/runtime-flow diagrams are documented.
 
-## Main-file target
+## Main-file rule
 
-The final `.ino` should contain only:
-
-```cpp
-void setup() {
-    board.construct();
-    application.initialize(board.ports());
-    scheduler.start(application.tasks());
-}
-
-void loop() {
-    scheduler.idle();
-}
-```
-
-Until migration reaches that point, each extraction must preserve control
-equations, timing, task priorities, gains, failsafe behavior, and telemetry.
+The .ino is an include-level composition root only. Runtime objects, validated
+configuration/telemetry bindings, ESP32 task bindings, and firmware lifecycle
+are each isolated in a named src/Composition file. Application decisions and
+flight-control equations are prohibited in the sketch.
 
 ## Configuration ownership
 

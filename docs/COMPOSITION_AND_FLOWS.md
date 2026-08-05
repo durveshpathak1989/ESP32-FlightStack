@@ -42,9 +42,10 @@ flowchart TB
 
 Dependency direction is downward only. Application components cannot include
 ESP32, Arduino, FreeRTOS, buses, or concrete board pins. Platform adapters
-implement application-owned ports. The `.ino` file is the composition root: it
-constructs the selected implementations and starts the runtime, but contains no
-flight-control equations.
+implement application-owned ports. The 108-line .ino file is the include-level
+composition root. Concrete object wiring is grouped under src/Composition; SWC
+behavior is under src/Application; ESP32 task and service adapters are under
+src/Platforms/Esp32. The sketch contains no flight-control equations.
 
 The normative runnable and port definitions—including datatype, direction, sender,
 receiver, unit, range, validity, and communication type—are maintained in
@@ -125,10 +126,11 @@ flowchart LR
     SAFE --> MOTOR["MotorPort / ESCs"]
 ```
 
-`MotorMixer` is now an active application component called by the production control path.
-The estimator, mode, safety, and remaining controller orchestration are still partially
-co-located in the main control task; the diagram is the required decomposition target and
-preserves the current signal path during migration.
+FlightControlSwc owns the deterministic 400 Hz orchestration. It exchanges
+application data with the estimator, cascaded controller, mixer, level trim, receiver,
+and state publishers through typed S/R ports. Hardware access is through IMU, battery,
+motor, clock, and calibration C/S ports. The production control equations live in their
+named controller/estimator/mixer modules rather than in the Arduino sketch.
 
 ## Runtime tuning and permanent save flow
 
@@ -171,6 +173,23 @@ Shared snapshots must have one owner and bounded synchronization. No low-priorit
 hold a lock or perform an operation that blocks the 400 Hz control path.
 
 The concrete FreeRTOS task creation table and 400 Hz release timer are owned by
-`Esp32FlightScheduler`. GPS, receiver, barometer, ToF, CPU, and Wi-Fi loops are implemented in
-their named `Platforms/Esp32/Tasks` adapters; the sketch contains only the FreeRTOS entry
-trampolines needed by the scheduler composition table.
+Esp32FlightScheduler. GPS, receiver, barometer, ToF, CPU, and Wi-Fi loops are implemented in
+their named Platforms/Esp32/Tasks adapters. The task entry trampolines and board wiring are
+isolated in src/Composition/Esp32TaskComposition.inc; each trampoline delegates immediately
+to an SWC runnable or platform task adapter.
+
+## Source ownership
+
+| Location | Single responsibility |
+| --- | --- |
+| RC_FlightController.ino | declare build dependencies and assemble the four composition sections |
+| src/Application/Runtime/FlightControlRuntime.inc | deterministic flight-control SWC runnables |
+| src/Application/Diagnostics/SerialDiagnosticsRuntime.inc | noncritical serial diagnostics SWC runnables |
+| src/Application/Control | controller and motor-mixing algorithms |
+| src/Application/Estimation | estimator selection and attitude output |
+| src/Composition/RuntimeObjects.inc | instantiate ports, SWCs, adapters, and shared runtime objects |
+| src/Composition/ConfigurationTelemetryBindings.inc | translate HTTP/configurator requests and telemetry DTOs |
+| src/Composition/Esp32TaskComposition.inc | bind SWC runnables to ESP32 task activations |
+| src/Composition/FirmwareLifecycle.inc | boot order and scheduler start |
+| src/Platforms/Esp32/Services | C/S adapters for ESP32 and concrete device services |
+| src/Platforms/Esp32/Tasks | platform activation loops that call Init and Periodic |

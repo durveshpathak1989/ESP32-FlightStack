@@ -27,23 +27,27 @@ The `Core` directory must never include Arduino, ESP32, FreeRTOS, Wi-Fi, or a
 concrete device driver. Platform adapters may depend on the core, never the
 reverse.
 
-## Directory target
+## Directory structure
 
 ```text
 RC_FlightController/src/
 ├── Core/
 │   ├── FlightTypes.h        plain portable data
-│   ├── Ports.h              hardware contracts
-│   ├── Control/             controller interfaces and algorithms
-│   └── Estimation/          AHRS/EKF-facing abstractions
+│   ├── Ports.h              portable hardware contracts
+│   ├── RtePorts.h           typed S/R ports and SWC lifecycle
+│   └── ServicePorts.h       portable C/S service contracts
 ├── Application/
 │   ├── FlightConfig.h       beginner-facing defaults
-│   ├── FlightApplication.*  use cases and flight-state transitions
-│   └── Control/             built-in PID implementation
+│   ├── Runtime/             400 Hz flight orchestration SWC
+│   ├── Control/             controller and mixer SWCs
+│   ├── Estimation/          estimator router SWC
+│   ├── Calibration/         application calibration behavior
+│   └── Diagnostics/         noncritical diagnostics SWC
+├── Composition/             board wiring, task bindings, boot order
 ├── Platforms/
 │   ├── Esp32/               Arduino/FreeRTOS/Preferences/Wi-Fi adapters
 │   └── Host/                deterministic test adapters
-└── Drivers/                 concrete sensors and protocols
+└── Submodules/              concrete sensors, algorithms, and protocols
 ```
 
 ## Swapping hardware
@@ -99,10 +103,11 @@ a controller should require:
 - Refactoring commits must not alter gains or flight equations unless explicitly
   labeled and tested as behavioral changes.
 
-## Current migration status
+## Current implementation status
 
-The project now has portable flight types and initial hardware contracts.
-`FlightConfig.h` is the single beginner-facing location for board pins and safe
-defaults. `PidController.h` is portable standard C++ and no longer lives inside
-the Arduino sketch. Existing concrete drivers are still called directly from
-the sketch; moving them behind ESP32 adapters is the next migration phase.
+FlightConfig.h is the beginner-facing location for board pins and safe defaults.
+The production estimator, cascaded controller, motor mixer, level trim, receiver,
+sensor, Wi-Fi, CPU, flight-control, and diagnostics components implement the
+mandatory Init/Periodic lifecycle. Inter-SWC data uses typed S/R ports; ESP32 and
+device operations use C/S service contracts implemented by platform adapters.
+The 108-line Arduino sketch only assembles the named composition sections.

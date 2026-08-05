@@ -146,6 +146,18 @@ enum class CalibrationRequest : std::uint8_t {
 struct CalibrationServiceStatus {
     bool active;
     CalibrationRequest request;
+    bool safeToRun;
+    bool requiresUserConfirm;
+    bool blocksFlight;
+    bool ownsMotors;
+    float progress;
+    std::uint32_t runId;
+    std::uint8_t stateCode;
+    const char* modeName;
+    const char* sourceName;
+    const char* stateName;
+    const char* message;
+    const char* error;
 };
 
 class CalibrationServicePort {
@@ -153,6 +165,9 @@ public:
     virtual ~CalibrationServicePort() = default;
     virtual bool Request(CalibrationRequest request) = 0;
     virtual CalibrationServiceStatus Status() const = 0;
+    virtual void SetSafety(bool safeToRun) = 0;
+    virtual void ConfirmStep() = 0;
+    virtual void PeriodicService() = 0;
     virtual void Cancel() = 0;
 };
 
@@ -168,6 +183,14 @@ public:
     virtual ~WifiServicePort() = default;
     virtual bool InitAccessPoint(const char* ssid, const char* password) = 0;
     virtual void PeriodicService() = 0;
+};
+
+class DiagnosticServicePort {
+public:
+    virtual ~DiagnosticServicePort() = default;
+    virtual bool CommandAvailable() const = 0;
+    virtual int ReadCommandByte() = 0;
+    virtual void Write(const char* message) = 0;
 };
 
 class PersistentStorageServicePort {

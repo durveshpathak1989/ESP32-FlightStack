@@ -80,8 +80,9 @@ GCS tuning is separate and may override `TUNE_*` values after validated NVS load
 **Inputs:** firmware defaults, validated tune packets, or verified persistent record.  
 **Outputs:** controller, estimator, filter, throttle, and authority configuration.
 
-**Ownership:** `g_tuning` currently owns the active instance; access is serialized by
-`g_tuneMutex`. A future `TuningService` will own it and remove the global.
+**Ownership:** the composition owns one active instance; access is serialized by
+the dedicated tuning RTE channel. HTTP/configurator translation is isolated in
+ConfigurationTelemetryBindings and cannot expose a partially updated snapshot.
 
 **Validity:** external input is constrained before assignment. `dirty` is runtime-only and
 must not cause a controller to observe a partially updated snapshot.
@@ -100,8 +101,10 @@ must not cause a controller to observe a partially updated snapshot.
 
 ## Application SWC: `MotorMixer`
 
-**Provided interface:** `update(MotorMixerInput, MotorMixerConfig)` returns one complete
-`MotorMixerOutput`; `reset()` explicitly clears its throttle-slew history.
+**Provided interface:** MotorCommand S/R port. **Required interfaces:** MixerInput
+and MixerConfig S/R ports. Init resets throttle-slew history and invalidates the
+provided port; Periodic consumes one coherent input/config pair and publishes one
+complete MotorMixerOutput.
 
 | Input | Unit/range | Meaning |
 | --- | --- | --- |
@@ -139,8 +142,9 @@ the inner loop directly on conditioned gyro rates.
 
 ## Application SWC: `AttitudeEstimatorRouter`
 
-**Inputs:** common `AHRSInput`, elapsed seconds, estimator mode `0..2`.
-**Output:** common quaternion/Euler `AttitudeEstimate` plus read-only EKF diagnostics.
+**Required interface:** EstimatorInput S/R port containing common AHRSInput,
+elapsed seconds, and estimator mode 0..2. **Provided interface:** AttitudeEstimate
+S/R port containing common quaternion/Euler output plus read-only EKF diagnostics.
 **Algorithms:** EKF, Mahony, or Madgwick. **Execution:** 400 Hz after IMU conditioning.
 **Transition policy:** changing mode resets EKF and Madgwick exactly as the original runtime
 did; Mahony state remains intact. **I/O/allocation/blocking:** none.

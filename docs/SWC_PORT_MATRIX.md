@@ -41,6 +41,15 @@ with a timestamp and monotonically increasing sequence counter.
 | `PersistentStorage` | `load/save/erase` | required | Tuning/calibration SWCs | ESP32 NVS adapters | byte records | schema, size, CRC, and read-back verification | C/S synchronous; disarmed only |
 | `CoreService` | `currentCore/delay/yield` | required | platform task SWCs | ESP32 FreeRTOS core adapter | core ID, ms | platform error policy; never called by control equations | C/S synchronous |
 | `ClockService` | `microseconds/milliseconds` | required | scheduled SWCs | ESP32 clock adapter | monotonic µs/ms | wrap handled by unsigned elapsed arithmetic | C/S synchronous |
+| ImuService | InitSensor/ReadSample/HasMagnetometer/LoadCalibration | required | flight-control SWC, firmware lifecycle | selected IMU adapter | g, deg/s, µT, °C | operation result plus magnetic-field validity | C/S synchronous |
+| BatteryService | InitMonitor/ReadStatus/CalibrationScale | required | flight-control SWC, firmware lifecycle | ESP32 ADC battery adapter | V, %, scale | sample contains valid/low/critical flags | C/S synchronous |
+| ReceiverService | InitReceiver/ReadFrame | required | receiver service task | ESP32 iBUS adapter | normalized and raw channels | frame contains explicit command validity | C/S synchronous |
+| GpsService | InitReceiver/ReadPosition | required | GPS service task | ESP32 GPS adapter | degrees, m, km/h, time | sample contains fix and validity flags | C/S synchronous |
+| BarometerService | InitSensor/ReadSample | required | barometer service task | BMP280 adapter | °C, hPa, m | boolean result and sample validity | C/S synchronous |
+| RangeService | InitSensor/ReadRange | required | ToF service task | VL53L4CX adapter | mm, MCPS, ms | ready, valid, range-status, and age fields | C/S synchronous |
+| MotorService | begin/prepareEscs/write/stop | required | flight-control SWC, firmware lifecycle | ESP32 PWM motor adapter | normalized [0,1] | safety SWC gates every nonzero command | C/S synchronous |
+| CalibrationService | Request/Status/SetSafety/ConfirmStep/PeriodicService/Cancel | required | receiver, flight-control, diagnostics SWCs | calibration-manager adapter | progress [0,1]; state enum | status exposes safe, active, blocks-flight, owns-motors, error | C/S synchronous |
+| DiagnosticService | CommandAvailable/ReadCommandByte/Write | required | serial diagnostics SWC | ESP32 serial adapter | byte/text | reads are nonblocking; diagnostic output is never control input | C/S synchronous |
 
 ## Runnable ownership
 
@@ -50,12 +59,18 @@ with a timestamp and monotonically increasing sequence counter.
 | Cascaded controller | reset six PIDs, command LPFs, yaw hold; invalidate output | 400 Hz | no allocation, I/O, or blocking |
 | Motor mixer | reset throttle slew; invalidate output | 400 Hz | no allocation, I/O, or blocking |
 | Level-trim service | clear capture/offset state; invalidate output | 400 Hz while control runs | no allocation, I/O, or blocking |
+| Flight-control orchestrator | reset control/estimator state | timer-released 400 Hz | hardware only through C/S; SWC data only through S/R; no intentional wait |
+| Serial diagnostics | clear tick state and publish banner | 20 Hz | noncritical; never scheduled on the control core |
 | Receiver service task | reset edge/health counters | 5 ms | bounded receiver service and calibration request |
 | GPS service task | reset diagnostic timer | 20 ms | one UART parser service and bounded RTE write |
 | Barometer service task | reset vertical-speed history | 50 ms | I2C mutex wait limited to 10 ms; RTE wait 2 ms |
 | ToF service task | no retained reset required | configured 25 ms | I2C mutex wait limited to 10 ms; RTE wait 2 ms |
 | CPU service task | initialize monitor through C/S port | 500 ms | one C/S call and bounded RTE write |
 | Wi-Fi service task | initialize AP through C/S port | event service with 10 ms yield | never runs on control core; no flight-state write |
+
+The FreeRTOS run functions and task entry functions are platform scheduling
+adapters, not SWC runnables. They invoke Init once and Periodic at each
+activation. No task loop contains application decisions.
 
 Any new SWC must add its two runnables and every provided/required port to these tables before
 its implementation is accepted.
