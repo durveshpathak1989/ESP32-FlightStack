@@ -81,6 +81,7 @@
 #include "src/Application/Safety/FlightSafetyPolicy.h"
 #include "src/Application/State/FlightState.h"
 #include "src/Platforms/Esp32/Storage/PreferencesTuningStore.h"
+#include "src/Platforms/Esp32/Configuration/TelemetryTuneAdapter.h"
 #include "src/Platforms/Esp32/Runtime/Esp32FlightScheduler.h"
 #include "src/Platforms/Esp32/Runtime/SnapshotRte.h"
 #include "src/Platforms/Esp32/Tasks/CpuServiceTask.h"
@@ -827,66 +828,7 @@ static bool handleTune(const TunePacket& in)
         return false;
     }
 
-    if (in.has_max_angle_deg)              g_tuning.max_angle_deg              = constrain(in.max_angle_deg, 5.0f, 80.0f);
-    if (in.has_max_rate_dps)               g_tuning.max_rate_dps               = constrain(in.max_rate_dps, 30.0f, 1200.0f);
-    if (in.has_max_pitch_rate_dps)         g_tuning.max_pitch_rate_dps         = constrain(in.max_pitch_rate_dps, 30.0f, 1200.0f);
-
-    if (in.has_roll_output_limit)          g_tuning.roll_output_limit          = constrain(in.roll_output_limit, 0.02f, 1.00f);
-    if (in.has_pitch_output_limit)         g_tuning.pitch_output_limit         = constrain(in.pitch_output_limit, 0.02f, 1.00f);
-    if (in.has_yaw_output_limit)           g_tuning.yaw_output_limit           = constrain(in.yaw_output_limit, 0.01f, 1.00f);
-
-    if (in.has_throttle_expo)              g_tuning.throttle_expo              = constrain(in.throttle_expo, 0.0f, 0.95f);
-    if (in.has_throttle_up_rate_per_sec)   g_tuning.throttle_up_rate_per_sec   = constrain(in.throttle_up_rate_per_sec, 0.05f, 10.0f);
-    if (in.has_throttle_down_rate_per_sec) g_tuning.throttle_down_rate_per_sec = constrain(in.throttle_down_rate_per_sec, 0.05f, 10.0f);
-    if (in.has_motor_idle)                 g_tuning.motor_idle                 = constrain(in.motor_idle, 0.0f, 0.40f);
-    if (in.has_motor_max)                  g_tuning.motor_max                  = constrain(in.motor_max, 0.10f, 1.00f);
-    if (in.has_throttle_cut)               g_tuning.throttle_cut               = constrain(in.throttle_cut, 0.0f, 0.30f);
-    if (in.has_idle_ramp_end)              g_tuning.idle_ramp_end              = constrain(in.idle_ramp_end, 0.01f, 0.60f);
-    if (in.has_pid_ilimit)                 g_tuning.pid_ilimit                 = constrain(in.pid_ilimit, 0.0f, 1000.0f);
-
-    // Keep idle/ramp relationships sane.
-    if (g_tuning.motor_idle > g_tuning.motor_max) g_tuning.motor_idle = g_tuning.motor_max;
-    if (g_tuning.idle_ramp_end <= g_tuning.throttle_cut) g_tuning.idle_ramp_end = g_tuning.throttle_cut + 0.01f;
-
-    if (in.has_pid_roll_kp)        g_tuning.pid_roll_kp        = in.pid_roll_kp;
-    if (in.has_pid_roll_ki)        g_tuning.pid_roll_ki        = in.pid_roll_ki;
-    if (in.has_pid_roll_kd)        g_tuning.pid_roll_kd        = in.pid_roll_kd;
-    if (in.has_pid_pitch_kp)       g_tuning.pid_pitch_kp       = in.pid_pitch_kp;
-    if (in.has_pid_pitch_ki)       g_tuning.pid_pitch_ki       = in.pid_pitch_ki;
-    if (in.has_pid_pitch_kd)       g_tuning.pid_pitch_kd       = in.pid_pitch_kd;
-    if (in.has_pid_yaw_kp)         g_tuning.pid_yaw_kp         = in.pid_yaw_kp;
-    if (in.has_pid_yaw_ki)         g_tuning.pid_yaw_ki         = in.pid_yaw_ki;
-    if (in.has_pid_yaw_kd)         g_tuning.pid_yaw_kd         = in.pid_yaw_kd;
-    if (in.has_pid_roll_ff)        g_tuning.pid_roll_ff        = in.pid_roll_ff;
-    if (in.has_pid_pitch_ff)       g_tuning.pid_pitch_ff       = in.pid_pitch_ff;
-    if (in.has_pid_yaw_ff)         g_tuning.pid_yaw_ff         = in.pid_yaw_ff;
-    if (in.has_pid_roll_d_lpf_hz)  g_tuning.pid_roll_d_lpf_hz  = constrain(in.pid_roll_d_lpf_hz, 0.0f, 200.0f);
-    if (in.has_pid_pitch_d_lpf_hz) g_tuning.pid_pitch_d_lpf_hz = constrain(in.pid_pitch_d_lpf_hz, 0.0f, 200.0f);
-    if (in.has_pid_yaw_d_lpf_hz)   g_tuning.pid_yaw_d_lpf_hz   = constrain(in.pid_yaw_d_lpf_hz, 0.0f, 200.0f);
-    if (in.has_pid_angle_roll_kp)  g_tuning.pid_angle_roll_kp  = in.pid_angle_roll_kp;
-    if (in.has_pid_angle_roll_ki)  g_tuning.pid_angle_roll_ki  = in.pid_angle_roll_ki;
-    if (in.has_pid_angle_roll_kd)  g_tuning.pid_angle_roll_kd  = in.pid_angle_roll_kd;
-    if (in.has_pid_angle_pitch_kp) g_tuning.pid_angle_pitch_kp = in.pid_angle_pitch_kp;
-    if (in.has_pid_angle_pitch_ki) g_tuning.pid_angle_pitch_ki = in.pid_angle_pitch_ki;
-    if (in.has_pid_angle_pitch_kd) g_tuning.pid_angle_pitch_kd = in.pid_angle_pitch_kd;
-    if (in.has_pid_angle_yaw_kp)   g_tuning.pid_angle_yaw_kp   = in.pid_angle_yaw_kp;
-    if (in.has_yaw_deadband)       g_tuning.yaw_deadband       = constrain(in.yaw_deadband, 0.0f, 0.50f);
-    if (in.has_yaw_max_rate_dps)   g_tuning.yaw_max_rate_dps   = constrain(in.yaw_max_rate_dps, 10.0f, 500.0f);
-    if (in.has_mahony_kp)          g_tuning.mahony_kp          = in.mahony_kp;
-    if (in.has_mahony_ki)          g_tuning.mahony_ki          = in.mahony_ki;
-    if (in.has_ahrs_filter_mode)   g_tuning.ahrs_filter_mode   = constrain(in.ahrs_filter_mode, 0.0f, 2.0f);
-    if (in.has_madgwick_beta)      g_tuning.madgwick_beta      = constrain(in.madgwick_beta, 0.001f, 1.000f);
-    if (in.has_notch_enable)       g_tuning.notch_enable       = in.notch_enable;
-    if (in.has_notch_freq_hz)      g_tuning.notch_freq_hz      = constrain(in.notch_freq_hz, 1.0f, NOTCH_SAMPLE_HZ * 0.45f);
-    if (in.has_notch_q)            g_tuning.notch_q            = constrain(in.notch_q, 0.5f, 50.0f);
-
-    if (in.has_ekf_angle_q)              g_tuning.ekf_angle_q             = constrain(in.ekf_angle_q, 0.000001f, 0.050000f);
-    if (in.has_ekf_bias_q)               g_tuning.ekf_bias_q              = constrain(in.ekf_bias_q, 0.000000001f, 0.001000f);
-    if (in.has_ekf_accel_r)              g_tuning.ekf_accel_r             = constrain(in.ekf_accel_r, 0.001f, 2.000f);
-    if (in.has_ekf_mag_r)                g_tuning.ekf_mag_r               = constrain(in.ekf_mag_r, 0.001f, 5.000f);
-    if (in.has_ekf_mag_declination_deg)  g_tuning.ekf_mag_declination_deg = constrain(in.ekf_mag_declination_deg, -30.0f, 30.0f);
-    if (in.has_ekf_mag_yaw_offset_deg)   g_tuning.ekf_mag_yaw_offset_deg  = constrain(in.ekf_mag_yaw_offset_deg, -180.0f, 180.0f);
-    if (in.has_ekf_mag_yaw_sign)         g_tuning.ekf_mag_yaw_sign        = (in.ekf_mag_yaw_sign < 0.0f) ? -1.0f : 1.0f;
+    TelemetryTuneAdapter::apply(in, g_tuning, NOTCH_SAMPLE_HZ);
     // Accept and apply immediately while disarmed. This removes the confusing
     // one-cycle handshake where the POST succeeded but telemetry still showed
     // old values until taskControl got around to applying dirty tuning.
