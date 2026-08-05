@@ -21,11 +21,11 @@ Pinned EKF commit: `4e8bccfb7ea34a122b76bdede5c830f57d0b8585`
 
 The submodule remains API-compatible with the existing sketch. `attitudeEKF.update()` continues to provide roll, pitch, yaw, quaternion, and gyro-bias accessors.
 
-Do not immediately replace the proven ACRO gyro feedback with the new estimated body-rate states. First validate estimated-rate latency, signs, covariance, and bias convergence from logs.
+The estimated body-rate feedback path is wired but intentionally disabled by default. The established notch-filtered gyro path remains active until estimated-rate latency, signs, covariance, and timing are validated from bench logs.
 
 ## ToF vertical aiding
 
-The EKF now supports:
+The EKF supports:
 
 ```cpp
 attitudeEKF.updateTofMeasurement(tofDistanceM, tofSampleTimestampMs);
@@ -38,11 +38,11 @@ A fresh downward-facing ToF sample:
 3. is differentiated against the previous fresh ToF sample;
 4. corrects `VZ` when the derived velocity passes timing and outlier checks.
 
-The timestamp must be the ToF sensor sample timestamp (`tofLastUpdate_ms`), not the current 400 Hz loop time. Duplicate timestamps are ignored so the same 40 Hz sample is not fused repeatedly.
+The timestamp must be the ToF sensor timestamp (`tofLastUpdate_ms`), not the current 400 Hz control-loop timestamp. Duplicate timestamps are ignored so the same 40 Hz sample is not fused repeatedly.
 
-## Recommended control-task wiring
+## Control-task wiring
 
-Fuse ToF from `taskControl`, immediately after the EKF attitude update. Do not call the EKF from `taskToF`, because the EKF object is also mutated by the 400 Hz control task and is not internally locked.
+ToF is fused from `taskControl`, immediately after the EKF attitude update. The EKF is not mutated from `taskToF`, because the EKF object is owned by the 400 Hz control task and is not internally locked.
 
 Conceptual integration:
 
@@ -69,7 +69,7 @@ if (ahrsMode == 0 &&
 }
 ```
 
-This call should occur only when EKF mode is active. If the estimator is reset, calibration begins, or AHRS mode changes away from EKF, reset `lastFusedTofTimestampMs` and call `attitudeEKF.resetPositionVelocity()` as appropriate.
+If the estimator is reset, calibration begins, or AHRS mode changes away from EKF, the ToF fusion timestamp/history should also be reset.
 
 ## Sign convention
 
@@ -80,6 +80,14 @@ World Z is positive upward. A larger ToF altitude therefore indicates ascent and
 ToF vertical velocity is relative to the surface below the vehicle. Reject or down-weight measurements over steps, furniture, vegetation, highly reflective surfaces, excessive tilt, invalid range status, stale samples, or operation outside the sensor range.
 
 Horizontal position and velocity still require GPS or optical-flow aiding. IMU integration alone will drift.
+
+## Build output
+
+The integration pull request runs the ESP32 release build with the project’s established 4 MB `min_spiffs` board configuration and `VERBOSE_ON=0`. The generated binaries, ELF/map files, build identity, and SHA-256 checksums are published under:
+
+```text
+firmware/agent-18-state-ekf-integration/
+```
 
 ## Validation order
 
