@@ -1,10 +1,34 @@
 /*
  * Name: Logger.cpp
  * Use: ESP32-safe high-speed diagnostic flight logger implementation.
- * Version: 1.0.0
+ * Version: 1.1.0
  */
 
 #include "Logger.h"
+
+static LoggerEkfRateSnapshot g_loggerEkfRateSnapshot = {0.0f, 0.0f, 0.0f, 0U, false};
+static portMUX_TYPE g_loggerEkfRateMux = portMUX_INITIALIZER_UNLOCKED;
+
+void loggerPublishEkfRateSnapshot(float rollRateDps,
+                                  float pitchRateDps,
+                                  float yawRateDps,
+                                  bool valid) {
+    portENTER_CRITICAL(&g_loggerEkfRateMux);
+    g_loggerEkfRateSnapshot.roll_rate_dps = rollRateDps;
+    g_loggerEkfRateSnapshot.pitch_rate_dps = pitchRateDps;
+    g_loggerEkfRateSnapshot.yaw_rate_dps = yawRateDps;
+    g_loggerEkfRateSnapshot.valid = valid;
+    g_loggerEkfRateSnapshot.sequence++;
+    portEXIT_CRITICAL(&g_loggerEkfRateMux);
+}
+
+LoggerEkfRateSnapshot loggerReadEkfRateSnapshot() {
+    LoggerEkfRateSnapshot snapshot;
+    portENTER_CRITICAL(&g_loggerEkfRateMux);
+    snapshot = g_loggerEkfRateSnapshot;
+    portEXIT_CRITICAL(&g_loggerEkfRateMux);
+    return snapshot;
+}
 
 Logger::Logger(uint16_t capacity)
     : _rows(nullptr), _capacity(capacity), _head(0), _full(false),
@@ -45,13 +69,42 @@ void Logger::resume() {
 
 bool Logger::push(const LoggerRow& row) {
     if (!_rows) return false;
+
+    LoggerRow enriched = row;
+
+    // The rate error was formed as target - feedback in the same 400 Hz cycle,
+    // so this reconstructs the exact signal seen by each PID axis. With the
+    // experimental EKF-rate feedback gate disabled, this is the notch + LPF
+    // gyro signal. If that gate is enabled later, these columns still truthfully
+    // report the active feedback signal rather than assuming its source.
+    enriched.feedback_roll_rate_dps =
+        row.target_roll_rate_dps - row.rate_roll_error_dps;
+    enriched.feedback_pitch_rate_dps =
+        row.target_pitch_rate_dps - row.rate_pitch_error_dps;
+    enriched.feedback_yaw_rate_dps =
+        row.target_yaw_rate_dps - row.rate_yaw_error_dps;
+
+    enriched.bias_corrected_roll_rate_dps =
+        enriched.feedback_roll_rate_dps - row.ekf_bgx_dps;
+    enriched.bias_corrected_pitch_rate_dps =
+        enriched.feedback_pitch_rate_dps - row.ekf_bgy_dps;
+    enriched.bias_corrected_yaw_rate_dps =
+        enriched.feedback_yaw_rate_dps - row.ekf_bgz_dps;
+
+    const LoggerEkfRateSnapshot ekfRates = loggerReadEkfRateSnapshot();
+    const bool ekfRatesValid = (row.ahrs_mode == 0U) && ekfRates.valid;
+    enriched.ekf_rate_valid = ekfRatesValid ? 1U : 0U;
+    enriched.ekf_roll_rate_dps = ekfRatesValid ? ekfRates.roll_rate_dps : 0.0f;
+    enriched.ekf_pitch_rate_dps = ekfRatesValid ? ekfRates.pitch_rate_dps : 0.0f;
+    enriched.ekf_yaw_rate_dps = ekfRatesValid ? ekfRates.yaw_rate_dps : 0.0f;
+
     portENTER_CRITICAL(&_mux);
     if (!_active) {
         _dropped++;
         portEXIT_CRITICAL(&_mux);
         return false;
     }
-    _rows[_head] = row;
+    _rows[_head] = enriched;
     if (++_head >= _capacity) { _head = 0; _full = true; }
     portEXIT_CRITICAL(&_mux);
     return true;
@@ -85,7 +138,10 @@ String Logger::csvHeader() const {
              "thr,rcRoll,rcPitch,rcYaw,"
              "targetRollDeg,targetPitchDeg,targetYawDeg,targetRollRateDps,targetPitchRateDps,targetYawRateDps,"
              "ekfRoll,ekfPitch,ekfYaw,ctrlRoll,ctrlPitch,ctrlYaw,zeroRoll,zeroPitch,zeroYaw,"
-             "ax,ay,az,gx,gy,gz,mx,my,mz,accelNorm,gyroNorm,magNorm,ekfBgx,ekfBgy,ekfBgz,ahrsMode,ekfMagUsed,"
+             "ax,ay,az,gxRaw,gyRaw,gzRaw,mx,my,mz,accelNorm,gyroNorm,magNorm,ekfBgx,ekfBgy,ekfBgz,"
+             "feedbackRollRateDps,feedbackPitchRateDps,feedbackYawRateDps,"
+             "biasCorrectedRollRateDps,biasCorrectedPitchRateDps,biasCorrectedYawRateDps,"
+             "ekfRollRateDps,ekfPitchRateDps,ekfYawRateDps,ekfRateValid,ahrsMode,ekfMagUsed,"
              "angleRollErr,anglePitchErr,yawErr,rateRollErr,ratePitchErr,rateYawErr,"
              "angleRollP,angleRollI,angleRollD,angleRollOut,anglePitchP,anglePitchI,anglePitchD,anglePitchOut,angleYawP,angleYawI,angleYawD,angleYawOut,"
              "rateRollP,rateRollI,rateRollD,rateRollOut,ratePitchP,ratePitchI,ratePitchD,ratePitchOut,rateYawP,rateYawI,rateYawD,rateYawOut,"
@@ -102,7 +158,7 @@ String Logger::csvRow(uint16_t chronologicalIndex) const {
     portEXIT_CRITICAL(const_cast<portMUX_TYPE*>(&_mux));
     if (!ok) return String();
 
-    String s; s.reserve(1600);
+    String s; s.reserve(1800);
     s += String(r.t_us); s += ','; s += String(r.loop_count); s += ','; s += String(r.period_us); s += ',';
     s += String(r.jitter_us); s += ','; s += String(r.control_exec_us); s += ','; s += String(r.imu_read_us); s += ',';
     s += String(r.rc_read_us); s += ','; s += String(r.ahrs_exec_us); s += ','; s += String(r.pid_exec_us); s += ',';
@@ -122,7 +178,19 @@ String Logger::csvRow(uint16_t chronologicalIndex) const {
     _appendFloat(s,r.mx_uT,3); _appendFloat(s,r.my_uT,3); _appendFloat(s,r.mz_uT,3);
     _appendFloat(s,r.accel_norm_g,5); _appendFloat(s,r.gyro_norm_dps,3); _appendFloat(s,r.mag_norm_uT,3);
     _appendFloat(s,r.ekf_bgx_dps,5); _appendFloat(s,r.ekf_bgy_dps,5); _appendFloat(s,r.ekf_bgz_dps,5);
+
+    _appendFloat(s,r.feedback_roll_rate_dps,3);
+    _appendFloat(s,r.feedback_pitch_rate_dps,3);
+    _appendFloat(s,r.feedback_yaw_rate_dps,3);
+    _appendFloat(s,r.bias_corrected_roll_rate_dps,3);
+    _appendFloat(s,r.bias_corrected_pitch_rate_dps,3);
+    _appendFloat(s,r.bias_corrected_yaw_rate_dps,3);
+    _appendFloat(s,r.ekf_roll_rate_dps,3);
+    _appendFloat(s,r.ekf_pitch_rate_dps,3);
+    _appendFloat(s,r.ekf_yaw_rate_dps,3);
+    s += ','; s += String(r.ekf_rate_valid);
     s += ','; s += String(r.ahrs_mode); s += ','; s += String(r.ekf_mag_used);
+
     _appendFloat(s,r.angle_roll_error_deg,3); _appendFloat(s,r.angle_pitch_error_deg,3); _appendFloat(s,r.yaw_error_deg,3);
     _appendFloat(s,r.rate_roll_error_dps,3); _appendFloat(s,r.rate_pitch_error_dps,3); _appendFloat(s,r.rate_yaw_error_dps,3);
 
