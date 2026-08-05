@@ -36,6 +36,7 @@ class MotorPort {
 public:
     virtual ~MotorPort() = default;
     virtual bool begin() = 0;
+    virtual void prepareEscs() {}
     virtual void write(const MotorCommand& command) = 0;
     virtual void stop() = 0;
 };

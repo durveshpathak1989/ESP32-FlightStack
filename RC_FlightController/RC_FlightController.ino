@@ -97,8 +97,10 @@
 #include "src/Platforms/Esp32/Services/Esp32RangeServiceAdapter.h"
 #include "src/Platforms/Esp32/Services/Esp32ReceiverServiceAdapter.h"
 #include "src/Platforms/Esp32/Services/CalibrationServiceAdapter.h"
+#include "src/Platforms/Esp32/Motor/Esp32MotorServiceAdapter.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
+static Esp32MotorServiceAdapter motorServiceAdapter;
 
 // ─────────────────────────────────────────────────────────────
 //  IMU loop timing instrumentation — Test 7.1
@@ -880,9 +882,10 @@ static bool handleTune(const TunePacket& in)
 // ─────────────────────────────────────────────────────────────
 //  Motor + SWC helpers
 // ─────────────────────────────────────────────────────────────
-static void motorsBegin()                                    { motorBegin(); }
-static void writeMotors(float fl,float fr,float rl,float rr) { motorSet(fl,fr,rl,rr); }
-static void motorsOff()                                      { motorOff(); }
+static void writeMotors(float fl,float fr,float rl,float rr) {
+    motorServiceAdapter.write({fl, fr, rl, rr});
+}
+static void motorsOff() { motorServiceAdapter.stop(); }
 //  TASKS
 // ═════════════════════════════════════════════════════════════
 
@@ -1094,22 +1097,26 @@ static String flightLogRowCsv(uint16_t i) {
 // BLOCK B — Replace your taskControl() with this version
 // ============================================================================
 
-static void taskControl(void* /*pv*/)
+class FlightControlSwc final : public rte::SoftwareComponent {
+public:
+    void Init() override;
+    void Periodic() override;
+};
+static FlightControlSwc flightControlSwc;
+
+void FlightControlSwc::Init()
 {
-    const uint32_t TARGET_US = TIMING_TARGET_US;   // 2500 us = 400 Hz
-
-    // The loop is released by esp_timer every 2500 us.
-    // Do not use vTaskDelay(1) here, and do not busy-wait: both caused
-    // either 40 ms periods or watchdog resets on this build.
-    uint32_t lastUs = 0;
-
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
     pidAngleYaw.reset();
     attitudeEstimator.resetEkf();
     flightController.reset();
+}
 
-    for (;;) {
+void FlightControlSwc::Periodic()
+{
+        const uint32_t TARGET_US = TIMING_TARGET_US;
+        static uint32_t lastUs = 0;
         if (g_tuning.dirty) applyTuningToObjects();
 
         // Block until the high-resolution 400 Hz timer releases this task.
@@ -1183,7 +1190,7 @@ static void taskControl(void* /*pv*/)
 
             updateExecTimingAndPrint(0, 0, periodUs, TARGET_US);
 
-            continue;
+            return;
         }
 
         // ── IMU read + EKF AHRS ───────────────────────────────
@@ -1474,7 +1481,7 @@ static void taskControl(void* /*pv*/)
                                      fullDoneUs - execStartUs,
                                      periodUs,
                                      TARGET_US);
-            continue;
+            return;
         }
 
         // ── ARMED — cascaded PID ──────────────────────────────
@@ -1895,7 +1902,12 @@ static void taskControl(void* /*pv*/)
                                  fullDoneUs - execStartUs,
                                  periodUs,
                                  TARGET_US);
-    }
+}
+
+static void taskControl(void* /*pv*/)
+{
+    flightControlSwc.Init();
+    for (;;) flightControlSwc.Periodic();
 }
 
 
@@ -1903,21 +1915,28 @@ static void taskControl(void* /*pv*/)
 //  taskSerial — Core 0, priority 1, 20 Hz
 //  1 Hz status line; optional ~4 Hz [PID] trace (Serial 'p' toggles).
 // ─────────────────────────────────────────────────────────────
-static void taskSerial(void* /*pv*/)
-{
-    const TickType_t period = pdMS_TO_TICKS(50);
-    TickType_t lastWake = xTaskGetTickCount();
-    uint32_t tick = 0;
+class SerialDiagnosticsSwc final : public rte::SoftwareComponent {
+public:
+    void Init() override;
+    void Periodic() override;
+private:
+    uint32_t tick_ = 0;
+};
+static SerialDiagnosticsSwc serialDiagnosticsSwc;
 
+void SerialDiagnosticsSwc::Init()
+{
+    tick_ = 0;
     DBG_PRINTLN(F("\n╔══════════════════════════════════════════════════════╗"));
     DBG_PRINTLN(F("  ║  FlySky iBUS + MPU-9250/6500 + BMP280 + GPS  v6.1.0  ║"));
     DBG_PRINTLN(F("  ║  Wi-Fi: ESP32-DRONE / 12345678 → 192.168.4.1         ║"));
     DBG_PRINTLN(F("  ║  taskControl: timer 400 Hz, original RC              ║"));
     DBG_PRINTLN(F("  ║  Type 'p' to toggle the [PID] tuning trace.          ║"));
     DBG_PRINTLN(F("  ╚══════════════════════════════════════════════════════╝"));
+}
 
-    for (;;) {
-
+void SerialDiagnosticsSwc::Periodic()
+{
         rte::SignalSample<flight::ReceiverFrame> receiverSignal{};
         receiverFramePort.receive(receiverSignal);
         const flight::PilotCommand& calCmd = receiverSignal.value.command;
@@ -1990,7 +2009,7 @@ static void taskSerial(void* /*pv*/)
         }
 
         // 1 Hz status line
-        if (tick % 20 == 0) {
+        if (tick_ % 20 == 0) {
             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
                           "CTRL R=%+6.1f P=%+6.1f Y=%+6.1f | "
                           "OFF R=%+5.2f P=%+5.2f Y=%+5.2f | "
@@ -1999,7 +2018,7 @@ static void taskSerial(void* /*pv*/)
                           "ToF %s %.3fm obj=%u %lums | "
                           "GPS %s Sats=%d | "
                           "Mag:%s Est:%s mKp=%.2f\n",
-                          (unsigned long)tick, ms,
+                          (unsigned long)tick_, ms,
                           s.roll_deg, s.pitch_deg, s.yaw_deg,
                           s.roll_ctrl_deg, s.pitch_ctrl_deg, s.yaw_ctrl_deg,
                           s.roll_offset_deg, s.pitch_offset_deg, s.yaw_offset_deg,
@@ -2031,7 +2050,7 @@ static void taskSerial(void* /*pv*/)
         }
 
         // ~4 Hz PID tuning trace (sibling of the 1 Hz block; gated by 'p')
-        if (g_pidTrace && s.armed && (tick % 5 == 0)) {
+        if (g_pidTrace && s.armed && (tick_ % 5 == 0)) {
             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
                           "ctrlAtt R=%+6.2f P=%+6.2f Y=%+6.2f | "
                           "gyro gx=%+7.1f gy=%+7.1f gz=%+7.1f | "
@@ -2045,7 +2064,16 @@ static void taskSerial(void* /*pv*/)
                           (int)flightController.yawHoldActive());
         }
 
-        tick++;
+        tick_++;
+}
+
+static void taskSerial(void* /*pv*/)
+{
+    const TickType_t period = pdMS_TO_TICKS(50);
+    TickType_t lastWake = xTaskGetTickCount();
+    serialDiagnosticsSwc.Init();
+    for (;;) {
+        serialDiagnosticsSwc.Periodic();
         vTaskDelayUntil(&lastWake, period);
     }
 }
@@ -2171,8 +2199,8 @@ void setup()
                bootBattery.valid ? 1 : 0);
     DBG_PRINTLN(F("[BOOT] Battery sanity: 12.2V pack should read about 1.58V at ADC."));
 
-    motorsBegin();
-    motorEscArm();   // sends 1000 µs for 3 s; comment out after ESC calibration done
+    motorServiceAdapter.begin();
+    motorServiceAdapter.prepareEscs();
     g_motorOutputsActive = false;
 
     SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_MPU_CS);
