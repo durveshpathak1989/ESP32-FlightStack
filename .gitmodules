@@ -17,7 +17,7 @@
 [submodule "Submodules/EKF"]
 	path = RC_FlightController/src/Submodules/EKF
 	url = https://github.com/durveshpathak1989/ekf.git
-	branch = master
+	branch = agent/18-state-inertial-ekf
 [submodule "Submodules/ESP32Core"]
 	path = RC_FlightController/src/Submodules/ESP32Core
 	url = https://github.com/durveshpathak1989/esp32core.git
