@@ -632,8 +632,8 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 <section class="tab-panel" id="tab-tune">
   <div class="panel">
     <div class="sec-title">PILOT COMMAND LIMITS</div>
-    <div class="tune-row"><span>Max Angle</span><input class="tval" id="limMaxAngle" value="5.0"><button class="tapply" onclick="sendSingle('max_angle_deg','limMaxAngle')">SET</button></div>
-    <div class="tune-row"><span>Max Rate</span><input class="tval" id="limMaxRate" value="120.0"><button class="tapply" onclick="sendSingle('max_rate_dps','limMaxRate')">SET</button></div>
+    <div class="tune-row"><span>Max Angle</span><input class="tval" id="limMaxAngle" value="20.0"><button class="tapply" onclick="sendSingle('max_angle_deg','limMaxAngle')">SET</button></div>
+    <div class="tune-row"><span>Max Rate</span><input class="tval" id="limMaxRate" value="300.0"><button class="tapply" onclick="sendSingle('max_rate_dps','limMaxRate')">SET</button></div>
     <div class="tune-row"><span>Yaw Max</span><input class="tval" id="yawMaxRate" value="20.0"><button class="tapply" onclick="sendSingle('yaw_max_rate_dps','yawMaxRate')">SET</button></div>
     <div class="tune-row"><span>Yaw DB</span><input class="tval" id="yawDeadband" value="0.02000"><button class="tapply" onclick="sendSingle('yaw_deadband','yawDeadband')">SET</button></div>
 
@@ -654,13 +654,13 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 
   <div class="panel">
     <div class="sec-title">RATE PID — ROLL</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="rKp" value="0.0009000"><button class="tapply" onclick="sendSingle('pid_roll_kp','rKp')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="rKp" value="0.0006000"><button class="tapply" onclick="sendSingle('pid_roll_kp','rKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="rKi" value="0.000001000"><button class="tapply" onclick="sendSingle('pid_roll_ki','rKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="rKd" value="0.000000010"><button class="tapply" onclick="sendSingle('pid_roll_kd','rKd')">SET</button></div>
     <div class="tune-row"><span>FF</span><input class="tval" id="rFf" value="0.000000"><button class="tapply" onclick="sendSingle('pid_roll_ff','rFf')">SET</button></div>
     <div class="tune-row"><span>D LPF</span><input class="tval" id="rDLpf" value="100.0"><button class="tapply" onclick="sendSingle('pid_roll_d_lpf_hz','rDLpf')">SET</button></div>
     <div class="sec-title">RATE PID — PITCH</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="pKp" value="0.001900"><button class="tapply" onclick="sendSingle('pid_pitch_kp','pKp')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="pKp" value="0.001200"><button class="tapply" onclick="sendSingle('pid_pitch_kp','pKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="pKi" value="0.000001000"><button class="tapply" onclick="sendSingle('pid_pitch_ki','pKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="pKd" value="0.000000010"><button class="tapply" onclick="sendSingle('pid_pitch_kd','pKd')">SET</button></div>
     <div class="tune-row"><span>FF</span><input class="tval" id="pFf" value="0.000000"><button class="tapply" onclick="sendSingle('pid_pitch_ff','pFf')">SET</button></div>
@@ -687,11 +687,11 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 
   <div class="panel" style="display:flex;flex-direction:column">
     <div class="sec-title">ANGLE PID — ROLL</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="arKp" value="1.500"><button class="tapply" onclick="sendSingle('pid_angle_roll_kp','arKp')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="arKp" value="2.000"><button class="tapply" onclick="sendSingle('pid_angle_roll_kp','arKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="arKi" value="0.000"><button class="tapply" onclick="sendSingle('pid_angle_roll_ki','arKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="arKd" value="0.000000"><button class="tapply" onclick="sendSingle('pid_angle_roll_kd','arKd')">SET</button></div>
     <div class="sec-title">ANGLE PID — PITCH</div>
-    <div class="tune-row"><span>Kp</span><input class="tval" id="apKp" value="1.000"><button class="tapply" onclick="sendSingle('pid_angle_pitch_kp','apKp')">SET</button></div>
+    <div class="tune-row"><span>Kp</span><input class="tval" id="apKp" value="2.000"><button class="tapply" onclick="sendSingle('pid_angle_pitch_kp','apKp')">SET</button></div>
     <div class="tune-row"><span>Ki</span><input class="tval" id="apKi" value="0.000"><button class="tapply" onclick="sendSingle('pid_angle_pitch_ki','apKi')">SET</button></div>
     <div class="tune-row"><span>Kd</span><input class="tval" id="apKd" value="0.000000"><button class="tapply" onclick="sendSingle('pid_angle_pitch_kd','apKd')">SET</button></div>
     <div class="sec-title">YAW HEADING HOLD</div>
@@ -700,7 +700,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 
     <div class="sec-title" style="margin-top:12px">MOTOR VIBRATION NOTCH</div>
     <div class="tune-row"><span>Enable</span><input class="tval" id="notchEnable" value="1"><button class="tapply" onclick="sendSingle('notch_enable','notchEnable')">SET</button></div>
-    <div class="tune-row"><span>Freq Hz</span><input class="tval" id="notchFreqHz" value="143.84"><button class="tapply" onclick="sendSingle('notch_freq_hz','notchFreqHz')">SET</button></div>
+    <div class="tune-row"><span>Freq Hz</span><input class="tval" id="notchFreqHz" value="112.57"><button class="tapply" onclick="sendSingle('notch_freq_hz','notchFreqHz')">SET</button></div>
     <div class="tune-row"><span>Q</span><input class="tval" id="notchQ" value="10.0"><button class="tapply" onclick="sendSingle('notch_q','notchQ')">SET</button></div>
 
     <div class="sec-title" style="margin-top:12px">LIVE VALUES</div>
@@ -847,9 +847,9 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
       <div class="sec-title">FLIGHT ENVELOPE <span class="badge-esp">ESP32</span></div>
       <div class="cfg-warn">These are sent to the drone via Wi-Fi. Firmware must handle them in the /tune endpoint.</div>
       <div class="cfg-section" style="margin-top:8px">
-        <div class="cfg-row"><span class="cfg-lbl">Max Lean Angle (ANGLE mode)<small>degrees — typically 25–45°</small></span><input class="cfg-inp" id="cfg-maxangle" value="30" type="number" min="5" max="80" step="1"></div>
-        <div class="cfg-row"><span class="cfg-lbl">Max Roll Rate (ACRO)<small>°/s — 200 freestyle, 150 cinematic</small></span><input class="cfg-inp" id="cfg-maxroll" value="200" type="number" min="30" max="1200" step="10"></div>
-        <div class="cfg-row"><span class="cfg-lbl">Max Pitch Rate (ACRO)<small>°/s</small></span><input class="cfg-inp" id="cfg-maxpitch" value="200" type="number" min="30" max="1200" step="10"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Max Lean Angle (ANGLE mode)<small>degrees — typically 25–45°</small></span><input class="cfg-inp" id="cfg-maxangle" value="20" type="number" min="5" max="80" step="1"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Max Roll Rate (ACRO)<small>°/s — 200 freestyle, 150 cinematic</small></span><input class="cfg-inp" id="cfg-maxroll" value="300" type="number" min="30" max="1200" step="10"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Max Pitch Rate (ACRO)<small>°/s</small></span><input class="cfg-inp" id="cfg-maxpitch" value="300" type="number" min="30" max="1200" step="10"></div>
         <div class="cfg-row"><span class="cfg-lbl">Max Yaw Rate<small>°/s — usually lower than roll/pitch</small></span><input class="cfg-inp" id="cfg-maxyaw" value="180" type="number" min="30" max="800" step="10"></div>
         <div class="cfg-row"><span class="cfg-lbl">Hover Throttle Estimate<small>0.0–1.0 — used for GCS display</small></span><input class="cfg-inp" id="cfg-hover" value="0.45" type="number" min="0.1" max="0.9" step="0.01"></div>
         <div class="cfg-row"><span class="cfg-lbl">Anti-windup I-limit<small>integrator clamp value</small></span><input class="cfg-inp" id="cfg-ilimit" value="50" type="number" min="5" max="500" step="5"></div>
@@ -889,7 +889,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
       <div class="sec-title">FILTERS · NOTCH + EKF <span class="badge-esp">ESP32</span></div>
       <div class="cfg-section">
         <div class="cfg-row"><span class="cfg-lbl">Notch Enable<small>1 = on, 0 = bypass</small></span><input class="cfg-inp" id="cfg-notchen" value="1" type="number" min="0" max="1" step="1"></div>
-        <div class="cfg-row"><span class="cfg-lbl">Notch Frequency<small>Hz — sweep 60–140 during motor test</small></span><input class="cfg-inp" id="cfg-notchhz" value="143.84" type="number" min="1" max="180" step="1"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Notch Frequency<small>Hz — sweep 60–140 during motor test</small></span><input class="cfg-inp" id="cfg-notchhz" value="112.57" type="number" min="1" max="180" step="0.01"></div>
         <div class="cfg-row"><span class="cfg-lbl">Notch Q<small>higher = narrower; start 6–10</small></span><input class="cfg-inp" id="cfg-notchq" value="10.0" type="number" min="0.5" max="50" step="0.5"></div>
         <div class="cfg-row"><span class="cfg-lbl">EKF Angle Q<small>process noise; higher follows gyro faster</small></span><input class="cfg-inp" id="cfg-ekfangq" value="0.0008" type="number" min="0.000001" max="0.05" step="0.0001"></div>
         <div class="cfg-row"><span class="cfg-lbl">EKF Bias Q<small>gyro bias wander; keep small</small></span><input class="cfg-inp" id="cfg-ekfbiasq" value="0.000001" type="number" min="0.000000001" max="0.001" step="0.000001"></div>
@@ -958,14 +958,14 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
 const CFG_DEFAULTS = {
   kv:920, cells:4, cellV:3.7, mah:3000, poles:14,
   propDiam:5.0, propPitch:4.5, weight:650,
-  maxAngle:5, maxRoll:120, maxPitch:120, maxYaw:20, hover:0.45, iLimit:50,
+  maxAngle:20, maxRoll:300, maxPitch:300, maxYaw:20, hover:0.45, iLimit:50,
   rollOutLimit:0.120, pitchOutLimit:0.120, yawOutLimit:0.120,
   throttleExpo:0.70, throttleUpRate:0.50, throttleDownRate:0.50,
   motorIdle:0.08, motorMax:1.00, throttleCut:0.03, idleRampEnd:0.15,
   yawDeadband:0.02,
   deadband:30, armThr:1700, calThr:1700, failsafe:500, thrMin:1000, thrMax:2000,
   mahonyKp:2.0, mahonyKi:0.005, frate:500,
-  notchEnable:1, notchFreqHz:143.84, notchQ:10.0,
+  notchEnable:1, notchFreqHz:112.57, notchQ:10.0,
   ekfAngleQ:0.0008, ekfBiasQ:0.000001, ekfAccelR:0.400, ekfMagR:0.200,
   ekfMagDeclinationDeg:0.0, ekfMagYawOffsetDeg:0.0, ekfMagYawSign:1,
   dshot:300, dshotMin:48, dshotMax:2047, bidir:0,
@@ -1023,7 +1023,7 @@ function readCfgFromInputs(){
   CFG.mahonyKi = +document.getElementById('cfg-mki').value||0.005;
   CFG.frate    = +document.getElementById('cfg-frate').value||500;
   CFG.notchEnable = +document.getElementById('cfg-notchen').value||0;
-  CFG.notchFreqHz = +document.getElementById('cfg-notchhz').value||143.84;
+  CFG.notchFreqHz = +document.getElementById('cfg-notchhz').value||112.57;
   CFG.notchQ      = +document.getElementById('cfg-notchq').value||10.0;
   CFG.ekfAngleQ   = +document.getElementById('cfg-ekfangq').value||0.0008;
   CFG.ekfBiasQ    = +document.getElementById('cfg-ekfbiasq').value||0.000001;
