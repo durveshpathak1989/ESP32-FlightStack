@@ -47,10 +47,10 @@ jobs:
           text = insert_after_once(
               text,
               'static constexpr float TUNE_MADGWICK_BETA       = 0.080f;\n',
-              '\n// Experimental full-state EKF control feedback. Active only when the\n'
-              '// selected AHRS mode is EKF. A blend of 1.0 uses the EKF body-rate\n'
-              '// estimate directly; lower values retain some filtered-gyro feedback.\n'
-              'static constexpr bool  TUNE_EKF_RATE_FEEDBACK_ENABLE = true;\n'
+              '\n// Experimental full-state EKF control feedback. The path is wired,\n'
+              '// but remains disabled by default until estimated-rate signs, latency,\n'
+              '// and covariance behavior are validated from bench logs.\n'
+              'static constexpr bool  TUNE_EKF_RATE_FEEDBACK_ENABLE = false;\n'
               'static constexpr float TUNE_EKF_RATE_BLEND           = 1.0f;\n'
           )
 
@@ -95,8 +95,9 @@ jobs:
         float gy = imuOk ? gyf : 0.0f;
         float gz = imuOk ? gzf : 0.0f;
 
-        // In EKF mode, use the new EKF body-rate states as rate-loop feedback.
-        // Other AHRS modes retain the proven filtered-gyro path.
+        // The new EKF body-rate states are available as an experimental feedback
+        // source. Keep the proven filtered-gyro path until the compile-time gate
+        // below is deliberately enabled after bench validation.
         if (imuOk &&
             TUNE_EKF_RATE_FEEDBACK_ENABLE &&
             g_ahrsFilterModeActive == 0 &&
@@ -135,7 +136,8 @@ jobs:
           rm -rf build
           mkdir -p build
           arduino-cli compile \
-            --fqbn esp32:esp32:esp32 \
+            --fqbn esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default \
+            --build-property compiler.cpp.extra_flags=-DVERBOSE_ON=0 \
             --build-path build \
             --export-binaries \
             RC_FlightController
@@ -167,7 +169,8 @@ jobs:
           Branch: agent/18-state-ekf-integration
           Source commit before generated build commit: $GITHUB_SHA
           EKF submodule commit: $(git -C RC_FlightController/src/Submodules/EKF rev-parse HEAD)
-          FQBN: esp32:esp32:esp32
+          FQBN: esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default
+          VERBOSE_ON: 0
           Built UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
 
