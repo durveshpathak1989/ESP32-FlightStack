@@ -2,7 +2,7 @@
  72b175e20950d4f79c263682464415f709299ec8 RC_FlightController/src/Submodules/BMP280 (heads/master)
  228343094fb9ba020f3ee1e5aa518808d65e8370 RC_FlightController/src/Submodules/CalManager (heads/master)
  3c57a4e730a32eb304ea3ffb3040945c0b307072 RC_FlightController/src/Submodules/DebugConfig (heads/master)
- 2b11cc6324b8b69d91b05cf9b8c9c08fd7821f7f RC_FlightController/src/Submodules/EKF (heads/master)
+ 4e8bccfb7ea34a122b76bdede5c830f57d0b8585 RC_FlightController/src/Submodules/EKF (4e8bccf)
  f89b384a4d7234827d63797235ffb77b6daf7591 RC_FlightController/src/Submodules/ESP32Core (heads/master)
  57a15bd187f9b0d5d4786562390aa09eeaad4030 RC_FlightController/src/Submodules/FFT (heads/master)
  2119d81f96ae4d266eacbfb7a96907f2029cdadb RC_FlightController/src/Submodules/GPS (heads/master)

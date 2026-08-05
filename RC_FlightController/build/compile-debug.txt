@@ -471,631 +471,691 @@ In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_F
    43 |     if (++_head >= N) { _head = 0; _full = true; }
       |           ^~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp: In member function 'bool Logger::push(const LoggerRow&)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:50:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-   50 |         _dropped++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:103:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+  103 |         _dropped++;
       |         ^~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:55:11: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-   55 |     if (++_head >= _capacity) { _head = 0; _full = true; }
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:108:11: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+  108 |     if (++_head >= _capacity) { _head = 0; _full = true; }
       |           ^~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp: In member function 'String Logger::csvRow(uint16_t) const':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:107:28: warning: 'r.LoggerRow::jitter_us' may be used uninitialized [-Wmaybe-uninitialized]
-  107 |     s += String(r.jitter_us); s += ','; s += String(r.control_exec_us); s += ','; s += String(r.imu_read_us); s += ',';
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:163:28: warning: 'r.LoggerRow::jitter_us' may be used uninitialized [-Wmaybe-uninitialized]
+  163 |     s += String(r.jitter_us); s += ','; s += String(r.control_exec_us); s += ','; s += String(r.imu_read_us); s += ',';
       |                            ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::jitter_us' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::jitter_us' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:107:70: warning: 'r.LoggerRow::control_exec_us' may be used uninitialized [-Wmaybe-uninitialized]
-  107 |     s += String(r.jitter_us); s += ','; s += String(r.control_exec_us); s += ','; s += String(r.imu_read_us); s += ',';
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:163:70: warning: 'r.LoggerRow::control_exec_us' may be used uninitialized [-Wmaybe-uninitialized]
+  163 |     s += String(r.jitter_us); s += ','; s += String(r.control_exec_us); s += ','; s += String(r.imu_read_us); s += ',';
       |                                                                      ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::control_exec_us' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::control_exec_us' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:107:108: warning: 'r.LoggerRow::imu_read_us' may be used uninitialized [-Wmaybe-uninitialized]
-  107 |     s += String(r.jitter_us); s += ','; s += String(r.control_exec_us); s += ','; s += String(r.imu_read_us); s += ',';
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:163:108: warning: 'r.LoggerRow::imu_read_us' may be used uninitialized [-Wmaybe-uninitialized]
+  163 |     s += String(r.jitter_us); s += ','; s += String(r.control_exec_us); s += ','; s += String(r.imu_read_us); s += ',';
       |                                                                                                            ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::imu_read_us' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::imu_read_us' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:108:29: warning: 'r.LoggerRow::rc_read_us' may be used uninitialized [-Wmaybe-uninitialized]
-  108 |     s += String(r.rc_read_us); s += ','; s += String(r.ahrs_exec_us); s += ','; s += String(r.pid_exec_us); s += ',';
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:164:29: warning: 'r.LoggerRow::rc_read_us' may be used uninitialized [-Wmaybe-uninitialized]
+  164 |     s += String(r.rc_read_us); s += ','; s += String(r.ahrs_exec_us); s += ','; s += String(r.pid_exec_us); s += ',';
       |                             ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rc_read_us' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rc_read_us' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:108:68: warning: 'r.LoggerRow::ahrs_exec_us' may be used uninitialized [-Wmaybe-uninitialized]
-  108 |     s += String(r.rc_read_us); s += ','; s += String(r.ahrs_exec_us); s += ','; s += String(r.pid_exec_us); s += ',';
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:164:68: warning: 'r.LoggerRow::ahrs_exec_us' may be used uninitialized [-Wmaybe-uninitialized]
+  164 |     s += String(r.rc_read_us); s += ','; s += String(r.ahrs_exec_us); s += ','; s += String(r.pid_exec_us); s += ',';
       |                                                                    ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ahrs_exec_us' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ahrs_exec_us' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:108:106: warning: 'r.LoggerRow::pid_exec_us' may be used uninitialized [-Wmaybe-uninitialized]
-  108 |     s += String(r.rc_read_us); s += ','; s += String(r.ahrs_exec_us); s += ','; s += String(r.pid_exec_us); s += ',';
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:164:106: warning: 'r.LoggerRow::pid_exec_us' may be used uninitialized [-Wmaybe-uninitialized]
+  164 |     s += String(r.rc_read_us); s += ','; s += String(r.ahrs_exec_us); s += ','; s += String(r.pid_exec_us); s += ',';
       |                                                                                                          ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::pid_exec_us' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::pid_exec_us' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:109:32: warning: 'r.LoggerRow::motor_exec_us' may be used uninitialized [-Wmaybe-uninitialized]
-  109 |     s += String(r.motor_exec_us); s += ','; s += String(r.mode); s += ',';
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:165:32: warning: 'r.LoggerRow::motor_exec_us' may be used uninitialized [-Wmaybe-uninitialized]
+  165 |     s += String(r.motor_exec_us); s += ','; s += String(r.mode); s += ',';
       |                                ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_exec_us' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_exec_us' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:109:63: warning: 'r.LoggerRow::mode' may be used uninitialized [-Wmaybe-uninitialized]
-  109 |     s += String(r.motor_exec_us); s += ','; s += String(r.mode); s += ',';
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:165:63: warning: 'r.LoggerRow::mode' may be used uninitialized [-Wmaybe-uninitialized]
+  165 |     s += String(r.motor_exec_us); s += ','; s += String(r.mode); s += ',';
       |                                                               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::mode' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::mode' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: warning: 'r.LoggerRow::flags' may be used uninitialized [-Wmaybe-uninitialized]
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:114:17: warning: 'r.LoggerRow::throttle' may be used uninitialized [-Wmaybe-uninitialized]
-  114 |     _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: warning: 'r.LoggerRow::flags' may be used uninitialized [-Wmaybe-uninitialized]
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:170:17: warning: 'r.LoggerRow::throttle' may be used uninitialized [-Wmaybe-uninitialized]
+  170 |     _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::throttle' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::throttle' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:114:47: warning: 'r.LoggerRow::rc_roll' may be used uninitialized [-Wmaybe-uninitialized]
-  114 |     _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:170:47: warning: 'r.LoggerRow::rc_roll' may be used uninitialized [-Wmaybe-uninitialized]
+  170 |     _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
       |                                   ~~~~~~~~~~~~^~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rc_roll' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rc_roll' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:114:76: warning: 'r.LoggerRow::rc_pitch' may be used uninitialized [-Wmaybe-uninitialized]
-  114 |     _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:170:76: warning: 'r.LoggerRow::rc_pitch' may be used uninitialized [-Wmaybe-uninitialized]
+  170 |     _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
       |                                                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rc_pitch' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rc_pitch' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:114:106: warning: 'r.LoggerRow::rc_yaw' may be used uninitialized [-Wmaybe-uninitialized]
-  114 |     _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:170:106: warning: 'r.LoggerRow::rc_yaw' may be used uninitialized [-Wmaybe-uninitialized]
+  170 |     _appendFloat(s,r.throttle,4); _appendFloat(s,r.rc_roll,4); _appendFloat(s,r.rc_pitch,4); _appendFloat(s,r.rc_yaw,4);
       |                                                                                              ~~~~~~~~~~~~^~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rc_yaw' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rc_yaw' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:115:17: warning: 'r.LoggerRow::target_roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  115 |     _appendFloat(s,r.target_roll_deg,3); _appendFloat(s,r.target_pitch_deg,3); _appendFloat(s,r.target_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:171:17: warning: 'r.LoggerRow::target_roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  171 |     _appendFloat(s,r.target_roll_deg,3); _appendFloat(s,r.target_pitch_deg,3); _appendFloat(s,r.target_yaw_deg,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::target_roll_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::target_roll_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:115:54: warning: 'r.LoggerRow::target_pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  115 |     _appendFloat(s,r.target_roll_deg,3); _appendFloat(s,r.target_pitch_deg,3); _appendFloat(s,r.target_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:171:54: warning: 'r.LoggerRow::target_pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  171 |     _appendFloat(s,r.target_roll_deg,3); _appendFloat(s,r.target_pitch_deg,3); _appendFloat(s,r.target_yaw_deg,3);
       |                                          ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::target_pitch_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::target_pitch_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:115:92: warning: 'r.LoggerRow::target_yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  115 |     _appendFloat(s,r.target_roll_deg,3); _appendFloat(s,r.target_pitch_deg,3); _appendFloat(s,r.target_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:171:92: warning: 'r.LoggerRow::target_yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  171 |     _appendFloat(s,r.target_roll_deg,3); _appendFloat(s,r.target_pitch_deg,3); _appendFloat(s,r.target_yaw_deg,3);
       |                                                                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::target_yaw_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::target_yaw_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:116:17: warning: 'r.LoggerRow::target_roll_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  116 |     _appendFloat(s,r.target_roll_rate_dps,3); _appendFloat(s,r.target_pitch_rate_dps,3); _appendFloat(s,r.target_yaw_rate_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:172:17: warning: 'r.LoggerRow::target_roll_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  172 |     _appendFloat(s,r.target_roll_rate_dps,3); _appendFloat(s,r.target_pitch_rate_dps,3); _appendFloat(s,r.target_yaw_rate_dps,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::target_roll_rate_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::target_roll_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:116:59: warning: 'r.LoggerRow::target_pitch_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  116 |     _appendFloat(s,r.target_roll_rate_dps,3); _appendFloat(s,r.target_pitch_rate_dps,3); _appendFloat(s,r.target_yaw_rate_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:172:59: warning: 'r.LoggerRow::target_pitch_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  172 |     _appendFloat(s,r.target_roll_rate_dps,3); _appendFloat(s,r.target_pitch_rate_dps,3); _appendFloat(s,r.target_yaw_rate_dps,3);
       |                                               ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::target_pitch_rate_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::target_pitch_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:116:102: warning: 'r.LoggerRow::target_yaw_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  116 |     _appendFloat(s,r.target_roll_rate_dps,3); _appendFloat(s,r.target_pitch_rate_dps,3); _appendFloat(s,r.target_yaw_rate_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:172:102: warning: 'r.LoggerRow::target_yaw_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  172 |     _appendFloat(s,r.target_roll_rate_dps,3); _appendFloat(s,r.target_pitch_rate_dps,3); _appendFloat(s,r.target_yaw_rate_dps,3);
       |                                                                                          ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::target_yaw_rate_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::target_yaw_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:117:17: warning: 'r.LoggerRow::ekf_roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  117 |     _appendFloat(s,r.ekf_roll_deg,3); _appendFloat(s,r.ekf_pitch_deg,3); _appendFloat(s,r.ekf_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:173:17: warning: 'r.LoggerRow::ekf_roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  173 |     _appendFloat(s,r.ekf_roll_deg,3); _appendFloat(s,r.ekf_pitch_deg,3); _appendFloat(s,r.ekf_yaw_deg,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ekf_roll_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_roll_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:117:51: warning: 'r.LoggerRow::ekf_pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  117 |     _appendFloat(s,r.ekf_roll_deg,3); _appendFloat(s,r.ekf_pitch_deg,3); _appendFloat(s,r.ekf_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:173:51: warning: 'r.LoggerRow::ekf_pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  173 |     _appendFloat(s,r.ekf_roll_deg,3); _appendFloat(s,r.ekf_pitch_deg,3); _appendFloat(s,r.ekf_yaw_deg,3);
       |                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ekf_pitch_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_pitch_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:117:86: warning: 'r.LoggerRow::ekf_yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  117 |     _appendFloat(s,r.ekf_roll_deg,3); _appendFloat(s,r.ekf_pitch_deg,3); _appendFloat(s,r.ekf_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:173:86: warning: 'r.LoggerRow::ekf_yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  173 |     _appendFloat(s,r.ekf_roll_deg,3); _appendFloat(s,r.ekf_pitch_deg,3); _appendFloat(s,r.ekf_yaw_deg,3);
       |                                                                          ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ekf_yaw_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_yaw_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:118:17: warning: 'r.LoggerRow::ctrl_roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  118 |     _appendFloat(s,r.ctrl_roll_deg,3); _appendFloat(s,r.ctrl_pitch_deg,3); _appendFloat(s,r.ctrl_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:174:17: warning: 'r.LoggerRow::ctrl_roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  174 |     _appendFloat(s,r.ctrl_roll_deg,3); _appendFloat(s,r.ctrl_pitch_deg,3); _appendFloat(s,r.ctrl_yaw_deg,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ctrl_roll_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ctrl_roll_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:118:52: warning: 'r.LoggerRow::ctrl_pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  118 |     _appendFloat(s,r.ctrl_roll_deg,3); _appendFloat(s,r.ctrl_pitch_deg,3); _appendFloat(s,r.ctrl_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:174:52: warning: 'r.LoggerRow::ctrl_pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  174 |     _appendFloat(s,r.ctrl_roll_deg,3); _appendFloat(s,r.ctrl_pitch_deg,3); _appendFloat(s,r.ctrl_yaw_deg,3);
       |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ctrl_pitch_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ctrl_pitch_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:118:88: warning: 'r.LoggerRow::ctrl_yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  118 |     _appendFloat(s,r.ctrl_roll_deg,3); _appendFloat(s,r.ctrl_pitch_deg,3); _appendFloat(s,r.ctrl_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:174:88: warning: 'r.LoggerRow::ctrl_yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  174 |     _appendFloat(s,r.ctrl_roll_deg,3); _appendFloat(s,r.ctrl_pitch_deg,3); _appendFloat(s,r.ctrl_yaw_deg,3);
       |                                                                            ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ctrl_yaw_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ctrl_yaw_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:119:17: warning: 'r.LoggerRow::zero_roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  119 |     _appendFloat(s,r.zero_roll_deg,3); _appendFloat(s,r.zero_pitch_deg,3); _appendFloat(s,r.zero_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:175:17: warning: 'r.LoggerRow::zero_roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  175 |     _appendFloat(s,r.zero_roll_deg,3); _appendFloat(s,r.zero_pitch_deg,3); _appendFloat(s,r.zero_yaw_deg,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::zero_roll_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::zero_roll_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:119:52: warning: 'r.LoggerRow::zero_pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  119 |     _appendFloat(s,r.zero_roll_deg,3); _appendFloat(s,r.zero_pitch_deg,3); _appendFloat(s,r.zero_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:175:52: warning: 'r.LoggerRow::zero_pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  175 |     _appendFloat(s,r.zero_roll_deg,3); _appendFloat(s,r.zero_pitch_deg,3); _appendFloat(s,r.zero_yaw_deg,3);
       |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::zero_pitch_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::zero_pitch_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:119:88: warning: 'r.LoggerRow::zero_yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  119 |     _appendFloat(s,r.zero_roll_deg,3); _appendFloat(s,r.zero_pitch_deg,3); _appendFloat(s,r.zero_yaw_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:175:88: warning: 'r.LoggerRow::zero_yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  175 |     _appendFloat(s,r.zero_roll_deg,3); _appendFloat(s,r.zero_pitch_deg,3); _appendFloat(s,r.zero_yaw_deg,3);
       |                                                                            ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::zero_yaw_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::zero_yaw_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:120:17: warning: 'r.LoggerRow::ax_g' may be used uninitialized [-Wmaybe-uninitialized]
-  120 |     _appendFloat(s,r.ax_g,5); _appendFloat(s,r.ay_g,5); _appendFloat(s,r.az_g,5);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:176:17: warning: 'r.LoggerRow::ax_g' may be used uninitialized [-Wmaybe-uninitialized]
+  176 |     _appendFloat(s,r.ax_g,5); _appendFloat(s,r.ay_g,5); _appendFloat(s,r.az_g,5);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ax_g' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ax_g' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:120:43: warning: 'r.LoggerRow::ay_g' may be used uninitialized [-Wmaybe-uninitialized]
-  120 |     _appendFloat(s,r.ax_g,5); _appendFloat(s,r.ay_g,5); _appendFloat(s,r.az_g,5);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:176:43: warning: 'r.LoggerRow::ay_g' may be used uninitialized [-Wmaybe-uninitialized]
+  176 |     _appendFloat(s,r.ax_g,5); _appendFloat(s,r.ay_g,5); _appendFloat(s,r.az_g,5);
       |                               ~~~~~~~~~~~~^~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ay_g' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ay_g' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:120:69: warning: 'r.LoggerRow::az_g' may be used uninitialized [-Wmaybe-uninitialized]
-  120 |     _appendFloat(s,r.ax_g,5); _appendFloat(s,r.ay_g,5); _appendFloat(s,r.az_g,5);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:176:69: warning: 'r.LoggerRow::az_g' may be used uninitialized [-Wmaybe-uninitialized]
+  176 |     _appendFloat(s,r.ax_g,5); _appendFloat(s,r.ay_g,5); _appendFloat(s,r.az_g,5);
       |                                                         ~~~~~~~~~~~~^~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::az_g' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::az_g' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:121:17: warning: 'r.LoggerRow::gx_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  121 |     _appendFloat(s,r.gx_dps,3); _appendFloat(s,r.gy_dps,3); _appendFloat(s,r.gz_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:177:17: warning: 'r.LoggerRow::gx_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  177 |     _appendFloat(s,r.gx_dps,3); _appendFloat(s,r.gy_dps,3); _appendFloat(s,r.gz_dps,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::gx_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::gx_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:121:45: warning: 'r.LoggerRow::gy_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  121 |     _appendFloat(s,r.gx_dps,3); _appendFloat(s,r.gy_dps,3); _appendFloat(s,r.gz_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:177:45: warning: 'r.LoggerRow::gy_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  177 |     _appendFloat(s,r.gx_dps,3); _appendFloat(s,r.gy_dps,3); _appendFloat(s,r.gz_dps,3);
       |                                 ~~~~~~~~~~~~^~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::gy_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::gy_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:121:73: warning: 'r.LoggerRow::gz_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  121 |     _appendFloat(s,r.gx_dps,3); _appendFloat(s,r.gy_dps,3); _appendFloat(s,r.gz_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:177:73: warning: 'r.LoggerRow::gz_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  177 |     _appendFloat(s,r.gx_dps,3); _appendFloat(s,r.gy_dps,3); _appendFloat(s,r.gz_dps,3);
       |                                                             ~~~~~~~~~~~~^~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::gz_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::gz_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:122:17: warning: 'r.LoggerRow::mx_uT' may be used uninitialized [-Wmaybe-uninitialized]
-  122 |     _appendFloat(s,r.mx_uT,3); _appendFloat(s,r.my_uT,3); _appendFloat(s,r.mz_uT,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:178:17: warning: 'r.LoggerRow::mx_uT' may be used uninitialized [-Wmaybe-uninitialized]
+  178 |     _appendFloat(s,r.mx_uT,3); _appendFloat(s,r.my_uT,3); _appendFloat(s,r.mz_uT,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::mx_uT' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::mx_uT' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:122:44: warning: 'r.LoggerRow::my_uT' may be used uninitialized [-Wmaybe-uninitialized]
-  122 |     _appendFloat(s,r.mx_uT,3); _appendFloat(s,r.my_uT,3); _appendFloat(s,r.mz_uT,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:178:44: warning: 'r.LoggerRow::my_uT' may be used uninitialized [-Wmaybe-uninitialized]
+  178 |     _appendFloat(s,r.mx_uT,3); _appendFloat(s,r.my_uT,3); _appendFloat(s,r.mz_uT,3);
       |                                ~~~~~~~~~~~~^~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::my_uT' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::my_uT' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:122:71: warning: 'r.LoggerRow::mz_uT' may be used uninitialized [-Wmaybe-uninitialized]
-  122 |     _appendFloat(s,r.mx_uT,3); _appendFloat(s,r.my_uT,3); _appendFloat(s,r.mz_uT,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:178:71: warning: 'r.LoggerRow::mz_uT' may be used uninitialized [-Wmaybe-uninitialized]
+  178 |     _appendFloat(s,r.mx_uT,3); _appendFloat(s,r.my_uT,3); _appendFloat(s,r.mz_uT,3);
       |                                                           ~~~~~~~~~~~~^~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::mz_uT' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::mz_uT' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:123:17: warning: 'r.LoggerRow::accel_norm_g' may be used uninitialized [-Wmaybe-uninitialized]
-  123 |     _appendFloat(s,r.accel_norm_g,5); _appendFloat(s,r.gyro_norm_dps,3); _appendFloat(s,r.mag_norm_uT,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:179:17: warning: 'r.LoggerRow::accel_norm_g' may be used uninitialized [-Wmaybe-uninitialized]
+  179 |     _appendFloat(s,r.accel_norm_g,5); _appendFloat(s,r.gyro_norm_dps,3); _appendFloat(s,r.mag_norm_uT,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::accel_norm_g' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::accel_norm_g' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:123:51: warning: 'r.LoggerRow::gyro_norm_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  123 |     _appendFloat(s,r.accel_norm_g,5); _appendFloat(s,r.gyro_norm_dps,3); _appendFloat(s,r.mag_norm_uT,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:179:51: warning: 'r.LoggerRow::gyro_norm_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  179 |     _appendFloat(s,r.accel_norm_g,5); _appendFloat(s,r.gyro_norm_dps,3); _appendFloat(s,r.mag_norm_uT,3);
       |                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::gyro_norm_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::gyro_norm_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:123:86: warning: 'r.LoggerRow::mag_norm_uT' may be used uninitialized [-Wmaybe-uninitialized]
-  123 |     _appendFloat(s,r.accel_norm_g,5); _appendFloat(s,r.gyro_norm_dps,3); _appendFloat(s,r.mag_norm_uT,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:179:86: warning: 'r.LoggerRow::mag_norm_uT' may be used uninitialized [-Wmaybe-uninitialized]
+  179 |     _appendFloat(s,r.accel_norm_g,5); _appendFloat(s,r.gyro_norm_dps,3); _appendFloat(s,r.mag_norm_uT,3);
       |                                                                          ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::mag_norm_uT' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::mag_norm_uT' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:124:17: warning: 'r.LoggerRow::ekf_bgx_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  124 |     _appendFloat(s,r.ekf_bgx_dps,5); _appendFloat(s,r.ekf_bgy_dps,5); _appendFloat(s,r.ekf_bgz_dps,5);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:180:17: warning: 'r.LoggerRow::ekf_bgx_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  180 |     _appendFloat(s,r.ekf_bgx_dps,5); _appendFloat(s,r.ekf_bgy_dps,5); _appendFloat(s,r.ekf_bgz_dps,5);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ekf_bgx_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_bgx_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:124:50: warning: 'r.LoggerRow::ekf_bgy_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  124 |     _appendFloat(s,r.ekf_bgx_dps,5); _appendFloat(s,r.ekf_bgy_dps,5); _appendFloat(s,r.ekf_bgz_dps,5);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:180:50: warning: 'r.LoggerRow::ekf_bgy_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  180 |     _appendFloat(s,r.ekf_bgx_dps,5); _appendFloat(s,r.ekf_bgy_dps,5); _appendFloat(s,r.ekf_bgz_dps,5);
       |                                      ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ekf_bgy_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_bgy_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:124:83: warning: 'r.LoggerRow::ekf_bgz_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  124 |     _appendFloat(s,r.ekf_bgx_dps,5); _appendFloat(s,r.ekf_bgy_dps,5); _appendFloat(s,r.ekf_bgz_dps,5);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:180:83: warning: 'r.LoggerRow::ekf_bgz_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  180 |     _appendFloat(s,r.ekf_bgx_dps,5); _appendFloat(s,r.ekf_bgy_dps,5); _appendFloat(s,r.ekf_bgz_dps,5);
       |                                                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ekf_bgz_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_bgz_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:125:38: warning: 'r.LoggerRow::ahrs_mode' may be used uninitialized [-Wmaybe-uninitialized]
-  125 |     s += ','; s += String(r.ahrs_mode); s += ','; s += String(r.ekf_mag_used);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:182:17: warning: 'r.LoggerRow::feedback_roll_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  182 |     _appendFloat(s,r.feedback_roll_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::feedback_roll_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:183:17: warning: 'r.LoggerRow::feedback_pitch_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  183 |     _appendFloat(s,r.feedback_pitch_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::feedback_pitch_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:184:17: warning: 'r.LoggerRow::feedback_yaw_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  184 |     _appendFloat(s,r.feedback_yaw_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::feedback_yaw_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:185:17: warning: 'r.LoggerRow::bias_corrected_roll_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  185 |     _appendFloat(s,r.bias_corrected_roll_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::bias_corrected_roll_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:186:17: warning: 'r.LoggerRow::bias_corrected_pitch_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  186 |     _appendFloat(s,r.bias_corrected_pitch_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::bias_corrected_pitch_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:187:17: warning: 'r.LoggerRow::bias_corrected_yaw_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  187 |     _appendFloat(s,r.bias_corrected_yaw_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::bias_corrected_yaw_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:188:17: warning: 'r.LoggerRow::ekf_roll_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  188 |     _appendFloat(s,r.ekf_roll_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_roll_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:189:17: warning: 'r.LoggerRow::ekf_pitch_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  189 |     _appendFloat(s,r.ekf_pitch_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_pitch_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:190:17: warning: 'r.LoggerRow::ekf_yaw_rate_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  190 |     _appendFloat(s,r.ekf_yaw_rate_dps,3);
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_yaw_rate_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:191:43: warning: 'r.LoggerRow::ekf_rate_valid' may be used uninitialized [-Wmaybe-uninitialized]
+  191 |     s += ','; s += String(r.ekf_rate_valid);
+      |                                           ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_rate_valid' was declared here
+  154 |     LoggerRow r; bool ok = false;
+      |               ^
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:192:38: warning: 'r.LoggerRow::ahrs_mode' may be used uninitialized [-Wmaybe-uninitialized]
+  192 |     s += ','; s += String(r.ahrs_mode); s += ','; s += String(r.ekf_mag_used);
       |                                      ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ahrs_mode' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ahrs_mode' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:125:77: warning: 'r.LoggerRow::ekf_mag_used' may be used uninitialized [-Wmaybe-uninitialized]
-  125 |     s += ','; s += String(r.ahrs_mode); s += ','; s += String(r.ekf_mag_used);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:192:77: warning: 'r.LoggerRow::ekf_mag_used' may be used uninitialized [-Wmaybe-uninitialized]
+  192 |     s += ','; s += String(r.ahrs_mode); s += ','; s += String(r.ekf_mag_used);
       |                                                                             ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::ekf_mag_used' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::ekf_mag_used' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:126:17: warning: 'r.LoggerRow::angle_roll_error_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  126 |     _appendFloat(s,r.angle_roll_error_deg,3); _appendFloat(s,r.angle_pitch_error_deg,3); _appendFloat(s,r.yaw_error_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:194:17: warning: 'r.LoggerRow::angle_roll_error_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  194 |     _appendFloat(s,r.angle_roll_error_deg,3); _appendFloat(s,r.angle_pitch_error_deg,3); _appendFloat(s,r.yaw_error_deg,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_roll_error_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_roll_error_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:126:59: warning: 'r.LoggerRow::angle_pitch_error_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  126 |     _appendFloat(s,r.angle_roll_error_deg,3); _appendFloat(s,r.angle_pitch_error_deg,3); _appendFloat(s,r.yaw_error_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:194:59: warning: 'r.LoggerRow::angle_pitch_error_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  194 |     _appendFloat(s,r.angle_roll_error_deg,3); _appendFloat(s,r.angle_pitch_error_deg,3); _appendFloat(s,r.yaw_error_deg,3);
       |                                               ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_pitch_error_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_pitch_error_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:126:102: warning: 'r.LoggerRow::yaw_error_deg' may be used uninitialized [-Wmaybe-uninitialized]
-  126 |     _appendFloat(s,r.angle_roll_error_deg,3); _appendFloat(s,r.angle_pitch_error_deg,3); _appendFloat(s,r.yaw_error_deg,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:194:102: warning: 'r.LoggerRow::yaw_error_deg' may be used uninitialized [-Wmaybe-uninitialized]
+  194 |     _appendFloat(s,r.angle_roll_error_deg,3); _appendFloat(s,r.angle_pitch_error_deg,3); _appendFloat(s,r.yaw_error_deg,3);
       |                                                                                          ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::yaw_error_deg' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::yaw_error_deg' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:127:17: warning: 'r.LoggerRow::rate_roll_error_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  127 |     _appendFloat(s,r.rate_roll_error_dps,3); _appendFloat(s,r.rate_pitch_error_dps,3); _appendFloat(s,r.rate_yaw_error_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:195:17: warning: 'r.LoggerRow::rate_roll_error_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  195 |     _appendFloat(s,r.rate_roll_error_dps,3); _appendFloat(s,r.rate_pitch_error_dps,3); _appendFloat(s,r.rate_yaw_error_dps,3);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_roll_error_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_roll_error_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:127:58: warning: 'r.LoggerRow::rate_pitch_error_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  127 |     _appendFloat(s,r.rate_roll_error_dps,3); _appendFloat(s,r.rate_pitch_error_dps,3); _appendFloat(s,r.rate_yaw_error_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:195:58: warning: 'r.LoggerRow::rate_pitch_error_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  195 |     _appendFloat(s,r.rate_roll_error_dps,3); _appendFloat(s,r.rate_pitch_error_dps,3); _appendFloat(s,r.rate_yaw_error_dps,3);
       |                                              ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_pitch_error_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_pitch_error_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:127:100: warning: 'r.LoggerRow::rate_yaw_error_dps' may be used uninitialized [-Wmaybe-uninitialized]
-  127 |     _appendFloat(s,r.rate_roll_error_dps,3); _appendFloat(s,r.rate_pitch_error_dps,3); _appendFloat(s,r.rate_yaw_error_dps,3);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:195:100: warning: 'r.LoggerRow::rate_yaw_error_dps' may be used uninitialized [-Wmaybe-uninitialized]
+  195 |     _appendFloat(s,r.rate_roll_error_dps,3); _appendFloat(s,r.rate_pitch_error_dps,3); _appendFloat(s,r.rate_yaw_error_dps,3);
       |                                                                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_yaw_error_dps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_yaw_error_dps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:129:17: warning: 'r.LoggerRow::angle_roll_p' may be used uninitialized [-Wmaybe-uninitialized]
-  129 |     _appendFloat(s,r.angle_roll_p,6); _appendFloat(s,r.angle_roll_i,6); _appendFloat(s,r.angle_roll_d,6); _appendFloat(s,r.angle_roll_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:197:17: warning: 'r.LoggerRow::angle_roll_p' may be used uninitialized [-Wmaybe-uninitialized]
+  197 |     _appendFloat(s,r.angle_roll_p,6); _appendFloat(s,r.angle_roll_i,6); _appendFloat(s,r.angle_roll_d,6); _appendFloat(s,r.angle_roll_out,6);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_roll_p' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_roll_p' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:129:51: warning: 'r.LoggerRow::angle_roll_i' may be used uninitialized [-Wmaybe-uninitialized]
-  129 |     _appendFloat(s,r.angle_roll_p,6); _appendFloat(s,r.angle_roll_i,6); _appendFloat(s,r.angle_roll_d,6); _appendFloat(s,r.angle_roll_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:197:51: warning: 'r.LoggerRow::angle_roll_i' may be used uninitialized [-Wmaybe-uninitialized]
+  197 |     _appendFloat(s,r.angle_roll_p,6); _appendFloat(s,r.angle_roll_i,6); _appendFloat(s,r.angle_roll_d,6); _appendFloat(s,r.angle_roll_out,6);
       |                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_roll_i' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_roll_i' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:129:85: warning: 'r.LoggerRow::angle_roll_d' may be used uninitialized [-Wmaybe-uninitialized]
-  129 |     _appendFloat(s,r.angle_roll_p,6); _appendFloat(s,r.angle_roll_i,6); _appendFloat(s,r.angle_roll_d,6); _appendFloat(s,r.angle_roll_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:197:85: warning: 'r.LoggerRow::angle_roll_d' may be used uninitialized [-Wmaybe-uninitialized]
+  197 |     _appendFloat(s,r.angle_roll_p,6); _appendFloat(s,r.angle_roll_i,6); _appendFloat(s,r.angle_roll_d,6); _appendFloat(s,r.angle_roll_out,6);
       |                                                                         ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_roll_d' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_roll_d' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:129:119: warning: 'r.LoggerRow::angle_roll_out' may be used uninitialized [-Wmaybe-uninitialized]
-  129 |     _appendFloat(s,r.angle_roll_p,6); _appendFloat(s,r.angle_roll_i,6); _appendFloat(s,r.angle_roll_d,6); _appendFloat(s,r.angle_roll_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:197:119: warning: 'r.LoggerRow::angle_roll_out' may be used uninitialized [-Wmaybe-uninitialized]
+  197 |     _appendFloat(s,r.angle_roll_p,6); _appendFloat(s,r.angle_roll_i,6); _appendFloat(s,r.angle_roll_d,6); _appendFloat(s,r.angle_roll_out,6);
       |                                                                                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_roll_out' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_roll_out' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:130:17: warning: 'r.LoggerRow::angle_pitch_p' may be used uninitialized [-Wmaybe-uninitialized]
-  130 |     _appendFloat(s,r.angle_pitch_p,6); _appendFloat(s,r.angle_pitch_i,6); _appendFloat(s,r.angle_pitch_d,6); _appendFloat(s,r.angle_pitch_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:198:17: warning: 'r.LoggerRow::angle_pitch_p' may be used uninitialized [-Wmaybe-uninitialized]
+  198 |     _appendFloat(s,r.angle_pitch_p,6); _appendFloat(s,r.angle_pitch_i,6); _appendFloat(s,r.angle_pitch_d,6); _appendFloat(s,r.angle_pitch_out,6);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_pitch_p' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_pitch_p' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:130:52: warning: 'r.LoggerRow::angle_pitch_i' may be used uninitialized [-Wmaybe-uninitialized]
-  130 |     _appendFloat(s,r.angle_pitch_p,6); _appendFloat(s,r.angle_pitch_i,6); _appendFloat(s,r.angle_pitch_d,6); _appendFloat(s,r.angle_pitch_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:198:52: warning: 'r.LoggerRow::angle_pitch_i' may be used uninitialized [-Wmaybe-uninitialized]
+  198 |     _appendFloat(s,r.angle_pitch_p,6); _appendFloat(s,r.angle_pitch_i,6); _appendFloat(s,r.angle_pitch_d,6); _appendFloat(s,r.angle_pitch_out,6);
       |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_pitch_i' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_pitch_i' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:130:87: warning: 'r.LoggerRow::angle_pitch_d' may be used uninitialized [-Wmaybe-uninitialized]
-  130 |     _appendFloat(s,r.angle_pitch_p,6); _appendFloat(s,r.angle_pitch_i,6); _appendFloat(s,r.angle_pitch_d,6); _appendFloat(s,r.angle_pitch_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:198:87: warning: 'r.LoggerRow::angle_pitch_d' may be used uninitialized [-Wmaybe-uninitialized]
+  198 |     _appendFloat(s,r.angle_pitch_p,6); _appendFloat(s,r.angle_pitch_i,6); _appendFloat(s,r.angle_pitch_d,6); _appendFloat(s,r.angle_pitch_out,6);
       |                                                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_pitch_d' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_pitch_d' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:130:122: warning: 'r.LoggerRow::angle_pitch_out' may be used uninitialized [-Wmaybe-uninitialized]
-  130 |     _appendFloat(s,r.angle_pitch_p,6); _appendFloat(s,r.angle_pitch_i,6); _appendFloat(s,r.angle_pitch_d,6); _appendFloat(s,r.angle_pitch_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:198:122: warning: 'r.LoggerRow::angle_pitch_out' may be used uninitialized [-Wmaybe-uninitialized]
+  198 |     _appendFloat(s,r.angle_pitch_p,6); _appendFloat(s,r.angle_pitch_i,6); _appendFloat(s,r.angle_pitch_d,6); _appendFloat(s,r.angle_pitch_out,6);
       |                                                                                                              ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_pitch_out' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_pitch_out' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:131:17: warning: 'r.LoggerRow::angle_yaw_p' may be used uninitialized [-Wmaybe-uninitialized]
-  131 |     _appendFloat(s,r.angle_yaw_p,6); _appendFloat(s,r.angle_yaw_i,6); _appendFloat(s,r.angle_yaw_d,6); _appendFloat(s,r.angle_yaw_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:199:17: warning: 'r.LoggerRow::angle_yaw_p' may be used uninitialized [-Wmaybe-uninitialized]
+  199 |     _appendFloat(s,r.angle_yaw_p,6); _appendFloat(s,r.angle_yaw_i,6); _appendFloat(s,r.angle_yaw_d,6); _appendFloat(s,r.angle_yaw_out,6);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_yaw_p' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_yaw_p' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:131:50: warning: 'r.LoggerRow::angle_yaw_i' may be used uninitialized [-Wmaybe-uninitialized]
-  131 |     _appendFloat(s,r.angle_yaw_p,6); _appendFloat(s,r.angle_yaw_i,6); _appendFloat(s,r.angle_yaw_d,6); _appendFloat(s,r.angle_yaw_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:199:50: warning: 'r.LoggerRow::angle_yaw_i' may be used uninitialized [-Wmaybe-uninitialized]
+  199 |     _appendFloat(s,r.angle_yaw_p,6); _appendFloat(s,r.angle_yaw_i,6); _appendFloat(s,r.angle_yaw_d,6); _appendFloat(s,r.angle_yaw_out,6);
       |                                      ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_yaw_i' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_yaw_i' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:131:83: warning: 'r.LoggerRow::angle_yaw_d' may be used uninitialized [-Wmaybe-uninitialized]
-  131 |     _appendFloat(s,r.angle_yaw_p,6); _appendFloat(s,r.angle_yaw_i,6); _appendFloat(s,r.angle_yaw_d,6); _appendFloat(s,r.angle_yaw_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:199:83: warning: 'r.LoggerRow::angle_yaw_d' may be used uninitialized [-Wmaybe-uninitialized]
+  199 |     _appendFloat(s,r.angle_yaw_p,6); _appendFloat(s,r.angle_yaw_i,6); _appendFloat(s,r.angle_yaw_d,6); _appendFloat(s,r.angle_yaw_out,6);
       |                                                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_yaw_d' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_yaw_d' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:131:116: warning: 'r.LoggerRow::angle_yaw_out' may be used uninitialized [-Wmaybe-uninitialized]
-  131 |     _appendFloat(s,r.angle_yaw_p,6); _appendFloat(s,r.angle_yaw_i,6); _appendFloat(s,r.angle_yaw_d,6); _appendFloat(s,r.angle_yaw_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:199:116: warning: 'r.LoggerRow::angle_yaw_out' may be used uninitialized [-Wmaybe-uninitialized]
+  199 |     _appendFloat(s,r.angle_yaw_p,6); _appendFloat(s,r.angle_yaw_i,6); _appendFloat(s,r.angle_yaw_d,6); _appendFloat(s,r.angle_yaw_out,6);
       |                                                                                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::angle_yaw_out' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::angle_yaw_out' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:132:17: warning: 'r.LoggerRow::rate_roll_p' may be used uninitialized [-Wmaybe-uninitialized]
-  132 |     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:200:17: warning: 'r.LoggerRow::rate_roll_p' may be used uninitialized [-Wmaybe-uninitialized]
+  200 |     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_roll_p' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_roll_p' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:132:50: warning: 'r.LoggerRow::rate_roll_i' may be used uninitialized [-Wmaybe-uninitialized]
-  132 |     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:200:50: warning: 'r.LoggerRow::rate_roll_i' may be used uninitialized [-Wmaybe-uninitialized]
+  200 |     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
       |                                      ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_roll_i' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_roll_i' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:132:83: warning: 'r.LoggerRow::rate_roll_d' may be used uninitialized [-Wmaybe-uninitialized]
-  132 |     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:200:83: warning: 'r.LoggerRow::rate_roll_d' may be used uninitialized [-Wmaybe-uninitialized]
+  200 |     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
       |                                                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_roll_d' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_roll_d' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:132:116: warning: 'r.LoggerRow::rate_roll_out' may be used uninitialized [-Wmaybe-uninitialized]
-  132 |     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:200:116: warning: 'r.LoggerRow::rate_roll_out' may be used uninitialized [-Wmaybe-uninitialized]
+  200 |     _appendFloat(s,r.rate_roll_p,6); _appendFloat(s,r.rate_roll_i,6); _appendFloat(s,r.rate_roll_d,6); _appendFloat(s,r.rate_roll_out,6);
       |                                                                                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_roll_out' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_roll_out' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:133:17: warning: 'r.LoggerRow::rate_pitch_p' may be used uninitialized [-Wmaybe-uninitialized]
-  133 |     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:201:17: warning: 'r.LoggerRow::rate_pitch_p' may be used uninitialized [-Wmaybe-uninitialized]
+  201 |     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_pitch_p' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_pitch_p' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:133:51: warning: 'r.LoggerRow::rate_pitch_i' may be used uninitialized [-Wmaybe-uninitialized]
-  133 |     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:201:51: warning: 'r.LoggerRow::rate_pitch_i' may be used uninitialized [-Wmaybe-uninitialized]
+  201 |     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
       |                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_pitch_i' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_pitch_i' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:133:85: warning: 'r.LoggerRow::rate_pitch_d' may be used uninitialized [-Wmaybe-uninitialized]
-  133 |     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:201:85: warning: 'r.LoggerRow::rate_pitch_d' may be used uninitialized [-Wmaybe-uninitialized]
+  201 |     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
       |                                                                         ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_pitch_d' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_pitch_d' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:133:119: warning: 'r.LoggerRow::rate_pitch_out' may be used uninitialized [-Wmaybe-uninitialized]
-  133 |     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:201:119: warning: 'r.LoggerRow::rate_pitch_out' may be used uninitialized [-Wmaybe-uninitialized]
+  201 |     _appendFloat(s,r.rate_pitch_p,6); _appendFloat(s,r.rate_pitch_i,6); _appendFloat(s,r.rate_pitch_d,6); _appendFloat(s,r.rate_pitch_out,6);
       |                                                                                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_pitch_out' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_pitch_out' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:134:17: warning: 'r.LoggerRow::rate_yaw_p' may be used uninitialized [-Wmaybe-uninitialized]
-  134 |     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:202:17: warning: 'r.LoggerRow::rate_yaw_p' may be used uninitialized [-Wmaybe-uninitialized]
+  202 |     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_yaw_p' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_yaw_p' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:134:49: warning: 'r.LoggerRow::rate_yaw_i' may be used uninitialized [-Wmaybe-uninitialized]
-  134 |     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:202:49: warning: 'r.LoggerRow::rate_yaw_i' may be used uninitialized [-Wmaybe-uninitialized]
+  202 |     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_yaw_i' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_yaw_i' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:134:81: warning: 'r.LoggerRow::rate_yaw_d' may be used uninitialized [-Wmaybe-uninitialized]
-  134 |     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:202:81: warning: 'r.LoggerRow::rate_yaw_d' may be used uninitialized [-Wmaybe-uninitialized]
+  202 |     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
       |                                                                     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_yaw_d' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_yaw_d' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:134:113: warning: 'r.LoggerRow::rate_yaw_out' may be used uninitialized [-Wmaybe-uninitialized]
-  134 |     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:202:113: warning: 'r.LoggerRow::rate_yaw_out' may be used uninitialized [-Wmaybe-uninitialized]
+  202 |     _appendFloat(s,r.rate_yaw_p,6); _appendFloat(s,r.rate_yaw_i,6); _appendFloat(s,r.rate_yaw_d,6); _appendFloat(s,r.rate_yaw_out,6);
       |                                                                                                     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rate_yaw_out' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rate_yaw_out' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:136:17: warning: 'r.LoggerRow::motor_fl_pre' may be used uninitialized [-Wmaybe-uninitialized]
-  136 |     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:204:17: warning: 'r.LoggerRow::motor_fl_pre' may be used uninitialized [-Wmaybe-uninitialized]
+  204 |     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_fl_pre' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_fl_pre' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:136:51: warning: 'r.LoggerRow::motor_fr_pre' may be used uninitialized [-Wmaybe-uninitialized]
-  136 |     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:204:51: warning: 'r.LoggerRow::motor_fr_pre' may be used uninitialized [-Wmaybe-uninitialized]
+  204 |     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
       |                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_fr_pre' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_fr_pre' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:136:85: warning: 'r.LoggerRow::motor_rl_pre' may be used uninitialized [-Wmaybe-uninitialized]
-  136 |     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:204:85: warning: 'r.LoggerRow::motor_rl_pre' may be used uninitialized [-Wmaybe-uninitialized]
+  204 |     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
       |                                                                         ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_rl_pre' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_rl_pre' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:136:119: warning: 'r.LoggerRow::motor_rr_pre' may be used uninitialized [-Wmaybe-uninitialized]
-  136 |     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:204:119: warning: 'r.LoggerRow::motor_rr_pre' may be used uninitialized [-Wmaybe-uninitialized]
+  204 |     _appendFloat(s,r.motor_fl_pre,4); _appendFloat(s,r.motor_fr_pre,4); _appendFloat(s,r.motor_rl_pre,4); _appendFloat(s,r.motor_rr_pre,4);
       |                                                                                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_rr_pre' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_rr_pre' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:137:17: warning: 'r.LoggerRow::motor_fl' may be used uninitialized [-Wmaybe-uninitialized]
-  137 |     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:205:17: warning: 'r.LoggerRow::motor_fl' may be used uninitialized [-Wmaybe-uninitialized]
+  205 |     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_fl' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_fl' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:137:47: warning: 'r.LoggerRow::motor_fr' may be used uninitialized [-Wmaybe-uninitialized]
-  137 |     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:205:47: warning: 'r.LoggerRow::motor_fr' may be used uninitialized [-Wmaybe-uninitialized]
+  205 |     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);
       |                                   ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_fr' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_fr' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:137:77: warning: 'r.LoggerRow::motor_rl' may be used uninitialized [-Wmaybe-uninitialized]
-  137 |     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:205:77: warning: 'r.LoggerRow::motor_rl' may be used uninitialized [-Wmaybe-uninitialized]
+  205 |     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);
       |                                                                 ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_rl' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_rl' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:137:107: warning: 'r.LoggerRow::motor_rr' may be used uninitialized [-Wmaybe-uninitialized]
-  137 |     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:205:107: warning: 'r.LoggerRow::motor_rr' may be used uninitialized [-Wmaybe-uninitialized]
+  205 |     _appendFloat(s,r.motor_fl,4); _appendFloat(s,r.motor_fr,4); _appendFloat(s,r.motor_rl,4); _appendFloat(s,r.motor_rr,4);
       |                                                                                               ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_rr' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_rr' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:138:17: warning: 'r.LoggerRow::motor_diag_a' may be used uninitialized [-Wmaybe-uninitialized]
-  138 |     _appendFloat(s,r.motor_diag_a,4); _appendFloat(s,r.motor_diag_b,4); _appendFloat(s,r.motor_diag_diff,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:206:17: warning: 'r.LoggerRow::motor_diag_a' may be used uninitialized [-Wmaybe-uninitialized]
+  206 |     _appendFloat(s,r.motor_diag_a,4); _appendFloat(s,r.motor_diag_b,4); _appendFloat(s,r.motor_diag_diff,4);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_diag_a' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_diag_a' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:138:51: warning: 'r.LoggerRow::motor_diag_b' may be used uninitialized [-Wmaybe-uninitialized]
-  138 |     _appendFloat(s,r.motor_diag_a,4); _appendFloat(s,r.motor_diag_b,4); _appendFloat(s,r.motor_diag_diff,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:206:51: warning: 'r.LoggerRow::motor_diag_b' may be used uninitialized [-Wmaybe-uninitialized]
+  206 |     _appendFloat(s,r.motor_diag_a,4); _appendFloat(s,r.motor_diag_b,4); _appendFloat(s,r.motor_diag_diff,4);
       |                                       ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_diag_b' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_diag_b' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:138:85: warning: 'r.LoggerRow::motor_diag_diff' may be used uninitialized [-Wmaybe-uninitialized]
-  138 |     _appendFloat(s,r.motor_diag_a,4); _appendFloat(s,r.motor_diag_b,4); _appendFloat(s,r.motor_diag_diff,4);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:206:85: warning: 'r.LoggerRow::motor_diag_diff' may be used uninitialized [-Wmaybe-uninitialized]
+  206 |     _appendFloat(s,r.motor_diag_a,4); _appendFloat(s,r.motor_diag_b,4); _appendFloat(s,r.motor_diag_diff,4);
       |                                                                         ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::motor_diag_diff' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::motor_diag_diff' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:139:17: warning: 'r.LoggerRow::rpm_fl' may be used uninitialized [-Wmaybe-uninitialized]
-  139 |     _appendFloat(s,r.rpm_fl,0); _appendFloat(s,r.rpm_fr,0); _appendFloat(s,r.rpm_rl,0); _appendFloat(s,r.rpm_rr,0);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:207:17: warning: 'r.LoggerRow::rpm_fl' may be used uninitialized [-Wmaybe-uninitialized]
+  207 |     _appendFloat(s,r.rpm_fl,0); _appendFloat(s,r.rpm_fr,0); _appendFloat(s,r.rpm_rl,0); _appendFloat(s,r.rpm_rr,0);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rpm_fl' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rpm_fl' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:139:45: warning: 'r.LoggerRow::rpm_fr' may be used uninitialized [-Wmaybe-uninitialized]
-  139 |     _appendFloat(s,r.rpm_fl,0); _appendFloat(s,r.rpm_fr,0); _appendFloat(s,r.rpm_rl,0); _appendFloat(s,r.rpm_rr,0);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:207:45: warning: 'r.LoggerRow::rpm_fr' may be used uninitialized [-Wmaybe-uninitialized]
+  207 |     _appendFloat(s,r.rpm_fl,0); _appendFloat(s,r.rpm_fr,0); _appendFloat(s,r.rpm_rl,0); _appendFloat(s,r.rpm_rr,0);
       |                                 ~~~~~~~~~~~~^~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rpm_fr' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rpm_fr' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:139:73: warning: 'r.LoggerRow::rpm_rl' may be used uninitialized [-Wmaybe-uninitialized]
-  139 |     _appendFloat(s,r.rpm_fl,0); _appendFloat(s,r.rpm_fr,0); _appendFloat(s,r.rpm_rl,0); _appendFloat(s,r.rpm_rr,0);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:207:73: warning: 'r.LoggerRow::rpm_rl' may be used uninitialized [-Wmaybe-uninitialized]
+  207 |     _appendFloat(s,r.rpm_fl,0); _appendFloat(s,r.rpm_fr,0); _appendFloat(s,r.rpm_rl,0); _appendFloat(s,r.rpm_rr,0);
       |                                                             ~~~~~~~~~~~~^~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rpm_rl' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rpm_rl' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:139:101: warning: 'r.LoggerRow::rpm_rr' may be used uninitialized [-Wmaybe-uninitialized]
-  139 |     _appendFloat(s,r.rpm_fl,0); _appendFloat(s,r.rpm_fr,0); _appendFloat(s,r.rpm_rl,0); _appendFloat(s,r.rpm_rr,0);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:207:101: warning: 'r.LoggerRow::rpm_rr' may be used uninitialized [-Wmaybe-uninitialized]
+  207 |     _appendFloat(s,r.rpm_fl,0); _appendFloat(s,r.rpm_fr,0); _appendFloat(s,r.rpm_rl,0); _appendFloat(s,r.rpm_rr,0);
       |                                                                                         ~~~~~~~~~~~~^~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rpm_rr' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rpm_rr' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:140:17: warning: 'r.LoggerRow::rpm_diag_a' may be used uninitialized [-Wmaybe-uninitialized]
-  140 |     _appendFloat(s,r.rpm_diag_a,0); _appendFloat(s,r.rpm_diag_b,0); _appendFloat(s,r.rpm_diag_diff,0);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:208:17: warning: 'r.LoggerRow::rpm_diag_a' may be used uninitialized [-Wmaybe-uninitialized]
+  208 |     _appendFloat(s,r.rpm_diag_a,0); _appendFloat(s,r.rpm_diag_b,0); _appendFloat(s,r.rpm_diag_diff,0);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rpm_diag_a' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rpm_diag_a' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:140:49: warning: 'r.LoggerRow::rpm_diag_b' may be used uninitialized [-Wmaybe-uninitialized]
-  140 |     _appendFloat(s,r.rpm_diag_a,0); _appendFloat(s,r.rpm_diag_b,0); _appendFloat(s,r.rpm_diag_diff,0);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:208:49: warning: 'r.LoggerRow::rpm_diag_b' may be used uninitialized [-Wmaybe-uninitialized]
+  208 |     _appendFloat(s,r.rpm_diag_a,0); _appendFloat(s,r.rpm_diag_b,0); _appendFloat(s,r.rpm_diag_diff,0);
       |                                     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rpm_diag_b' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rpm_diag_b' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:140:81: warning: 'r.LoggerRow::rpm_diag_diff' may be used uninitialized [-Wmaybe-uninitialized]
-  140 |     _appendFloat(s,r.rpm_diag_a,0); _appendFloat(s,r.rpm_diag_b,0); _appendFloat(s,r.rpm_diag_diff,0);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:208:81: warning: 'r.LoggerRow::rpm_diag_diff' may be used uninitialized [-Wmaybe-uninitialized]
+  208 |     _appendFloat(s,r.rpm_diag_a,0); _appendFloat(s,r.rpm_diag_b,0); _appendFloat(s,r.rpm_diag_diff,0);
       |                                                                     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::rpm_diag_diff' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::rpm_diag_diff' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:141:17: warning: 'r.LoggerRow::battery_v' may be used uninitialized [-Wmaybe-uninitialized]
-  141 |     _appendFloat(s,r.battery_v,3); _appendFloat(s,r.cpu0_pct,1); _appendFloat(s,r.cpu1_pct,1);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:209:17: warning: 'r.LoggerRow::battery_v' may be used uninitialized [-Wmaybe-uninitialized]
+  209 |     _appendFloat(s,r.battery_v,3); _appendFloat(s,r.cpu0_pct,1); _appendFloat(s,r.cpu1_pct,1);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::battery_v' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::battery_v' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:141:48: warning: 'r.LoggerRow::cpu0_pct' may be used uninitialized [-Wmaybe-uninitialized]
-  141 |     _appendFloat(s,r.battery_v,3); _appendFloat(s,r.cpu0_pct,1); _appendFloat(s,r.cpu1_pct,1);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:209:48: warning: 'r.LoggerRow::cpu0_pct' may be used uninitialized [-Wmaybe-uninitialized]
+  209 |     _appendFloat(s,r.battery_v,3); _appendFloat(s,r.cpu0_pct,1); _appendFloat(s,r.cpu1_pct,1);
       |                                    ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::cpu0_pct' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::cpu0_pct' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:141:78: warning: 'r.LoggerRow::cpu1_pct' may be used uninitialized [-Wmaybe-uninitialized]
-  141 |     _appendFloat(s,r.battery_v,3); _appendFloat(s,r.cpu0_pct,1); _appendFloat(s,r.cpu1_pct,1);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:209:78: warning: 'r.LoggerRow::cpu1_pct' may be used uninitialized [-Wmaybe-uninitialized]
+  209 |     _appendFloat(s,r.battery_v,3); _appendFloat(s,r.cpu0_pct,1); _appendFloat(s,r.cpu1_pct,1);
       |                                                                  ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::cpu1_pct' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::cpu1_pct' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:142:17: warning: 'r.LoggerRow::notch_freq_hz' may be used uninitialized [-Wmaybe-uninitialized]
-  142 |     _appendFloat(s,r.notch_freq_hz,2); _appendFloat(s,r.notch_q,2); s += ','; s += String(r.notch_enable);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:210:17: warning: 'r.LoggerRow::notch_freq_hz' may be used uninitialized [-Wmaybe-uninitialized]
+  210 |     _appendFloat(s,r.notch_freq_hz,2); _appendFloat(s,r.notch_q,2); s += ','; s += String(r.notch_enable);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::notch_freq_hz' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::notch_freq_hz' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:142:52: warning: 'r.LoggerRow::notch_q' may be used uninitialized [-Wmaybe-uninitialized]
-  142 |     _appendFloat(s,r.notch_freq_hz,2); _appendFloat(s,r.notch_q,2); s += ','; s += String(r.notch_enable);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:210:52: warning: 'r.LoggerRow::notch_q' may be used uninitialized [-Wmaybe-uninitialized]
+  210 |     _appendFloat(s,r.notch_freq_hz,2); _appendFloat(s,r.notch_q,2); s += ','; s += String(r.notch_enable);
       |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::notch_q' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::notch_q' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:142:105: warning: 'r.LoggerRow::notch_enable' may be used uninitialized [-Wmaybe-uninitialized]
-  142 |     _appendFloat(s,r.notch_freq_hz,2); _appendFloat(s,r.notch_q,2); s += ','; s += String(r.notch_enable);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:210:105: warning: 'r.LoggerRow::notch_enable' may be used uninitialized [-Wmaybe-uninitialized]
+  210 |     _appendFloat(s,r.notch_freq_hz,2); _appendFloat(s,r.notch_q,2); s += ','; s += String(r.notch_enable);
       |                                                                                                         ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::notch_enable' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::notch_enable' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:143:17: warning: 'r.LoggerRow::bmp_alt_m' may be used uninitialized [-Wmaybe-uninitialized]
-  143 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:211:17: warning: 'r.LoggerRow::bmp_alt_m' may be used uninitialized [-Wmaybe-uninitialized]
+  211 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
       |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::bmp_alt_m' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::bmp_alt_m' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:143:48: warning: 'r.LoggerRow::bmp_vz_mps' may be used uninitialized [-Wmaybe-uninitialized]
-  143 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:211:48: warning: 'r.LoggerRow::bmp_vz_mps' may be used uninitialized [-Wmaybe-uninitialized]
+  211 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
       |                                    ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::bmp_vz_mps' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::bmp_vz_mps' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:143:101: warning: 'r.LoggerRow::gps_valid' may be used uninitialized [-Wmaybe-uninitialized]
-  143 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:211:101: warning: 'r.LoggerRow::gps_valid' may be used uninitialized [-Wmaybe-uninitialized]
+  211 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
       |                                                                                                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::gps_valid' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::gps_valid' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:143:136: warning: 'r.LoggerRow::gps_sats' may be used uninitialized [-Wmaybe-uninitialized]
-  143 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:211:136: warning: 'r.LoggerRow::gps_sats' may be used uninitialized [-Wmaybe-uninitialized]
+  211 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
       |                                                                                                                                        ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::gps_sats' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::gps_sats' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:143:151: warning: 'r.LoggerRow::gps_hdop' may be used uninitialized [-Wmaybe-uninitialized]
-  143 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:211:151: warning: 'r.LoggerRow::gps_hdop' may be used uninitialized [-Wmaybe-uninitialized]
+  211 |     _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
       |                                                                                                                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:98:15: note: 'r.LoggerRow::gps_hdop' was declared here
-   98 |     LoggerRow r; bool ok = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/Logger/Logger.cpp:154:15: note: 'r.LoggerRow::gps_hdop' was declared here
+  154 |     LoggerRow r; bool ok = false;
       |               ^
 In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/WiFiTelemetry/TelemetryWiFi.cpp:14:
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/WiFiTelemetry/TelemetryWiFi.h: In constructor 'TelemetryWiFi::TelemetryWiFi(uint16_t)':
@@ -1108,5 +1168,5 @@ In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_F
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/WiFiTelemetry/TelemetryWiFi.cpp:49:1: warning:   when initialized here [-Wreorder]
    49 | TelemetryWiFi::TelemetryWiFi(uint16_t port)
       | ^~~~~~~~~~~~~
-Sketch uses 1149571 bytes (58%) of program storage space. Maximum is 1966080 bytes.
-Global variables use 76252 bytes (23%) of dynamic memory, leaving 251428 bytes for local variables. Maximum is 327680 bytes.
+Sketch uses 1151915 bytes (58%) of program storage space. Maximum is 1966080 bytes.
+Global variables use 77556 bytes (23%) of dynamic memory, leaving 250124 bytes for local variables. Maximum is 327680 bytes.
