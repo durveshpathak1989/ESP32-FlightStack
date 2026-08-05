@@ -710,7 +710,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="data-row"><span class="dn">Notch</span><span class="dv" id="sNotch">—</span></div>
     <div class="data-row"><span class="dn">EKF R</span><span class="dv" id="sEkfR">—</span></div>
     <div id="tuneStatusTune" style="margin-top:8px;font-size:11px;color:var(--t3)">Wi-Fi only · DISARM first</div>
-    <button class="apply-all-btn" onclick="sendAllGains()">⬆ APPLY ALL TUNING LEVERS</button>
+    <button class="apply-all-btn" onclick="sendAllGains()">💾 SAVE ALL TUNING TO DRONE (NVS)</button>
   </div>
 </section>
 
@@ -936,7 +936,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="panel cfg-actions">
       <div id="cfgStatus">No unsaved changes</div>
       <button class="cfg-btn-primary" onclick="saveConfig()">💾 SAVE TO BROWSER</button>
-      <button class="cfg-btn-push" onclick="pushConfigToDrone()">⬆ SAVE TO DRONE (Wi-Fi + NVS)</button>
+      <button class="cfg-btn-push" onclick="pushConfigToDrone()">⬆ PUSH CONFIG TO DRONE (Wi-Fi)</button>
       <button class="cfg-btn-reset" onclick="resetConfig()">↺ RESET DEFAULTS</button>
       <div style="font-size:10px;color:var(--t3);line-height:1.6;margin-top:4px">
         <span style="color:var(--green)">●</span> ESP32 params require Wi-Fi connection<br>
