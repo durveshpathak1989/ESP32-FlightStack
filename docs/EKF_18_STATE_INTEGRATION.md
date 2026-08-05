@@ -23,6 +23,30 @@ The submodule remains API-compatible with the existing sketch. `attitudeEKF.upda
 
 The estimated body-rate feedback path is wired but intentionally disabled by default. The established notch-filtered gyro path remains active until estimated-rate latency, signs, covariance, and timing are validated from bench logs.
 
+## Gyro-rate comparison logging
+
+The existing 100 Hz flight-log CSV now records four rate signals on roll, pitch, and yaw:
+
+| Signal | CSV columns | Meaning |
+| --- | --- | --- |
+| Pre-filter gyro | `gxRaw`, `gyRaw`, `gzRaw` | Calibrated IMU gyro before the motor notch and 50 Hz software LPF |
+| Active PID feedback | `feedbackRollRateDps`, `feedbackPitchRateDps`, `feedbackYawRateDps` | Reconstructed exactly from `targetRate - rateError`; with EKF-rate feedback disabled, this is the notch + LPF gyro signal |
+| Bias-corrected feedback | `biasCorrectedRollRateDps`, `biasCorrectedPitchRateDps`, `biasCorrectedYawRateDps` | Active feedback minus the corresponding EKF gyro-bias estimate |
+| EKF rate state | `ekfRollRateDps`, `ekfPitchRateDps`, `ekfYawRateDps` | The posterior 18-state EKF body-rate estimate captured after the same control-cycle EKF update |
+
+`ekfRateValid` is `1` only when the selected AHRS mode is EKF and the EKF update produced a valid rate snapshot. `ahrsMode` remains in the row so post-processing can reject stale data from Mahony or Madgwick operation.
+
+The flight log is currently sampled at 100 Hz even though control runs at 400 Hz. This is sufficient for initial shape, noise, bias, and gross-delay comparison. A dedicated short 400 Hz capture should be used before making a final phase-lag decision for the inner rate loop.
+
+Recommended comparison sequence:
+
+1. Props removed, armed at minimum throttle: leave the frame still for several seconds to compare zero-rate noise and bias.
+2. Manually rotate one axis at a time with smooth positive and negative motion.
+3. Run motors without props at several throttle levels to compare vibration rejection.
+4. Plot all four signals against `t_us`; do not enable EKF rate feedback until signs, amplitude, and delay are verified on every axis.
+
+The additional comparison fields add approximately 40 bytes to each logger row. With the current 120-row allocation, the extra buffer cost is approximately 4.8 KB.
+
 ## ToF vertical aiding
 
 The EKF supports:
