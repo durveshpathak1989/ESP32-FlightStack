@@ -2,21 +2,21 @@
   "schema_version": 2,
   "build": {
     "status": "success",
-    "generated_utc": "2026-08-05T17:01:53.415804+00:00",
+    "generated_utc": "2026-08-05T18:12:12.491059+00:00",
     "repository": "durveshpathak1989/ESP32-FlightStack",
     "source_branch": "master",
-    "source_commit": "542030f8b53d643acde16e0d10b5b9c6d2db24b0",
-    "workflow_run_id": "31027827569",
-    "workflow_run_number": "15",
-    "workflow_run_url": "https://github.com/durveshpathak1989/ESP32-FlightStack/actions/runs/31027827569"
+    "source_commit": "6f14b768d1d45a56cc4d428809136653583b4c24",
+    "workflow_run_id": "31033364183",
+    "workflow_run_number": "19",
+    "workflow_run_url": "https://github.com/durveshpathak1989/ESP32-FlightStack/actions/runs/31033364183"
   },
   "firmware_identity": {
     "name": "RC_FlightController",
     "version": "V6.1.0",
     "source_branch": "master",
-    "source_commit": "542030f8b53d",
-    "build_id": "20260805T165951Z-master-542030f8b53d",
-    "build_time_iso": "2026-08-05T16:59:51Z"
+    "source_commit": "6f14b768d1d4",
+    "build_id": "20260805T181009Z-master-6f14b768d1d4",
+    "build_time_iso": "2026-08-05T18:10:09Z"
   },
   "target": {
     "board_name": "ESP32 Dev Module",
@@ -36,10 +36,10 @@
     "release": {
       "verbose_on": 0,
       "resource_usage": {
-        "flash_used_bytes": 1140619,
+        "flash_used_bytes": 1141619,
         "flash_used_percent": 58.0,
         "flash_max_bytes": 1966080,
-        "flash_free_bytes": 825461,
+        "flash_free_bytes": 824461,
         "ram_global_bytes": 77556,
         "ram_used_percent": 23.0,
         "ram_remaining_bytes": 250124,
@@ -49,10 +49,10 @@
     "debug": {
       "verbose_on": 1,
       "resource_usage": {
-        "flash_used_bytes": 1151915,
+        "flash_used_bytes": 1153111,
         "flash_used_percent": 58.0,
         "flash_max_bytes": 1966080,
-        "flash_free_bytes": 814165,
+        "flash_free_bytes": 812969,
         "ram_global_bytes": 77556,
         "ram_used_percent": 23.0,
         "ram_remaining_bytes": 250124,
@@ -64,8 +64,8 @@
     {
       "file": "RC_FlightController.ino.bin",
       "variant": "release_mirror",
-      "size_bytes": 1140768,
-      "sha256": "0fecb9e62e5f4202ef8b24babe08f32e0794fcc44c7bdc0f2b7b5af269d246b3",
+      "size_bytes": 1141760,
+      "sha256": "5f6d3ceebe98b9e10672ecfca0ab5e0e61f2e8de84bb27fb055542e6c9c6321b",
       "application_image": true,
       "merged_flash_image": false
     },
@@ -73,15 +73,15 @@
       "file": "RC_FlightController.ino.merged.bin",
       "variant": "release_mirror",
       "size_bytes": 4194304,
-      "sha256": "a1e14f757c0fc04e4d420fe1da7a574126db6c75d2faf2983bd55b6727c2895c",
+      "sha256": "cfdf2d17fac2d6dee5fa069e21d6f87ebaedc192b2bf06c26e5dd8fe54c67ec4",
       "application_image": false,
       "merged_flash_image": true
     },
     {
       "file": "bin_debug/RC_FlightController.ino.bin",
       "variant": "debug",
-      "size_bytes": 1152064,
-      "sha256": "5eef850ecc1a09c8297088474d3240eabd106876c30ab874426b0731415233f5",
+      "size_bytes": 1153264,
+      "sha256": "2243c7c9235296ce02b637e830bb8dc9dbd8bd54672695f3f2de1009dfc47e47",
       "application_image": true,
       "merged_flash_image": false
     },
@@ -97,7 +97,7 @@
       "file": "bin_debug/RC_FlightController.ino.merged.bin",
       "variant": "debug",
       "size_bytes": 4194304,
-      "sha256": "96ecb670c6c899f60ce16a38000730c13f2d3924ffc77696f5dc2f775ced8307",
+      "sha256": "47b44ffc79a075f5eb78e45db8f4c7c237cb7f13f1940fecd46afa47ec473b42",
       "application_image": false,
       "merged_flash_image": true
     },
@@ -112,8 +112,8 @@
     {
       "file": "bin_release/RC_FlightController.ino.bin",
       "variant": "release",
-      "size_bytes": 1140768,
-      "sha256": "0fecb9e62e5f4202ef8b24babe08f32e0794fcc44c7bdc0f2b7b5af269d246b3",
+      "size_bytes": 1141760,
+      "sha256": "5f6d3ceebe98b9e10672ecfca0ab5e0e61f2e8de84bb27fb055542e6c9c6321b",
       "application_image": true,
       "merged_flash_image": false
     },
@@ -129,7 +129,7 @@
       "file": "bin_release/RC_FlightController.ino.merged.bin",
       "variant": "release",
       "size_bytes": 4194304,
-      "sha256": "a1e14f757c0fc04e4d420fe1da7a574126db6c75d2faf2983bd55b6727c2895c",
+      "sha256": "cfdf2d17fac2d6dee5fa069e21d6f87ebaedc192b2bf06c26e5dd8fe54c67ec4",
       "application_image": false,
       "merged_flash_image": true
     },
@@ -142,5 +142,5 @@
       "merged_flash_image": false
     }
   ],
-  "total_published_binary_bytes": 16072704
+  "total_published_binary_bytes": 16075888
 }

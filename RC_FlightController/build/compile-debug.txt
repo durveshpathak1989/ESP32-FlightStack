@@ -1,34 +1,34 @@
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void updateExecTimingAndPrint(uint32_t, uint32_t, uint32_t, uint32_t)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:284:22: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  284 |         g_execTiming.controlOverruns++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:285:22: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+  285 |         g_execTiming.controlOverruns++;
       |         ~~~~~~~~~~~~~^~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:288:22: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  288 |         g_execTiming.fullOverruns++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:289:22: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+  289 |         g_execTiming.fullOverruns++;
       |         ~~~~~~~~~~~~~^~~~~~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void updateControlTransitionCounters(const RCCommand&)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:975:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  975 |         g_modeTransitionCount++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1055:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1055 |         g_modeTransitionCount++;
       |         ^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:982:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  982 |         g_armingTransitionCount++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1062:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1062 |         g_armingTransitionCount++;
       |         ^~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:987:21: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  987 |     if (resetEvent) g_pidResetCount++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1067:21: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1067 |     if (resetEvent) g_pidResetCount++;
       |                     ^~~~~~~~~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'bool handleTune(const TunePacket&)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1180:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
- 1180 |         g_tuneRejectSeq++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1260:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1260 |         g_tuneRejectSeq++;
       |         ^~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1186:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
- 1186 |         g_tuneRejectSeq++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1266:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1266 |         g_tuneRejectSeq++;
       |         ^~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1254:5: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
- 1254 |     g_tuneRequestSeq++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1334:5: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1334 |     g_tuneRequestSeq++;
       |     ^~~~~~~~~~~~~~~~
-In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:51:
+In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:52:
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void setup()':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:3182:16: warning: format '%u' expects argument of type 'unsigned int', but argument 3 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
- 3182 |     DBG_PRINTF("[BOOT] Free heap: %u bytes\n", ESP.getFreeHeap());
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:3277:16: warning: format '%u' expects argument of type 'unsigned int', but argument 3 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+ 3277 |     DBG_PRINTF("[BOOT] Free heap: %u bytes\n", ESP.getFreeHeap());
       |                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  ~~~~~~~~~~~~~~~~~
       |                                                               |
       |                                                               uint32_t {aka long unsigned int}
@@ -36,424 +36,424 @@ In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_F
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
       |                                        ^~~~~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: At global scope:
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:353:17: warning: 'g_lastDynamicNotchUpdateMs' defined but not used [-Wunused-variable]
-  353 | static uint32_t g_lastDynamicNotchUpdateMs = 0;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:354:17: warning: 'g_lastDynamicNotchUpdateMs' defined but not used [-Wunused-variable]
+  354 | static uint32_t g_lastDynamicNotchUpdateMs = 0;
       |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:352:17: warning: 'g_dynamicNotchTracking' defined but not used [-Wunused-variable]
-  352 | static bool     g_dynamicNotchTracking = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:353:17: warning: 'g_dynamicNotchTracking' defined but not used [-Wunused-variable]
+  353 | static bool     g_dynamicNotchTracking = false;
       |                 ^~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:351:17: warning: 'g_dynamicNotchHz' defined but not used [-Wunused-variable]
-  351 | static float    g_dynamicNotchHz = TUNE_NOTCH_FREQ_HZ;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:352:17: warning: 'g_dynamicNotchHz' defined but not used [-Wunused-variable]
+  352 | static float    g_dynamicNotchHz = TUNE_NOTCH_FREQ_HZ;
       |                 ^~~~~~~~~~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void taskSerial(void*)':
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::roll_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::roll_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::roll_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::pitch_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::pitch_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::pitch_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::yaw_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::yaw_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::yaw_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::ahrsFilterMode' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::ahrsFilterMode' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::ahrsFilterMode' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::roll_ctrl_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::roll_ctrl_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::roll_ctrl_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::pitch_ctrl_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::pitch_ctrl_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::pitch_ctrl_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::yaw_ctrl_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::yaw_ctrl_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::yaw_ctrl_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::roll_offset_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::roll_offset_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::roll_offset_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::pitch_offset_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::pitch_offset_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::pitch_offset_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::yaw_offset_deg' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::yaw_offset_deg' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::yaw_offset_deg' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::ax_g' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2836:13: note: in expansion of macro 'DBG_PRINTF'
- 2836 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2924:13: note: in expansion of macro 'DBG_PRINTF'
+ 2924 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::ax_g' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::ax_g' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::ay_g' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2836:13: note: in expansion of macro 'DBG_PRINTF'
- 2836 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2924:13: note: in expansion of macro 'DBG_PRINTF'
+ 2924 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::ay_g' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::ay_g' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::az_g' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2836:13: note: in expansion of macro 'DBG_PRINTF'
- 2836 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2924:13: note: in expansion of macro 'DBG_PRINTF'
+ 2924 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::az_g' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::az_g' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::gx_dps' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2836:13: note: in expansion of macro 'DBG_PRINTF'
- 2836 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2924:13: note: in expansion of macro 'DBG_PRINTF'
+ 2924 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::gx_dps' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::gx_dps' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::gy_dps' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2836:13: note: in expansion of macro 'DBG_PRINTF'
- 2836 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2924:13: note: in expansion of macro 'DBG_PRINTF'
+ 2924 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::gy_dps' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::gy_dps' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::gz_dps' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2836:13: note: in expansion of macro 'DBG_PRINTF'
- 2836 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2924:13: note: in expansion of macro 'DBG_PRINTF'
+ 2924 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::gz_dps' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::gz_dps' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2832:53: warning: 's.FlightState::mx_uT' may be used uninitialized [-Wmaybe-uninitialized]
- 2832 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2920:53: warning: 's.FlightState::mx_uT' may be used uninitialized [-Wmaybe-uninitialized]
+ 2920 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
       |                                   ~~~~~~~~~~~~~~~~~~^
- 2833 |                       s.my_uT * s.my_uT +
+ 2921 |                       s.my_uT * s.my_uT +
       |                       ~~~~~~~~~~~~~~~~~              
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::mx_uT' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::mx_uT' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::my_uT' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2836:13: note: in expansion of macro 'DBG_PRINTF'
- 2836 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2924:13: note: in expansion of macro 'DBG_PRINTF'
+ 2924 |             DBG_PRINTF("          SENS: acc=%+.4f %+.4f %+.4f g | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::my_uT' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::my_uT' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2832:34: warning: 's.FlightState::mz_uT' may be used uninitialized [-Wmaybe-uninitialized]
- 2832 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2920:34: warning: 's.FlightState::mz_uT' may be used uninitialized [-Wmaybe-uninitialized]
+ 2920 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
       |                             ~~~~~^~~~~~~~~~~~~~~~~~~~
- 2833 |                       s.my_uT * s.my_uT +
+ 2921 |                       s.my_uT * s.my_uT +
       |                       ~~~~~~~~~~~~~~~~~~~
- 2834 |                       s.mz_uT * s.mz_uT);
+ 2922 |                       s.mz_uT * s.mz_uT);
       |                       ~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::mz_uT' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::mz_uT' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::bmpTemp_c' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::bmpTemp_c' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::bmpTemp_c' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::bmpPressure_hpa' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::bmpPressure_hpa' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::bmpPressure_hpa' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::bmpAltitude_m' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::bmpAltitude_m' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::bmpAltitude_m' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::tofDistance_m' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::tofDistance_m' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::tofDistance_m' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::tofObjectCount' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::tofObjectCount' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::tofObjectCount' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::tofAge_ms' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::tofAge_ms' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::tofAge_ms' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2820:50: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::tofReady))' may be used uninitialized [-Wmaybe-uninitialized]
- 2820 |                           s.tofValid ? "OK" : (s.tofReady ? "---" : "OFF"),
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2908:50: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::tofReady))' may be used uninitialized [-Wmaybe-uninitialized]
+ 2908 |                           s.tofValid ? "OK" : (s.tofReady ? "---" : "OFF"),
       |                                                ~~^~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:40: note: in definition of macro 'DBG_PRINTF'
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
       |                                        ^~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::tofReady))' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::tofReady))' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2820:29: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::tofValid))' may be used uninitialized [-Wmaybe-uninitialized]
- 2820 |                           s.tofValid ? "OK" : (s.tofReady ? "---" : "OFF"),
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2908:29: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::tofValid))' may be used uninitialized [-Wmaybe-uninitialized]
+ 2908 |                           s.tofValid ? "OK" : (s.tofReady ? "---" : "OFF"),
       |                           ~~^~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:40: note: in definition of macro 'DBG_PRINTF'
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
       |                                        ^~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::tofValid))' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::tofValid))' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::motorFL' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::motorFL' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::motorFL' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::motorFR' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::motorFR' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::motorFR' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::motorRL' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::motorRL' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::motorRL' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::motorRR' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::motorRR' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::motorRR' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::pidRollOut' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2847:13: note: in expansion of macro 'DBG_PRINTF'
- 2847 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2935:13: note: in expansion of macro 'DBG_PRINTF'
+ 2935 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::pidRollOut' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::pidRollOut' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::pidPitchOut' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2847:13: note: in expansion of macro 'DBG_PRINTF'
- 2847 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2935:13: note: in expansion of macro 'DBG_PRINTF'
+ 2935 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::pidPitchOut' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::pidPitchOut' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::pidYawOut' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2847:13: note: in expansion of macro 'DBG_PRINTF'
- 2847 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2935:13: note: in expansion of macro 'DBG_PRINTF'
+ 2935 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::pidYawOut' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::pidYawOut' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::roll' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2847:13: note: in expansion of macro 'DBG_PRINTF'
- 2847 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2935:13: note: in expansion of macro 'DBG_PRINTF'
+ 2935 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::roll' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::roll' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::pitch' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2847:13: note: in expansion of macro 'DBG_PRINTF'
- 2847 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2935:13: note: in expansion of macro 'DBG_PRINTF'
+ 2935 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::pitch' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::pitch' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::yaw' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2847:13: note: in expansion of macro 'DBG_PRINTF'
- 2847 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2935:13: note: in expansion of macro 'DBG_PRINTF'
+ 2935 |             DBG_PRINTF("[PID] %s | cmd r=%+.2f p=%+.2f y=%+.2f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::yaw' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::yaw' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2797:9: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::rc.RCCommand::mode))' may be used uninitialized [-Wmaybe-uninitialized]
- 2797 |         switch(s.rc.mode) {
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2885:9: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::rc.RCCommand::mode))' may be used uninitialized [-Wmaybe-uninitialized]
+ 2885 |         switch(s.rc.mode) {
       |         ^~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::rc.RCCommand::mode))' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::rc.RCCommand::mode))' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[0]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[0]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[0]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[1]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[1]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[1]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[2]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[2]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[2]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[3]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[3]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[3]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[4]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[4]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[4]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[5]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[5]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[5]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[6]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[6]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[6]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[7]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[7]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[7]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[8]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[8]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[8]' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::rc.RCCommand::raw[9]' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2828:13: note: in expansion of macro 'DBG_PRINTF'
- 2828 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2916:13: note: in expansion of macro 'DBG_PRINTF'
+ 2916 |             DBG_PRINTF("          CH: 1=%4u 2=%4u 3=%4u 4=%4u 5=%4u 6=%4u 7=%4u 8=%4u 9=%4u 10=%4u\n",
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::rc.RCCommand::raw[9]' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::rc.RCCommand::raw[9]' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2846:29: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::armed))' may be used uninitialized [-Wmaybe-uninitialized]
- 2846 |         if (g_pidTrace && s.armed && (tick % 5 == 0)) {
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2934:29: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::armed))' may be used uninitialized [-Wmaybe-uninitialized]
+ 2934 |         if (g_pidTrace && s.armed && (tick % 5 == 0)) {
       |                           ~~^~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::armed))' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::armed))' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:39: warning: 's.FlightState::gps.GPSData::satellites' may be used uninitialized [-Wmaybe-uninitialized]
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2806:13: note: in expansion of macro 'DBG_PRINTF'
- 2806 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2894:13: note: in expansion of macro 'DBG_PRINTF'
+ 2894 |             DBG_PRINTF("[%6lu] %s | RAW R=%+6.1f P=%+6.1f Y=%6.1f | "
       |             ^~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::gps.GPSData::satellites' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::gps.GPSData::satellites' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2824:33: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::gps.GPSData::valid))' may be used uninitialized [-Wmaybe-uninitialized]
- 2824 |                           s.gps.valid ? "FIX" : "---", s.gps.satellites,
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2912:33: warning: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::gps.GPSData::valid))' may be used uninitialized [-Wmaybe-uninitialized]
+ 2912 |                           s.gps.valid ? "FIX" : "---", s.gps.satellites,
       |                           ~~~~~~^~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/DebugConfig/DebugConfig.h:27:40: note: in definition of macro 'DBG_PRINTF'
    27 | #define DBG_PRINTF(...)  Serial.printf(__VA_ARGS__)
       |                                        ^~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::gps.GPSData::valid))' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: '*(unsigned char*)((char*)&s + offsetof(FlightState, FlightState::gps.GPSData::valid))' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/ESP32Core/CPUUtilization.cpp: In function 'bool idleHookCore0()':
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/ESP32Core/CPUUtilization.cpp:23:5: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
@@ -1168,5 +1168,5 @@ In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_F
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/WiFiTelemetry/TelemetryWiFi.cpp:49:1: warning:   when initialized here [-Wreorder]
    49 | TelemetryWiFi::TelemetryWiFi(uint16_t port)
       | ^~~~~~~~~~~~~
-Sketch uses 1151915 bytes (58%) of program storage space. Maximum is 1966080 bytes.
+Sketch uses 1153111 bytes (58%) of program storage space. Maximum is 1966080 bytes.
 Global variables use 77556 bytes (23%) of dynamic memory, leaving 250124 bytes for local variables. Maximum is 327680 bytes.

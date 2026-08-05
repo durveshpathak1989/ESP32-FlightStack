@@ -1,88 +1,88 @@
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void updateExecTimingAndPrint(uint32_t, uint32_t, uint32_t, uint32_t)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:284:22: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  284 |         g_execTiming.controlOverruns++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:285:22: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+  285 |         g_execTiming.controlOverruns++;
       |         ~~~~~~~~~~~~~^~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:288:22: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  288 |         g_execTiming.fullOverruns++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:289:22: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+  289 |         g_execTiming.fullOverruns++;
       |         ~~~~~~~~~~~~~^~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:300:17: warning: unused variable 'jitterSigned' [-Wunused-variable]
-  300 |         int32_t jitterSigned  = (int32_t)periodUs - (int32_t)targetUs;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:301:17: warning: unused variable 'jitterSigned' [-Wunused-variable]
+  301 |         int32_t jitterSigned  = (int32_t)periodUs - (int32_t)targetUs;
       |                 ^~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:301:17: warning: unused variable 'headroomFull' [-Wunused-variable]
-  301 |         int32_t headroomFull  = (int32_t)targetUs - (int32_t)fullUs;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:302:17: warning: unused variable 'headroomFull' [-Wunused-variable]
+  302 |         int32_t headroomFull  = (int32_t)targetUs - (int32_t)fullUs;
       |                 ^~~~~~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void updateControlTransitionCounters(const RCCommand&)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:975:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  975 |         g_modeTransitionCount++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1055:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1055 |         g_modeTransitionCount++;
       |         ^~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:982:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  982 |         g_armingTransitionCount++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1062:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1062 |         g_armingTransitionCount++;
       |         ^~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:987:21: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
-  987 |     if (resetEvent) g_pidResetCount++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1067:21: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1067 |     if (resetEvent) g_pidResetCount++;
       |                     ^~~~~~~~~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'bool handleTune(const TunePacket&)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1180:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
- 1180 |         g_tuneRejectSeq++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1260:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1260 |         g_tuneRejectSeq++;
       |         ^~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1186:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
- 1186 |         g_tuneRejectSeq++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1266:9: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1266 |         g_tuneRejectSeq++;
       |         ^~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1254:5: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
- 1254 |     g_tuneRequestSeq++;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1334:5: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
+ 1334 |     g_tuneRequestSeq++;
       |     ^~~~~~~~~~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void taskRC(void*)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1545:22: warning: unused variable 'failPerS' [-Wunused-variable]
- 1545 |             uint32_t failPerS = fails - lastCsumFail;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1633:22: warning: unused variable 'failPerS' [-Wunused-variable]
+ 1633 |             uint32_t failPerS = fails - lastCsumFail;
       |                      ^~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void taskControl(void*)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1950:27: warning: unused variable 'gyroMag' [-Wunused-variable]
- 1950 |                     float gyroMag =
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2038:27: warning: unused variable 'gyroMag' [-Wunused-variable]
+ 2038 |                     float gyroMag =
       |                           ^~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:1955:27: warning: unused variable 'accelVib' [-Wunused-variable]
- 1955 |                     float accelVib =
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2043:27: warning: unused variable 'accelVib' [-Wunused-variable]
+ 2043 |                     float accelVib =
       |                           ^~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void taskSerial(void*)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2832:19: warning: unused variable 'magNorm' [-Wunused-variable]
- 2832 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2920:19: warning: unused variable 'magNorm' [-Wunused-variable]
+ 2920 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
       |                   ^~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2796:21: warning: variable 'ms' set but not used [-Wunused-but-set-variable]
- 2796 |         const char* ms = "???";
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2884:21: warning: variable 'ms' set but not used [-Wunused-but-set-variable]
+ 2884 |         const char* ms = "???";
       |                     ^~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: At global scope:
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:353:17: warning: 'g_lastDynamicNotchUpdateMs' defined but not used [-Wunused-variable]
-  353 | static uint32_t g_lastDynamicNotchUpdateMs = 0;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:354:17: warning: 'g_lastDynamicNotchUpdateMs' defined but not used [-Wunused-variable]
+  354 | static uint32_t g_lastDynamicNotchUpdateMs = 0;
       |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:352:17: warning: 'g_dynamicNotchTracking' defined but not used [-Wunused-variable]
-  352 | static bool     g_dynamicNotchTracking = false;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:353:17: warning: 'g_dynamicNotchTracking' defined but not used [-Wunused-variable]
+  353 | static bool     g_dynamicNotchTracking = false;
       |                 ^~~~~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:351:17: warning: 'g_dynamicNotchHz' defined but not used [-Wunused-variable]
-  351 | static float    g_dynamicNotchHz = TUNE_NOTCH_FREQ_HZ;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:352:17: warning: 'g_dynamicNotchHz' defined but not used [-Wunused-variable]
+  352 | static float    g_dynamicNotchHz = TUNE_NOTCH_FREQ_HZ;
       |                 ^~~~~~~~~~~~~~~~
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino: In function 'void taskSerial(void*)':
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2832:53: warning: 's.FlightState::mx_uT' may be used uninitialized [-Wmaybe-uninitialized]
- 2832 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2920:53: warning: 's.FlightState::mx_uT' may be used uninitialized [-Wmaybe-uninitialized]
+ 2920 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
       |                                   ~~~~~~~~~~~~~~~~~~^
- 2833 |                       s.my_uT * s.my_uT +
+ 2921 |                       s.my_uT * s.my_uT +
       |                       ~~~~~~~~~~~~~~~~~              
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::mx_uT' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::mx_uT' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2833:31: warning: 's.FlightState::my_uT' may be used uninitialized [-Wmaybe-uninitialized]
- 2833 |                       s.my_uT * s.my_uT +
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2921:31: warning: 's.FlightState::my_uT' may be used uninitialized [-Wmaybe-uninitialized]
+ 2921 |                       s.my_uT * s.my_uT +
       |                       ~~~~~~~~^~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::my_uT' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::my_uT' was declared here
+ 2879 |         FlightState s;
       |                     ^
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2832:34: warning: 's.FlightState::mz_uT' may be used uninitialized [-Wmaybe-uninitialized]
- 2832 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2920:34: warning: 's.FlightState::mz_uT' may be used uninitialized [-Wmaybe-uninitialized]
+ 2920 |             float magNorm = sqrtf(s.mx_uT * s.mx_uT +
       |                             ~~~~~^~~~~~~~~~~~~~~~~~~~
- 2833 |                       s.my_uT * s.my_uT +
+ 2921 |                       s.my_uT * s.my_uT +
       |                       ~~~~~~~~~~~~~~~~~~~
- 2834 |                       s.mz_uT * s.mz_uT);
+ 2922 |                       s.mz_uT * s.mz_uT);
       |                       ~~~~~~~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2791:21: note: 's.FlightState::mz_uT' was declared here
- 2791 |         FlightState s;
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/RC_FlightController.ino:2879:21: note: 's.FlightState::mz_uT' was declared here
+ 2879 |         FlightState s;
       |                     ^
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/ESP32Core/CPUUtilization.cpp: In function 'bool idleHookCore0()':
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/ESP32Core/CPUUtilization.cpp:23:5: warning: '++' expression of 'volatile'-qualified type is deprecated [-Wvolatile]
@@ -821,5 +821,5 @@ In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_F
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/WiFiTelemetry/TelemetryWiFi.cpp:49:1: warning:   when initialized here [-Wreorder]
    49 | TelemetryWiFi::TelemetryWiFi(uint16_t port)
       | ^~~~~~~~~~~~~
-Sketch uses 1140619 bytes (58%) of program storage space. Maximum is 1966080 bytes.
+Sketch uses 1141619 bytes (58%) of program storage space. Maximum is 1966080 bytes.
 Global variables use 77556 bytes (23%) of dynamic memory, leaving 250124 bytes for local variables. Maximum is 327680 bytes.
