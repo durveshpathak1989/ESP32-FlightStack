@@ -3,34 +3,39 @@
 #include <cstdint>
 
 #include "Arduino.h"
-#include "../../../Submodules/CalManager/CalibrationManager.h"
 #include "../../../Submodules/DebugConfig/DebugConfig.h"
-#include "../../../Submodules/iFly/FlySkyiBUS.h"
 #include "../../../Core/RtePorts.h"
+#include "../../../Core/ServicePorts.h"
 
 class ReceiverServiceTask : public rte::SoftwareComponent {
 public:
     using LogFunction = void (*)(const char* message);
 
-    ReceiverServiceTask(FlySkyiBUS& receiver, CalibrationManager& calibration,
+    ReceiverServiceTask(rte::ReceiverServicePort& receiver,
+                        rte::CalibrationServicePort& calibration,
+                        rte::SenderReceiverPort<flight::ReceiverFrame>& outputPort,
                         LogFunction log, std::uint16_t escThreshold,
-                        float throttleCut)
-        : receiver_(receiver), calibration_(calibration), log_(log),
-          escThreshold_(escThreshold), throttleCut_(throttleCut) {}
+                        float throttleCut, std::uint8_t escChannelIndex)
+        : receiver_(receiver), calibration_(calibration), outputPort_(outputPort),
+          log_(log), escThreshold_(escThreshold), throttleCut_(throttleCut),
+          escChannelIndex_(escChannelIndex) {}
 
     void Init() override {
         swdPreviouslyHigh_ = false;
         escPreviouslyHigh_ = false;
         lastReportMs_ = 0;
         lastFailureCount_ = 0;
+        outputPort_.invalidate();
+        receiver_.InitReceiver();
     }
 
     void Periodic() override {
-        receiver_.update();
-        const RCCommand command = receiver_.getCommand();
-        serviceImuCalibration(command);
-        serviceEscCalibration(command);
-        reportHealth();
+        latestFrame_ = receiver_.ReadFrame();
+        outputPort_.send(latestFrame_,
+                         static_cast<std::uint64_t>(millis()) * 1000ULL);
+        serviceImuCalibration(latestFrame_.command);
+        serviceEscCalibration(latestFrame_.command);
+        reportHealth(latestFrame_);
     }
 
     [[noreturn]] void run() {
@@ -44,11 +49,10 @@ public:
     }
 
 private:
-    void serviceImuCalibration(const RCCommand& command) {
+    void serviceImuCalibration(const flight::PilotCommand& command) {
         if (command.swdHigh && !swdPreviouslyHigh_) {
-            if (command.mode == FlightMode::DISARMED) {
-                calibration_.request(CalibrationMode::IMU_ALL_GUIDED,
-                                     CalibrationSource::RC);
+            if (command.mode == flight::FlightMode::Disarmed) {
+                calibration_.Request(rte::CalibrationRequest::ImuAllGuided);
                 log_("[RC] Calibration Manager request — IMU All GUIDED.");
             } else {
                 log_("[RC] Cannot calibrate while armed.");
@@ -57,44 +61,47 @@ private:
         swdPreviouslyHigh_ = command.swdHigh;
     }
 
-    void serviceEscCalibration(const RCCommand& command) {
+    void serviceEscCalibration(const flight::PilotCommand& command) {
         const bool escHigh = command.valid &&
-            command.raw[RC_CH_AUX5] >= escThreshold_;
+            command.raw[escChannelIndex_] >= escThreshold_;
         if (escHigh && !escPreviouslyHigh_) {
-            if (command.mode == FlightMode::DISARMED &&
+            if (command.mode == flight::FlightMode::Disarmed &&
                 command.throttle <= throttleCut_) {
-                calibration_.request(CalibrationMode::ESC, CalibrationSource::RC);
+                calibration_.Request(rte::CalibrationRequest::Esc);
                 log_("[RC] ESC calibration requested by VrB. Use SWC to confirm.");
             } else {
                 log_("[RC] ESC calibration rejected — disarm and set throttle low first.");
             }
         }
         escPreviouslyHigh_ = escHigh;
-        const CalibrationStatus status = calibration_.status();
-        if (status.active && status.mode == CalibrationMode::ESC && !escHigh) {
-            calibration_.cancel();
+        const rte::CalibrationServiceStatus status = calibration_.Status();
+        if (status.active && status.request == rte::CalibrationRequest::Esc && !escHigh) {
+            calibration_.Cancel();
             log_("[RC] ESC calibration cancelled — VrB lowered.");
         }
     }
 
-    void reportHealth() {
+    void reportHealth(const flight::ReceiverFrame& frame) {
         const std::uint32_t nowMs = millis();
         if (nowMs - lastReportMs_ < 1000) return;
-        const std::uint32_t failures = receiver_.getChecksumFailCount();
+        const std::uint32_t failures = frame.checksumFailureCount;
         const std::uint32_t failuresPerSecond = failures - lastFailureCount_;
         lastFailureCount_ = failures;
         lastReportMs_ = nowMs;
         DBG_PRINTF("[iBUS] %.0f Hz good | %lu bad/s | %lu bad total\n",
-                   receiver_.getFrameRate(),
+                   frame.frameRateHz,
                    static_cast<unsigned long>(failuresPerSecond),
                    static_cast<unsigned long>(failures));
     }
 
-    FlySkyiBUS& receiver_;
-    CalibrationManager& calibration_;
+    rte::ReceiverServicePort& receiver_;
+    rte::CalibrationServicePort& calibration_;
+    rte::SenderReceiverPort<flight::ReceiverFrame>& outputPort_;
     LogFunction log_;
     std::uint16_t escThreshold_;
     float throttleCut_;
+    std::uint8_t escChannelIndex_;
+    flight::ReceiverFrame latestFrame_{};
     bool swdPreviouslyHigh_ = false;
     bool escPreviouslyHigh_ = false;
     std::uint32_t lastReportMs_ = 0;

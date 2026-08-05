@@ -4,6 +4,13 @@
 
 namespace flight {
 
+enum class FlightMode : std::uint8_t {
+    Disarmed = 0,
+    Angle = 1,
+    Acro = 2,
+    Failsafe = 3
+};
+
 struct Vec3f {
     float x = 0.0f;
     float y = 0.0f;
@@ -26,9 +33,17 @@ struct PilotCommand {
     float roll = 0.0f;
     float pitch = 0.0f;
     float yaw = 0.0f;
-    bool armed = false;
-    bool angleMode = true;
+    std::uint16_t raw[14]{};
+    FlightMode mode = FlightMode::Disarmed;
+    bool swdHigh = false;
     bool valid = false;
+};
+
+struct ReceiverFrame {
+    PilotCommand command;
+    float frameRateHz = 0.0f;
+    std::uint32_t checksumFailureCount = 0;
+    std::uint32_t failsafeCount = 0;
 };
 
 struct Attitude {

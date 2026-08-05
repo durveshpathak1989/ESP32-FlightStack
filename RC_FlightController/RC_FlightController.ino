@@ -92,6 +92,11 @@
 #include "src/Platforms/Esp32/Tasks/WifiServiceTask.h"
 #include "src/Platforms/Esp32/Services/TelemetryWifiServiceAdapter.h"
 #include "src/Platforms/Esp32/Services/Esp32CpuLoadServiceAdapter.h"
+#include "src/Platforms/Esp32/Services/Esp32GpsServiceAdapter.h"
+#include "src/Platforms/Esp32/Services/Esp32BarometerServiceAdapter.h"
+#include "src/Platforms/Esp32/Services/Esp32RangeServiceAdapter.h"
+#include "src/Platforms/Esp32/Services/Esp32ReceiverServiceAdapter.h"
+#include "src/Platforms/Esp32/Services/CalibrationServiceAdapter.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
@@ -238,15 +243,21 @@ SpectrumAnalyzer spectrumAnalyzer(NOTCH_SAMPLE_HZ);
 // ─────────────────────────────────────────────────────────────
 static FlightState       g_state;
 static SnapshotRte<FlightState> flightStateRte(g_state);
-static GpsServiceTask gpsServiceTask(gps, flightStateRte, g_state);
+static Esp32GpsServiceAdapter gpsServiceAdapter(
+    gps, PIN_GPS_RX, PIN_GPS_TX, 9600);
+static GpsServiceTask gpsServiceTask(gpsServiceAdapter, flightStateRte, g_state);
 static Esp32CpuLoadServiceAdapter cpuLoadServiceAdapter(cpuUtilization);
 static CpuServiceTask cpuServiceTask(cpuLoadServiceAdapter, flightStateRte, g_state);
 static SemaphoreHandle_t g_i2cMutex;
+static Esp32RangeServiceAdapter rangeServiceAdapter(
+    tofSensor, g_i2cMutex, TOF_ST_ADDRESS, TOF_TIMING_BUDGET_US,
+    TOF_INTER_MEASUREMENT_MS, TOF_STALE_MS);
+static Esp32BarometerServiceAdapter barometerServiceAdapter(
+    bmp280, g_i2cMutex, PIN_BMP_SDA, PIN_BMP_SCL, 100000);
 static TofServiceTask tofServiceTask(
-    tofSensor, g_i2cMutex, flightStateRte, g_state,
-    TOF_TASK_PERIOD_MS, TOF_STALE_MS);
+    rangeServiceAdapter, flightStateRte, g_state, TOF_TASK_PERIOD_MS);
 static BarometerServiceTask barometerServiceTask(
-    bmp280, g_i2cMutex, flightStateRte, g_state);
+    barometerServiceAdapter, flightStateRte, g_state);
 
 static volatile uint32_t g_pidResetCount = 0;
 static volatile uint32_t g_modeTransitionCount = 0;
@@ -254,7 +265,7 @@ static volatile uint32_t g_lastModeChangeMs = 0;
 static volatile uint32_t g_armingTransitionCount = 0;
 static volatile uint32_t g_lastArmChangeMs = 0;
 static bool g_transitionTrackerInitialized = false;
-static FlightMode g_lastObservedMode = FlightMode::DISARMED;
+static flight::FlightMode g_lastObservedMode = flight::FlightMode::Disarmed;
 static bool g_lastObservedArmed = false;
 
 static rte::SenderReceiverPort<LevelTrimInput> levelTrimInputPort;
@@ -277,14 +288,10 @@ static volatile uint32_t g_tuneApplySeq   = 0;
 static volatile uint32_t g_tuneRejectSeq  = 0;
 static volatile bool     g_notchResetPending = false;
 static volatile uint8_t  g_ahrsFilterModeActive = 0;
-
-// ─────────────────────────────────────────────────────────────
-//  Calibration state machine
-// ─────────────────────────────────────────────────────────────
-enum class CalibState : uint8_t {
-    IDLE=0, REQUESTED, RUNNING_GYRO, RUNNING_ACCEL, RUNNING_MAG, SAVING, DONE
-};
-static volatile CalibState g_calibState = CalibState::IDLE;
+static rte::SenderReceiverPort<flight::ReceiverFrame> receiverFramePort;
+static Esp32ReceiverServiceAdapter receiverServiceAdapter(
+    rcReceiver, PIN_IBUS_RX, PIN_IBUS_TX, 2);
+static CalibrationServiceAdapter calibrationServiceAdapter(calManager);
 
 static Esp32FlightScheduler flightScheduler;
 
@@ -606,21 +613,21 @@ static String provideTimingCsv()
 // ─────────────────────────────────────────────────────────────
 //  Wi-Fi telemetry provider — /telemetry endpoint
 // ─────────────────────────────────────────────────────────────
-static const char* flightModeToStr(FlightMode m) {
+static const char* flightModeToStr(flight::FlightMode m) {
     switch(m) {
-        case FlightMode::DISARMED: return "DISARMED";
-        case FlightMode::ANGLE:    return "ANGLE";
-        case FlightMode::ACRO:     return "ACRO";
-        case FlightMode::FAILSAFE: return "FAILSAFE";
+        case flight::FlightMode::Disarmed: return "DISARMED";
+        case flight::FlightMode::Angle:    return "ANGLE";
+        case flight::FlightMode::Acro:     return "ACRO";
+        case flight::FlightMode::Failsafe: return "FAILSAFE";
         default:                   return "UNKNOWN";
     }
 }
 
-static void updateControlTransitionCounters(const RCCommand& cmd)
+static void updateControlTransitionCounters(const flight::PilotCommand& cmd)
 {
     const bool armedNow = cmd.valid &&
-                          cmd.mode != FlightMode::DISARMED &&
-                          cmd.mode != FlightMode::FAILSAFE;
+                          cmd.mode != flight::FlightMode::Disarmed &&
+                          cmd.mode != flight::FlightMode::Failsafe;
     const uint32_t nowMs = millis();
 
     if (!g_transitionTrackerInitialized) {
@@ -729,7 +736,7 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.pid_yaw_out   = s.pidYawOut;
     out.throttle=s.rc.throttle; out.rc_roll=s.rc.roll;
     out.rc_pitch=s.rc.pitch;    out.rc_yaw=s.rc.yaw;
-    out.rc_hz=rcReceiver.getFrameRate();
+    out.rc_hz=s.rcFrameRateHz;
     out.battery_voltage_v=s.batteryVoltage_v;
     out.battery_adc_v=s.batteryAdcVoltage_v;
     out.battery_cell_v=s.batteryCellVoltage_v;
@@ -876,195 +883,6 @@ static bool handleTune(const TunePacket& in)
 static void motorsBegin()                                    { motorBegin(); }
 static void writeMotors(float fl,float fr,float rl,float rr) { motorSet(fl,fr,rl,rr); }
 static void motorsOff()                                      { motorOff(); }
-static bool swcIsUp()     { return rcReceiver.getChannel(RC_CH_AUX3) >= SWC_THRESHOLD; }
-static void waitSwcDown() { while (swcIsUp()) delay(20); }
-static void silentWait(uint32_t ms) {
-    uint32_t t = millis();
-    while (millis()-t < ms) delay(50);
-}
-
-// ═════════════════════════════════════════════════════════════
-//  AUTONOMOUS CALIBRATION (runs inside taskControl, Core 1)
-// ═════════════════════════════════════════════════════════════
-static void runAutonomousCalibration()
-{
-    calLog("[CAL] ═══ AUTONOMOUS CALIBRATION STARTED ═══");
-
-    if (!SelectedImu::supportsManualCalibration()) {
-        calLog("[CAL] Manual calibration is not used by this IMU backend.");
-        calLog("[CAL] Follow the BNO085 calibration procedure and save DCD in the sensor adapter.");
-        g_calibState = CalibState::DONE;
-        return;
-    }
-
-    // ── Stage 1: Gyro ────────────────────────────────────────
-    g_calibState = CalibState::RUNNING_GYRO;
-    calLogf("[CAL] 1/3 GYRO — flat + still. Settle %ds, sample %ds...",
-            GYRO_SETTLE_MS/1000, GYRO_SAMPLE_MS/1000);
-    silentWait(GYRO_SETTLE_MS);
-    {
-        ImuSensorData avg;
-        imu.sampleAvg(GYRO_SAMPLE_MS / 2, avg);
-        imu.cal.gx_b = avg.gx_dps;
-        imu.cal.gy_b = avg.gy_dps;
-        imu.cal.gz_b = avg.gz_dps;
-        calLogf("[CAL] Gyro bias X=%+.4f Y=%+.4f Z=%+.4f dps",
-                imu.cal.gx_b, imu.cal.gy_b, imu.cal.gz_b);
-    }
-    calLog("[CAL] ✓ GYRO done.");
-
-    // ── Stage 2: Accel ───────────────────────────────────────
-    g_calibState = CalibState::RUNNING_ACCEL;
-
-    struct AccelPose {
-        const char* physicalPose;
-        uint8_t axis;
-        int8_t sign;
-    };
-
-    const AccelPose poses[6] = {
-        {"NOSE UP",        0, +1},
-        {"NOSE DOWN",      0, -1},
-        {"LEFT side UP",   1, +1},
-        {"RIGHT side UP",  1, -1},
-        {"FLAT top up",    2, +1},
-        {"UPSIDE DOWN",    2, -1}
-    };
-
-    float plusVal[3]  = {0.0f, 0.0f, 0.0f};
-    float minusVal[3] = {0.0f, 0.0f, 0.0f};
-    bool gotPlus[3]   = {false, false, false};
-    bool gotMinus[3]  = {false, false, false};
-
-    calLog("[CAL] 2/3 ACCEL — 6 physical positions, flip SWC UP to confirm each.");
-
-    for (int p = 0; p < 6; p++) {
-        if (swcIsUp()) {
-            calLog("[CAL] Flip SWC DOWN first...");
-            waitSwcDown();
-        }
-
-        calLogf("[CAL] Pos %d/6: Put drone: %s — Flip SWC UP when steady",
-                p + 1, poses[p].physicalPose);
-
-        uint32_t t0 = millis();
-        while (!swcIsUp()) {
-            if (millis() - t0 > ACCEL_WAIT_MAX_MS) {
-                calLog("[CAL] Timeout — position skipped");
-                break;
-            }
-            delay(20);
-        }
-
-        if (!swcIsUp()) continue;
-
-        silentWait(ACCEL_HOLD_MS);
-
-        ImuSensorData avg;
-        imu.sampleAvg(ACCEL_HOLD_MS / 2, avg);
-
-        float axisValue[3] = { avg.ax_g, avg.ay_g, avg.az_g };
-
-        uint8_t axis = poses[p].axis;
-        int8_t sign  = poses[p].sign;
-        float value  = axisValue[axis];
-
-        calLogf("[CAL] Got ax=%+.4f ay=%+.4f az=%+.4f g",
-                avg.ax_g, avg.ay_g, avg.az_g);
-
-        calLogf("[CAL] Routed %s to sensor %c%c = %+.4f g",
-                poses[p].physicalPose,
-                sign > 0 ? '+' : '-',
-                axis == 0 ? 'X' : axis == 1 ? 'Y' : 'Z',
-                value);
-
-        if ((sign > 0 && value < 0.5f) || (sign < 0 && value > -0.5f)) {
-            calLog("[CAL][WARN] Axis sign does not match expected pose. Check orientation.");
-        }
-
-        if (sign > 0) {
-            plusVal[axis] = value;
-            gotPlus[axis] = true;
-        } else {
-            minusVal[axis] = value;
-            gotMinus[axis] = true;
-        }
-
-        waitSwcDown();
-    }
-
-    bool accelOk = true;
-    for (int a = 0; a < 3; a++) {
-        if (!gotPlus[a] || !gotMinus[a]) {
-            accelOk = false;
-        }
-    }
-
-    if (!accelOk) {
-        calLog("[CAL][ERROR] Accel calibration incomplete — keeping old accel calibration.");
-    } else {
-        imu.cal.ax_b = (plusVal[0] + minusVal[0]) / 2.0f;
-        imu.cal.ay_b = (plusVal[1] + minusVal[1]) / 2.0f;
-        imu.cal.az_b = (plusVal[2] + minusVal[2]) / 2.0f;
-
-        float hx = (plusVal[0] - minusVal[0]) / 2.0f;
-        float hy = (plusVal[1] - minusVal[1]) / 2.0f;
-        float hz = (plusVal[2] - minusVal[2]) / 2.0f;
-
-        imu.cal.ax_s = fabsf(hx) > 0.01f ? 1.0f / hx : 1.0f;
-        imu.cal.ay_s = fabsf(hy) > 0.01f ? 1.0f / hy : 1.0f;
-        imu.cal.az_s = fabsf(hz) > 0.01f ? 1.0f / hz : 1.0f;
-
-        calLogf("[CAL] Accel bias ax=%+.4f ay=%+.4f az=%+.4f g",
-                imu.cal.ax_b, imu.cal.ay_b, imu.cal.az_b);
-
-        calLogf("[CAL] Accel scale ax=%+.4f ay=%+.4f az=%+.4f",
-                imu.cal.ax_s, imu.cal.ay_s, imu.cal.az_s);
-
-        calLog("[CAL] ✓ ACCEL done.");
-    }
-
-    // ── Stage 3: Mag (skipped automatically if no AK8963) ────
-    g_calibState = CalibState::RUNNING_MAG;
-    if (imu.hasMag()) {
-        calLogf("[CAL] 3/3 MAG — rotate figure-8 for %ds", MAG_DURATION_MS/1000);
-        float xn=1e9f,yn=1e9f,zn=1e9f,xx=-1e9f,yx=-1e9f,zx=-1e9f;
-        uint32_t end=millis()+MAG_DURATION_MS, lp=0;
-        while (millis() < end) {
-            ImuSensorData s;
-            if (imu.readScaled(s)) {
-                if (fabsf(s.mx_uT)>0.1f || fabsf(s.my_uT)>0.1f || fabsf(s.mz_uT)>0.1f) {
-                    if(s.mx_uT<xn)xn=s.mx_uT; if(s.mx_uT>xx)xx=s.mx_uT;
-                    if(s.my_uT<yn)yn=s.my_uT; if(s.my_uT>yx)yx=s.my_uT;
-                    if(s.mz_uT<zn)zn=s.mz_uT; if(s.mz_uT>zx)zx=s.mz_uT;
-                }
-            }
-            if (millis()-lp >= 10000) {
-                calLogf("[CAL] Mag — %lus remaining", (unsigned long)((end-millis())/1000));
-                lp=millis();
-            }
-            delay(10);
-        }
-        imu.cal.mx_b=(xx+xn)/2.0f; imu.cal.my_b=(yx+yn)/2.0f; imu.cal.mz_b=(zx+zn)/2.0f;
-        float sp=((xx-xn)+(yx-yn)+(zx-zn))/3.0f;
-        imu.cal.mx_s=(xx-xn)>0.1f?sp/(xx-xn):1.0f;
-        imu.cal.my_s=(yx-yn)>0.1f?sp/(yx-yn):1.0f;
-        imu.cal.mz_s=(zx-zn)>0.1f?sp/(zx-zn):1.0f;
-        calLog("[CAL] ✓ MAG done.");
-    } else {
-        calLog("[CAL] 3/3 MAG — SKIPPED (no AK8963 on this board).");
-        calLog("[CAL] AHRS running 6-DOF mode — roll+pitch accurate, yaw drifts.");
-    }
-
-    // ── Save to NVS flash ─────────────────────────────────────
-    g_calibState = CalibState::SAVING;
-    imu.cal.valid = true;
-    imu.saveCalibration();
-    calLog("[CAL] ✓ Calibration COMPLETE — saved to NVS.");
-    g_calibState = CalibState::DONE;
-}
-
-// ═════════════════════════════════════════════════════════════
 //  TASKS
 // ═════════════════════════════════════════════════════════════
 
@@ -1085,8 +903,8 @@ static void taskGPS(void* /*pv*/)
 static void taskRC(void* /*pv*/)
 {
     static ReceiverServiceTask receiverTask(
-        rcReceiver, calManager, calLog,
-        ESC_CALIB_VRB_THRESHOLD, TUNE_THROTTLE_CUT);
+        receiverServiceAdapter, calibrationServiceAdapter, receiverFramePort,
+        calLog, ESC_CALIB_VRB_THRESHOLD, TUNE_THROTTLE_CUT, RC_CH_AUX5);
     receiverTask.run();
 }
 
@@ -1294,23 +1112,6 @@ static void taskControl(void* /*pv*/)
     for (;;) {
         if (g_tuning.dirty) applyTuningToObjects();
 
-        if (g_calibState == CalibState::REQUESTED) {
-            if (g_motorOutputsActive) {
-                motorsOff();
-                g_motorOutputsActive = false;
-            }
-            pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
-            pidAngleRoll.reset(); pidAnglePitch.reset();
-            pidAngleYaw.reset();
-            attitudeEstimator.resetEkf();
-            flightController.reset();
-            runAutonomousCalibration();
-            g_calibState = CalibState::IDLE;
-            ulTaskNotifyTake(pdTRUE, 0);  // discard stale timer releases
-            lastUs = 0;
-            continue;
-        }
-
         // Block until the high-resolution 400 Hz timer releases this task.
         // pdTRUE clears any accumulated notifications, so if a previous cycle
         // ran long we skip stale releases instead of trying to catch up.
@@ -1507,7 +1308,14 @@ static void taskControl(void* /*pv*/)
         }
 
         phaseStartUs = micros();
-        RCCommand cmd = rcReceiver.getCommand();
+        rte::SignalSample<flight::ReceiverFrame> receiverSignal{};
+        receiverFramePort.receive(receiverSignal);
+        flight::ReceiverFrame receiverFrame = receiverSignal.value;
+        if (receiverSignal.validity != rte::DataValidity::Valid) {
+            receiverFrame.command.mode = flight::FlightMode::Failsafe;
+            receiverFrame.command.valid = false;
+        }
+        const flight::PilotCommand& cmd = receiverFrame.command;
         updateControlTransitionCounters(cmd);
         g_execTiming.lastRcUs = micros() - phaseStartUs;
  
@@ -1517,7 +1325,7 @@ static void taskControl(void* /*pv*/)
         // Level-zero capture: DISARMED + SWB/ACRO high.
         // Uses raw CH8 because cmd.mode is DISARMED while disarmed, even if SWB is high.
         const bool swbAcroHigh = (cmd.valid && cmd.raw[RC_CH_AUX2] >= LEVEL_ZERO_SWB_THRESHOLD);
-        const bool canCaptureLevelZero = (cmd.mode == FlightMode::DISARMED && imuOk && swbAcroHigh);
+        const bool canCaptureLevelZero = (cmd.mode == flight::FlightMode::Disarmed && imuOk && swbAcroHigh);
         levelTrimInputPort.send(
             {swbAcroHigh, canCaptureLevelZero, millis(), LEVEL_ZERO_SAMPLE_MS,
              att.roll_deg, att.pitch_deg, att.yaw_deg},
@@ -1542,8 +1350,8 @@ static void taskControl(void* /*pv*/)
 
         // ── DISARMED / FAILSAFE ───────────────────────────────
         if (FlightSafetyPolicy::controlMustStop(
-                cmd.mode == FlightMode::DISARMED,
-                cmd.mode == FlightMode::FAILSAFE,
+                cmd.mode == flight::FlightMode::Disarmed,
+                cmd.mode == flight::FlightMode::Failsafe,
                 false)) {
             phaseStartUs = micros();
             if (g_motorOutputsActive) {
@@ -1593,7 +1401,8 @@ static void taskControl(void* /*pv*/)
                 g_state.armSwitchRaw_us = cmd.raw[RC_CH_FLIGHTMODE];
                 g_state.auxTune1Raw_us = cmd.raw[RC_CH_AUX1];
                 g_state.auxTune2Raw_us = cmd.raw[RC_CH_AUX5];
-                g_state.rcFailsafeCount = rcReceiver.getFailsafeCount();
+                g_state.rcFailsafeCount = receiverFrame.failsafeCount;
+                g_state.rcFrameRateHz = receiverFrame.frameRateHz;
                 g_state.angleLoopEnabled = false;
                 g_state.rateLoopEnabled = false;
                 g_state.actualRollRate_dps = imuOk ? gxf : 0.0f;
@@ -1720,7 +1529,7 @@ static void taskControl(void* /*pv*/)
             {cmd.roll, cmd.pitch, cmd.yaw,
              roll, pitch, yawCtrlDeg,
              gx, gy, gz, dt, RC_LPF_HZ,
-             cmd.mode == FlightMode::ANGLE, imuOk},
+             cmd.mode == flight::FlightMode::Angle, imuOk},
             nowUs);
         flightController.Periodic();
         rte::SignalSample<CascadedControlOutput> controlSignal{};
@@ -1852,7 +1661,7 @@ static void taskControl(void* /*pv*/)
             row.pid_exec_us = 0;
             row.motor_exec_us = clampU16(g_execTiming.lastMotorUs);
             row.mode = (uint8_t)cmd.mode;
-            row.flags = ((cmd.mode != FlightMode::DISARMED) ? 0x0001 : 0)
+            row.flags = ((cmd.mode != flight::FlightMode::Disarmed) ? 0x0001 : 0)
                       | (imuOk ? 0x0002 : 0)
                       | (cmd.valid ? 0x0004 : 0)
                       | ((imuOk && imu.isMagConnected()) ? 0x0008 : 0)
@@ -2035,15 +1844,16 @@ static void taskControl(void* /*pv*/)
             g_state.wifiService_us = g_lastWifiServiceUs;
             g_state.onboardLogWrite_us = g_execTiming.lastLogUs;
             g_state.missedLoopCount = g_execTiming.missedTimerReleases;
-            g_state.angleModeActive = (cmd.mode == FlightMode::ANGLE);
-            g_state.acroModeActive = (cmd.mode == FlightMode::ACRO);
+            g_state.angleModeActive = (cmd.mode == flight::FlightMode::Angle);
+            g_state.acroModeActive = (cmd.mode == flight::FlightMode::Acro);
             g_state.modeSwitchRaw_us = cmd.raw[RC_CH_AUX2];
             g_state.armSwitchRaw_us = cmd.raw[RC_CH_FLIGHTMODE];
             g_state.auxTune1Raw_us = cmd.raw[RC_CH_AUX1];
             g_state.auxTune2Raw_us = cmd.raw[RC_CH_AUX5];
-            g_state.rcFailsafeCount = rcReceiver.getFailsafeCount();
-            g_state.angleLoopEnabled = (cmd.mode == FlightMode::ANGLE) && imuOk;
-            g_state.rateLoopEnabled = imuOk && (cmd.mode == FlightMode::ANGLE || cmd.mode == FlightMode::ACRO);
+            g_state.rcFailsafeCount = receiverFrame.failsafeCount;
+            g_state.rcFrameRateHz = receiverFrame.frameRateHz;
+            g_state.angleLoopEnabled = (cmd.mode == flight::FlightMode::Angle) && imuOk;
+            g_state.rateLoopEnabled = imuOk && (cmd.mode == flight::FlightMode::Angle || cmd.mode == flight::FlightMode::Acro);
             g_state.actualRollRate_dps = gx;
             g_state.actualPitchRate_dps = gy;
             g_state.actualYawRate_dps = gz;
@@ -2108,11 +1918,13 @@ static void taskSerial(void* /*pv*/)
 
     for (;;) {
 
-        RCCommand calCmd = rcReceiver.getCommand();
+        rte::SignalSample<flight::ReceiverFrame> receiverSignal{};
+        receiverFramePort.receive(receiverSignal);
+        const flight::PilotCommand& calCmd = receiverSignal.value.command;
 
         bool safeForCalibration =
             calCmd.valid &&
-            calCmd.mode == FlightMode::DISARMED;
+            calCmd.mode == flight::FlightMode::Disarmed;
 
         calManager.setSafety(safeForCalibration);
 
@@ -2165,20 +1977,16 @@ static void taskSerial(void* /*pv*/)
             }
         }
 
-        if (g_calibState != CalibState::IDLE && g_calibState != CalibState::DONE) {
-            tick++; vTaskDelayUntil(&lastWake, period); continue;
-        }
-
         // Snapshot once per loop; both blocks below use it.
         FlightState s;
         flightStateRte.read(s, pdMS_TO_TICKS(5));
         updateDynamicNotchFromFFT();
         const char* ms = "???";
         switch(s.rc.mode) {
-            case FlightMode::DISARMED: ms="DISARMD"; break;
-            case FlightMode::ANGLE:    ms="ANGLE  "; break;
-            case FlightMode::ACRO:     ms="ACRO   "; break;
-            case FlightMode::FAILSAFE: ms="FAILSFE"; break;
+            case flight::FlightMode::Disarmed: ms="DISARMD"; break;
+            case flight::FlightMode::Angle:    ms="ANGLE  "; break;
+            case flight::FlightMode::Acro:     ms="ACRO   "; break;
+            case flight::FlightMode::Failsafe: ms="FAILSFE"; break;
         }
 
         // 1 Hz status line
@@ -2389,28 +2197,12 @@ void setup()
         DBG_PRINTLN(F("[BOOT] Roll and pitch accurate. Yaw will drift."));
     }
 
-    bmp280.scanI2C(PIN_BMP_SDA, PIN_BMP_SCL, 100000);
-    DBG_PRINT(F("[BOOT] BMP280... "));
-    bmp280.beginAuto(PIN_BMP_SDA, PIN_BMP_SCL, 100000)
-        ? DBG_PRINTLN(F("OK")) : DBG_PRINTLN(F("not found."));
-
-    DBG_PRINT(F("[BOOT] VL53L4CX ToF... "));
     Wire.setClock(TOF_I2C_HZ);
-    bool tofOk = tofSensor.begin(TOF_ST_ADDRESS,
-                                 FlightToF_VL53L4CX::DISTANCE_MEDIUM,
-                                 TOF_TIMING_BUDGET_US,
-                                 TOF_INTER_MEASUREMENT_MS);
-    g_state.tofReady = tofOk;
-    if (tofOk) {
-        DBG_PRINTLN(F("OK"));
-    } else {
-        DBG_PRINTLN(F("disabled/not found."));
-    }
+    DBG_PRINTLN(F("[BOOT] BMP280 and VL53L4CX initialization delegated to task Init runnables."));
 
     DBG_PRINTLN(F("[BOOT] CPU monitor delegated to CpuServiceTask::Init."));
 
-    DBG_PRINTLN(F("[BOOT] GPS (GY-GPS6MV2)..."));
-    gps.begin(PIN_GPS_RX, PIN_GPS_TX, 9600);
+    DBG_PRINTLN(F("[BOOT] GPS initialization delegated to GpsServiceTask::Init."));
 
     DBG_PRINT(F("[BOOT] NVS calibration... "));
     if (imu.loadCalibration()) {
@@ -2420,8 +2212,7 @@ void setup()
         DBG_PRINTLN(F("none — flip SWD UP (disarmed) to calibrate."));
     }
 
-    rcReceiver.begin(PIN_IBUS_RX, PIN_IBUS_TX, 2);
-    DBG_PRINTLN(F("[BOOT] iBUS ready."));
+    DBG_PRINTLN(F("[BOOT] iBUS initialization delegated to ReceiverServiceTask::Init."));
 
     syncTuningFromObjects();
     DBG_PRINT(F("[BOOT] NVS tuning... "));

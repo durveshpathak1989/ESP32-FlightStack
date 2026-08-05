@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "../../Submodules/GPS/GPSSensor.h"
-#include "../../Submodules/iFly/FlySkyiBUS.h"
+#include "../../Core/FlightTypes.h"
 
 // Complete immutable-at-reader-boundary telemetry snapshot. The 400 Hz control
 // task is the primary writer; slower services copy it under the RTE mutex.
@@ -85,7 +85,8 @@ struct FlightState {
     float accelRoll_deg, accelPitch_deg;
     float gyroRoll_deg, gyroPitch_deg, gyroYaw_deg;
     float rollAngleError_deg, pitchAngleError_deg;
-    RCCommand rc;
+    flight::PilotCommand rc;
+    float rcFrameRateHz;
     bool armed;
     std::uint32_t loopCount;
     GPSData gps;
