@@ -2,15 +2,62 @@
 
 #include <cstdint>
 
+#include "../../Core/RtePorts.h"
+
+struct LevelTrimInput {
+    bool switchHigh;
+    bool canCapture;
+    std::uint32_t nowMs;
+    std::uint32_t sampleDurationMs;
+    float rollDeg;
+    float pitchDeg;
+    float yawDeg;
+};
+
 struct LevelTrimUpdate {
     bool captureStarted = false;
     bool captureCompleted = false;
 };
 
+struct LevelTrimOutput {
+    LevelTrimUpdate event;
+    float rollOffsetDeg;
+    float pitchOffsetDeg;
+    float yawOffsetDeg;
+};
+
 // Captures a software level reference while disarmed. This component owns the
 // capture state and offsets; callers own switch validation, time, and logging.
-class LevelTrimService {
+class LevelTrimService : public rte::SoftwareComponent {
 public:
+    LevelTrimService() = default;
+    LevelTrimService(rte::SenderReceiverPort<LevelTrimInput>& inputPort,
+                     rte::SenderReceiverPort<LevelTrimOutput>& outputPort)
+        : inputPort_(&inputPort), outputPort_(&outputPort) {}
+
+    void Init() override {
+        switchHandled_ = false;
+        clearCapture();
+        rollOffsetDeg_ = pitchOffsetDeg_ = yawOffsetDeg_ = 0.0f;
+        if (outputPort_ != nullptr) outputPort_->invalidate();
+    }
+
+    void Periodic() override {
+        if (inputPort_ == nullptr || outputPort_ == nullptr) return;
+        rte::SignalSample<LevelTrimInput> input{};
+        if (!inputPort_->receive(input)) {
+            outputPort_->invalidate(input.timestampUs);
+            return;
+        }
+        const LevelTrimUpdate event = update(
+            input.value.switchHigh, input.value.canCapture,
+            input.value.nowMs, input.value.sampleDurationMs,
+            input.value.rollDeg, input.value.pitchDeg, input.value.yawDeg);
+        outputPort_->send(
+            {event, rollOffsetDeg_, pitchOffsetDeg_, yawOffsetDeg_},
+            input.timestampUs);
+    }
+
     LevelTrimUpdate update(bool switchHigh, bool canCapture,
                            std::uint32_t nowMs, std::uint32_t sampleDurationMs,
                            float rollDeg, float pitchDeg, float yawDeg) {
@@ -76,4 +123,6 @@ private:
     float rollOffsetDeg_ = 0.0f;
     float pitchOffsetDeg_ = 0.0f;
     float yawOffsetDeg_ = 0.0f;
+    rte::SenderReceiverPort<LevelTrimInput>* inputPort_ = nullptr;
+    rte::SenderReceiverPort<LevelTrimOutput>* outputPort_ = nullptr;
 };

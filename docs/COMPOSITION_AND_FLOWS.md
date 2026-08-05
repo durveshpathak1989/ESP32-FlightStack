@@ -46,6 +46,10 @@ implement application-owned ports. The `.ino` file is the composition root: it
 constructs the selected implementations and starts the runtime, but contains no
 flight-control equations.
 
+The normative runnable and port definitions—including datatype, direction, sender,
+receiver, unit, range, validity, and communication type—are maintained in
+[`SWC_PORT_MATRIX.md`](SWC_PORT_MATRIX.md).
+
 ## Static composition
 
 ```mermaid
@@ -165,3 +169,8 @@ sequenceDiagram
 
 Shared snapshots must have one owner and bounded synchronization. No low-priority service may
 hold a lock or perform an operation that blocks the 400 Hz control path.
+
+The concrete FreeRTOS task creation table and 400 Hz release timer are owned by
+`Esp32FlightScheduler`. GPS, receiver, barometer, ToF, CPU, and Wi-Fi loops are implemented in
+their named `Platforms/Esp32/Tasks` adapters; the sketch contains only the FreeRTOS entry
+trampolines needed by the scheduler composition table.

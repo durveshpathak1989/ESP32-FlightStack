@@ -6,8 +6,9 @@
 #include "../../../Submodules/CalManager/CalibrationManager.h"
 #include "../../../Submodules/DebugConfig/DebugConfig.h"
 #include "../../../Submodules/iFly/FlySkyiBUS.h"
+#include "../../../Core/RtePorts.h"
 
-class ReceiverServiceTask {
+class ReceiverServiceTask : public rte::SoftwareComponent {
 public:
     using LogFunction = void (*)(const char* message);
 
@@ -17,15 +18,27 @@ public:
         : receiver_(receiver), calibration_(calibration), log_(log),
           escThreshold_(escThreshold), throttleCut_(throttleCut) {}
 
+    void Init() override {
+        swdPreviouslyHigh_ = false;
+        escPreviouslyHigh_ = false;
+        lastReportMs_ = 0;
+        lastFailureCount_ = 0;
+    }
+
+    void Periodic() override {
+        receiver_.update();
+        const RCCommand command = receiver_.getCommand();
+        serviceImuCalibration(command);
+        serviceEscCalibration(command);
+        reportHealth();
+    }
+
     [[noreturn]] void run() {
         const TickType_t period = pdMS_TO_TICKS(5);
         TickType_t lastWake = xTaskGetTickCount();
+        Init();
         for (;;) {
-            receiver_.update();
-            const RCCommand command = receiver_.getCommand();
-            serviceImuCalibration(command);
-            serviceEscCalibration(command);
-            reportHealth();
+            Periodic();
             vTaskDelayUntil(&lastWake, period);
         }
     }

@@ -167,6 +167,34 @@ motor I/O; the motor adapter executes the resulting stop command.
 The timer only releases the control task; it never runs flight logic in timer context.
 Task creation or timer failure prevents boot from declaring the flight runtime ready.
 
+## Runtime SWC: `SnapshotRte<T>`
+
+Owns one FreeRTOS mutex for one typed shared snapshot. `read()` produces an atomic copy;
+`lock()`/`unlock()` provide a bounded writer transaction for the single owning producer.
+Flight, tuning, and timing state use separate channels so a slow telemetry request cannot
+hold the 400 Hz control path behind an unrelated state operation. No channel performs I/O.
+
+## Platform task adapters
+
+| Component | Activation | Required interfaces | Published output |
+| --- | ---: | --- | --- |
+| `ReceiverServiceTask` | 5 ms | iBUS, calibration request/log ports | receiver/calibration events |
+| `GpsServiceTask` | 20 ms | GPS driver, flight-state RTE | GPS snapshot |
+| `BarometerServiceTask` | 50 ms | BMP280, I2C mutex, flight-state RTE | pressure/altitude/vertical speed |
+| `TofServiceTask` | 25 ms configured | VL53L4CX, I2C mutex, flight-state RTE | range/status/age |
+| `CpuServiceTask` | 500 ms | CPU utilization monitor, flight-state RTE | per-core load |
+| `WifiServiceTask` | event loop + 10 ms yield | telemetry adapter and bound callbacks | HTTP/OTA/log services |
+
+Each task adapter owns only its pacing and device-specific publication state. It cannot
+change flight-control equations or directly arm the aircraft.
+
+## Platform adapter: `TelemetryTuneAdapter`
+
+Translates optional HTML/configurator `TunePacket` fields into one validated `TuningState`.
+All numeric bounds and cross-field throttle constraints are applied before the snapshot is
+made visible or persisted. It performs no NVS write; `PreferencesTuningStore` remains the
+single persistence adapter and verifies the complete record after saving.
+
 ## Infrastructure SWC: `PreferencesTuningStore`
 
 **Layer:** ESP32 platform services.  

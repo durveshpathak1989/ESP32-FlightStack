@@ -90,6 +90,8 @@
 #include "src/Platforms/Esp32/Tasks/BarometerServiceTask.h"
 #include "src/Platforms/Esp32/Tasks/TofServiceTask.h"
 #include "src/Platforms/Esp32/Tasks/WifiServiceTask.h"
+#include "src/Platforms/Esp32/Services/TelemetryWifiServiceAdapter.h"
+#include "src/Platforms/Esp32/Services/Esp32CpuLoadServiceAdapter.h"
 
 static Logger flightLogger(FLIGHT_LOGGER_CAPACITY);
 
@@ -131,7 +133,8 @@ struct ExecTimingStats {
 
 static volatile ExecTimingStats g_execTiming = {0,0,0,0,0,0,0,0,0,0,0,0,0};
 static volatile uint32_t g_lastWifiServiceUs = 0;
-static WifiServiceTask wifiServiceTask(telemetryWiFi, g_lastWifiServiceUs);
+static TelemetryWifiServiceAdapter wifiServiceAdapter(telemetryWiFi);
+static WifiServiceTask wifiServiceTask(wifiServiceAdapter, g_lastWifiServiceUs);
 
 static void updateExecTimingAndPrint(uint32_t controlUs, uint32_t fullUs,
                                      uint32_t periodUs, uint32_t targetUs)
@@ -211,7 +214,11 @@ MahonyAHRS mahony;
 AttitudeEstimate mahonyAtt;
 AttitudeEKF attitudeEKF;
 MadgwickAHRS madgwickAHRS;
-AttitudeEstimatorRouter attitudeEstimator(attitudeEKF, mahony, madgwickAHRS);
+static rte::SenderReceiverPort<AttitudeEstimatorInput> estimatorInputPort;
+static rte::SenderReceiverPort<AttitudeEstimate> estimatorOutputPort;
+AttitudeEstimatorRouter attitudeEstimator(
+    attitudeEKF, mahony, madgwickAHRS,
+    estimatorInputPort, estimatorOutputPort);
 NotchFilter notchAx, notchAy, notchAz;
 NotchFilter notchGx, notchGy, notchGz;
 static FlightToF_VL53L4CX tofSensor(Wire);
@@ -232,7 +239,8 @@ SpectrumAnalyzer spectrumAnalyzer(NOTCH_SAMPLE_HZ);
 static FlightState       g_state;
 static SnapshotRte<FlightState> flightStateRte(g_state);
 static GpsServiceTask gpsServiceTask(gps, flightStateRte, g_state);
-static CpuServiceTask cpuServiceTask(cpuUtilization, flightStateRte, g_state);
+static Esp32CpuLoadServiceAdapter cpuLoadServiceAdapter(cpuUtilization);
+static CpuServiceTask cpuServiceTask(cpuLoadServiceAdapter, flightStateRte, g_state);
 static SemaphoreHandle_t g_i2cMutex;
 static TofServiceTask tofServiceTask(
     tofSensor, g_i2cMutex, flightStateRte, g_state,
@@ -249,7 +257,9 @@ static bool g_transitionTrackerInitialized = false;
 static FlightMode g_lastObservedMode = FlightMode::DISARMED;
 static bool g_lastObservedArmed = false;
 
-static LevelTrimService levelTrim;
+static rte::SenderReceiverPort<LevelTrimInput> levelTrimInputPort;
+static rte::SenderReceiverPort<LevelTrimOutput> levelTrimOutputPort;
+static LevelTrimService levelTrim(levelTrimInputPort, levelTrimOutputPort);
 
 // PID-trace toggle (Serial 'p'). Off at boot so the log stays clean.
 static volatile bool g_pidTrace = false;
@@ -290,10 +300,18 @@ static PidController pidAngleRoll(
 static PidController pidAnglePitch(
     TUNE_ANGLE_PITCH_KP, TUNE_ANGLE_PITCH_KI, TUNE_ANGLE_PITCH_KD);
 static PidController pidAngleYaw(TUNE_ANGLE_YAW_KP, 0.0f, 0.0f);
+static rte::SenderReceiverPort<CascadedControlInput> controllerInputPort;
+static rte::SenderReceiverPort<TuningState> controllerConfigPort;
+static rte::SenderReceiverPort<CascadedControlOutput> controllerOutputPort;
 static CascadedController flightController(
     pidRateRoll, pidRatePitch, pidRateYaw,
-    pidAngleRoll, pidAnglePitch, pidAngleYaw);
-static MotorMixer motorMixer;
+    pidAngleRoll, pidAnglePitch, pidAngleYaw,
+    controllerInputPort, controllerConfigPort, controllerOutputPort);
+static rte::SenderReceiverPort<MotorMixerInput> motorMixerInputPort;
+static rte::SenderReceiverPort<MotorMixerConfig> motorMixerConfigPort;
+static rte::SenderReceiverPort<MotorMixerOutput> motorMixerOutputPort;
+static MotorMixer motorMixer(
+    motorMixerInputPort, motorMixerConfigPort, motorMixerOutputPort);
 
 // ─────────────────────────────────────────────────────────────
 //  Tuning sync helpers
@@ -1451,7 +1469,11 @@ static void taskControl(void* /*pv*/)
                 tuningRte.unlock();
             }
             uint32_t ahrsStartUs = micros();
-            att = attitudeEstimator.update(ekfIn, dt, ahrsMode);
+            estimatorInputPort.send({ekfIn, dt, ahrsMode}, nowUs);
+            attitudeEstimator.Periodic();
+            rte::SignalSample<AttitudeEstimate> attitudeSignal{};
+            estimatorOutputPort.receive(attitudeSignal);
+            att = attitudeSignal.value;
             g_ahrsFilterModeActive = attitudeEstimator.activeMode();
             g_execTiming.lastAhrsUs = micros() - ahrsStartUs;
 
@@ -1496,9 +1518,14 @@ static void taskControl(void* /*pv*/)
         // Uses raw CH8 because cmd.mode is DISARMED while disarmed, even if SWB is high.
         const bool swbAcroHigh = (cmd.valid && cmd.raw[RC_CH_AUX2] >= LEVEL_ZERO_SWB_THRESHOLD);
         const bool canCaptureLevelZero = (cmd.mode == FlightMode::DISARMED && imuOk && swbAcroHigh);
-        const LevelTrimUpdate levelEvent = levelTrim.update(
-            swbAcroHigh, canCaptureLevelZero, millis(), LEVEL_ZERO_SAMPLE_MS,
-            att.roll_deg, att.pitch_deg, att.yaw_deg);
+        levelTrimInputPort.send(
+            {swbAcroHigh, canCaptureLevelZero, millis(), LEVEL_ZERO_SAMPLE_MS,
+             att.roll_deg, att.pitch_deg, att.yaw_deg},
+            nowUs);
+        levelTrim.Periodic();
+        rte::SignalSample<LevelTrimOutput> levelSignal{};
+        levelTrimOutputPort.receive(levelSignal);
+        const LevelTrimUpdate& levelEvent = levelSignal.value.event;
         if (levelEvent.captureStarted) {
             DBG_PRINTLN(F("[LEVEL] Capturing software zero — keep drone still..."));
             calLog("[LEVEL] Capturing software zero — keep drone still...");
@@ -1688,12 +1715,17 @@ static void taskControl(void* /*pv*/)
             tune.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
         }
 
-        const CascadedControlOutput control = flightController.update(
+        controllerConfigPort.send(tune, nowUs);
+        controllerInputPort.send(
             {cmd.roll, cmd.pitch, cmd.yaw,
              roll, pitch, yawCtrlDeg,
              gx, gy, gz, dt, RC_LPF_HZ,
              cmd.mode == FlightMode::ANGLE, imuOk},
-            tune);
+            nowUs);
+        flightController.Periodic();
+        rte::SignalSample<CascadedControlOutput> controlSignal{};
+        controllerOutputPort.receive(controlSignal);
+        const CascadedControlOutput& control = controlSignal.value;
         const float rollCmd = control.filteredRollCommand;
         const float pitchCmd = control.filteredPitchCommand;
         const float yawCmd = control.filteredYawCommand;
@@ -1730,8 +1762,12 @@ static void taskControl(void* /*pv*/)
             tune.throttle_cut,
             tune.idle_ramp_end
         };
-        const MotorMixerOutput mixed = motorMixer.update(
-            {cmd.throttle, rO, pO, yO, dt}, mixerConfig);
+        motorMixerConfigPort.send(mixerConfig, nowUs);
+        motorMixerInputPort.send({cmd.throttle, rO, pO, yO, dt}, nowUs);
+        motorMixer.Periodic();
+        rte::SignalSample<MotorMixerOutput> mixedSignal{};
+        motorMixerOutputPort.receive(mixedSignal);
+        const MotorMixerOutput& mixed = mixedSignal.value;
         const float thr = mixed.shapedThrottle;
         const float flPre = mixed.frontLeftPreSaturation;
         const float frPre = mixed.frontRightPreSaturation;
@@ -2275,7 +2311,9 @@ static void taskWiFi(void* /*pv*/)
         provideSpectrumJson, provideIdentityJson,
         flightLogCount, flightLogHeader, flightLogRowCsv, resetFlightLog
     };
-    wifiServiceTask.run(bindings, "ESP32-DRONE", "12345678");
+    wifiServiceAdapter.bind(bindings);
+    wifiServiceTask.configure("ESP32-DRONE", "12345678");
+    wifiServiceTask.run();
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -2297,6 +2335,10 @@ void setup()
 
     memset(&g_state,    0, sizeof(g_state));
     memset(&g_timing,   0, sizeof(g_timing));
+    attitudeEstimator.Init();
+    flightController.Init();
+    motorMixer.Init();
+    levelTrim.Init();
 
     batteryMonitor.begin(PIN_BATTERY_ADC,
                          BATTERY_CELL_COUNT,
@@ -2365,9 +2407,7 @@ void setup()
         DBG_PRINTLN(F("disabled/not found."));
     }
 
-    DBG_PRINT(F("[BOOT] CPU monitor... "));
-    cpuUtilization.begin(1000)
-        ? DBG_PRINTLN(F("OK")) : DBG_PRINTLN(F("idle-hook failed."));
+    DBG_PRINTLN(F("[BOOT] CPU monitor delegated to CpuServiceTask::Init."));
 
     DBG_PRINTLN(F("[BOOT] GPS (GY-GPS6MV2)..."));
     gps.begin(PIN_GPS_RX, PIN_GPS_TX, 9600);

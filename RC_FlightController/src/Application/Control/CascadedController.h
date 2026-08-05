@@ -6,6 +6,7 @@
 #include "LowPassFilter.h"
 #include "PidController.h"
 #include "../Configuration/TuningState.h"
+#include "../../Core/RtePorts.h"
 
 struct CascadedControlInput {
     float rollCommand;
@@ -53,13 +54,44 @@ struct CascadedControlOutput {
 
 // Portable flight-control SWC. It owns command-filter and yaw-hold state while
 // the injected PID instances retain their existing gains and diagnostic terms.
-class CascadedController {
+class CascadedController : public rte::SoftwareComponent {
 public:
     CascadedController(PidController& rateRoll, PidController& ratePitch,
                        PidController& rateYaw, PidController& angleRoll,
                        PidController& anglePitch, PidController& angleYaw)
         : rateRoll_(rateRoll), ratePitch_(ratePitch), rateYaw_(rateYaw),
           angleRoll_(angleRoll), anglePitch_(anglePitch), angleYaw_(angleYaw) {}
+
+    CascadedController(
+        PidController& rateRoll, PidController& ratePitch,
+        PidController& rateYaw, PidController& angleRoll,
+        PidController& anglePitch, PidController& angleYaw,
+        rte::SenderReceiverPort<CascadedControlInput>& inputPort,
+        rte::SenderReceiverPort<TuningState>& configPort,
+        rte::SenderReceiverPort<CascadedControlOutput>& outputPort)
+        : CascadedController(rateRoll, ratePitch, rateYaw, angleRoll,
+                             anglePitch, angleYaw) {
+        inputPort_ = &inputPort;
+        configPort_ = &configPort;
+        outputPort_ = &outputPort;
+    }
+
+    void Init() override {
+        reset();
+        if (outputPort_ != nullptr) outputPort_->invalidate();
+    }
+
+    void Periodic() override {
+        if (inputPort_ == nullptr || configPort_ == nullptr || outputPort_ == nullptr)
+            return;
+        rte::SignalSample<CascadedControlInput> input{};
+        rte::SignalSample<TuningState> config{};
+        if (!inputPort_->receive(input) || !configPort_->receive(config)) {
+            outputPort_->invalidate(input.timestampUs);
+            return;
+        }
+        outputPort_->send(update(input.value, config.value), input.timestampUs);
+    }
 
     CascadedControlOutput update(const CascadedControlInput& input,
                                  const TuningState& tuning) {
@@ -181,4 +213,7 @@ private:
     LowPassFilter yawCommandFilter_;
     float yawSetpointDeg_ = 0.0f;
     bool yawHoldActive_ = false;
+    rte::SenderReceiverPort<CascadedControlInput>* inputPort_ = nullptr;
+    rte::SenderReceiverPort<TuningState>* configPort_ = nullptr;
+    rte::SenderReceiverPort<CascadedControlOutput>* outputPort_ = nullptr;
 };

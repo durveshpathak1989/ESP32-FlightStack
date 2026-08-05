@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "../../Core/RtePorts.h"
+
 struct MotorMixerConfig {
     float throttleExpo;
     float throttleUpRatePerSecond;
@@ -38,8 +40,32 @@ struct MotorMixerOutput {
 
 // Portable, deterministic Quad-X mixer. It owns only throttle slew state and
 // performs no I/O, allocation, logging, or synchronization.
-class MotorMixer {
+class MotorMixer : public rte::SoftwareComponent {
 public:
+    MotorMixer() = default;
+    MotorMixer(rte::SenderReceiverPort<MotorMixerInput>& inputPort,
+               rte::SenderReceiverPort<MotorMixerConfig>& configPort,
+               rte::SenderReceiverPort<MotorMixerOutput>& outputPort)
+        : inputPort_(&inputPort), configPort_(&configPort),
+          outputPort_(&outputPort) {}
+
+    void Init() override {
+        reset();
+        if (outputPort_ != nullptr) outputPort_->invalidate();
+    }
+
+    void Periodic() override {
+        if (inputPort_ == nullptr || configPort_ == nullptr || outputPort_ == nullptr)
+            return;
+        rte::SignalSample<MotorMixerInput> input{};
+        rte::SignalSample<MotorMixerConfig> config{};
+        if (!inputPort_->receive(input) || !configPort_->receive(config)) {
+            outputPort_->invalidate(input.timestampUs);
+            return;
+        }
+        outputPort_->send(update(input.value, config.value), input.timestampUs);
+    }
+
     MotorMixerOutput update(const MotorMixerInput& input,
                             const MotorMixerConfig& config) {
         const float rawThrottle = clamp(input.throttle, 0.0f, 1.0f);
@@ -120,4 +146,7 @@ private:
     }
 
     float smoothedThrottle_ = 0.0f;
+    rte::SenderReceiverPort<MotorMixerInput>* inputPort_ = nullptr;
+    rte::SenderReceiverPort<MotorMixerConfig>* configPort_ = nullptr;
+    rte::SenderReceiverPort<MotorMixerOutput>* outputPort_ = nullptr;
 };
