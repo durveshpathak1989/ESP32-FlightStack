@@ -1291,8 +1291,8 @@ In file included from /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_F
 /home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/WiFiTelemetry/TelemetryWiFi.h:393:16: warning:   'uint32_t TelemetryWiFi::_requestCount' [-Wreorder]
   393 |     uint32_t   _requestCount;
       |                ^~~~~~~~~~~~~
-/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/WiFiTelemetry/TelemetryWiFi.cpp:49:1: warning:   when initialized here [-Wreorder]
-   49 | TelemetryWiFi::TelemetryWiFi(uint16_t port)
+/home/runner/work/ESP32-FlightStack/ESP32-FlightStack/RC_FlightController/src/Submodules/WiFiTelemetry/TelemetryWiFi.cpp:51:1: warning:   when initialized here [-Wreorder]
+   51 | TelemetryWiFi::TelemetryWiFi(uint16_t port)
       | ^~~~~~~~~~~~~
-Sketch uses 1158079 bytes (58%) of program storage space. Maximum is 1966080 bytes.
+Sketch uses 1158147 bytes (58%) of program storage space. Maximum is 1966080 bytes.
 Global variables use 77604 bytes (23%) of dynamic memory, leaving 250076 bytes for local variables. Maximum is 327680 bytes.
