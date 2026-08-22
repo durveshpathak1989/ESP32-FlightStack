@@ -12,5 +12,5 @@
  1e6a6caa11e3cfa96f5bf334634a1a6418cede67 RC_FlightController/src/Submodules/MotorControl (heads/master)
  2b888358cd21d21956b7abef3df0877abc521ca7 RC_FlightController/src/Submodules/NotchFilter (heads/master)
  570802c6d44a5b2176d634e9e06c92400dd1e21c RC_FlightController/src/Submodules/ToF (570802c)
- 0f041e3adc638fe6457c0d3717851698e71e2610 RC_FlightController/src/Submodules/WiFiTelemetry (0f041e3)
- 0c786217a8c4b08596669bd2af9e49623525dfb7 RC_FlightController/src/Submodules/iFly (heads/master)
+ 8675ed8e6cb22b133ec1b0578319b9661873b5af RC_FlightController/src/Submodules/WiFiTelemetry (heads/master)
+ f3c41a12662b1034f7f9e8538396b32f56aa26d9 RC_FlightController/src/Submodules/iFly (heads/master)

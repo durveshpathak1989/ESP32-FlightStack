@@ -4,7 +4,7 @@
 #define FW_NAME "RC_FlightController"
 #define FW_VERSION "V6.1.0"
 #define FW_SOURCE_BRANCH "master"
-#define FW_SOURCE_COMMIT "7cd155ce965c"
+#define FW_SOURCE_COMMIT "ff076b36bb61"
 #define FW_SOURCE_DIRTY 0
-#define FW_BUILD_ID "20260805T185411Z-master-7cd155ce965c"
-#define FW_BUILD_TIME_ISO "2026-08-05T18:54:11Z"
+#define FW_BUILD_ID "20260822T024727Z-master-ff076b36bb61"
+#define FW_BUILD_TIME_ISO "2026-08-22T02:47:27Z"
