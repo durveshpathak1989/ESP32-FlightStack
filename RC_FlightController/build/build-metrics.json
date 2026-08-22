@@ -2,21 +2,21 @@
   "schema_version": 2,
   "build": {
     "status": "success",
-    "generated_utc": "2026-08-22T02:49:40.194408+00:00",
+    "generated_utc": "2026-08-22T02:56:48.136777+00:00",
     "repository": "durveshpathak1989/ESP32-FlightStack",
     "source_branch": "master",
-    "source_commit": "ff076b36bb61e7f64dc6ab94cda631f2c4bec871",
-    "workflow_run_id": "32547153418",
-    "workflow_run_number": "30",
-    "workflow_run_url": "https://github.com/durveshpathak1989/ESP32-FlightStack/actions/runs/32547153418"
+    "source_commit": "a39bfdf00c060c329794527cfe446e0d90276d1e",
+    "workflow_run_id": "32547474222",
+    "workflow_run_number": "31",
+    "workflow_run_url": "https://github.com/durveshpathak1989/ESP32-FlightStack/actions/runs/32547474222"
   },
   "firmware_identity": {
     "name": "RC_FlightController",
     "version": "V6.1.0",
     "source_branch": "master",
-    "source_commit": "ff076b36bb61",
-    "build_id": "20260822T024727Z-master-ff076b36bb61",
-    "build_time_iso": "2026-08-22T02:47:27Z"
+    "source_commit": "a39bfdf00c06",
+    "build_id": "20260822T025503Z-master-a39bfdf00c06",
+    "build_time_iso": "2026-08-22T02:55:03Z"
   },
   "target": {
     "board_name": "ESP32 Dev Module",
@@ -65,7 +65,7 @@
       "file": "RC_FlightController.ino.bin",
       "variant": "release_mirror",
       "size_bytes": 1146672,
-      "sha256": "54765e62f0c90e9a163fec507721a2132aadfc0c64332152735729ddc1e9b62a",
+      "sha256": "647a938813ff4f863da04fca7ed8224f829530e575b435f8db4a768b02c629b4",
       "application_image": true,
       "merged_flash_image": false
     },
@@ -73,7 +73,7 @@
       "file": "RC_FlightController.ino.merged.bin",
       "variant": "release_mirror",
       "size_bytes": 4194304,
-      "sha256": "c014001b19edb8bd1a1d7a3b343b13023fbaac9154f9a605b27b4a801f007d72",
+      "sha256": "7254eac7cc00ad0dad2018ce3373b77234a65b823825eca6b29026b888899d8a",
       "application_image": false,
       "merged_flash_image": true
     },
@@ -81,7 +81,7 @@
       "file": "bin_debug/RC_FlightController.ino.bin",
       "variant": "debug",
       "size_bytes": 1158224,
-      "sha256": "78f507cfdfb6be16490cb8b4a0d6e99771f71fdfd3598b0d9d47eaa822cf69a1",
+      "sha256": "26d9ff9ffe59f8cf4c15d6d85c8e0162b9b65aeb6ccce5cd883ca4b0f897147f",
       "application_image": true,
       "merged_flash_image": false
     },
@@ -97,7 +97,7 @@
       "file": "bin_debug/RC_FlightController.ino.merged.bin",
       "variant": "debug",
       "size_bytes": 4194304,
-      "sha256": "c5e4ed318fb835c3278adf86a600650a2f3ac36d1b628642b08a8ba3eeadbfd2",
+      "sha256": "30194d405e92fb39b7284b2a00114550278ccaba0342844604a25deb63d75ba0",
       "application_image": false,
       "merged_flash_image": true
     },
@@ -113,7 +113,7 @@
       "file": "bin_release/RC_FlightController.ino.bin",
       "variant": "release",
       "size_bytes": 1146672,
-      "sha256": "54765e62f0c90e9a163fec507721a2132aadfc0c64332152735729ddc1e9b62a",
+      "sha256": "647a938813ff4f863da04fca7ed8224f829530e575b435f8db4a768b02c629b4",
       "application_image": true,
       "merged_flash_image": false
     },
@@ -129,7 +129,7 @@
       "file": "bin_release/RC_FlightController.ino.merged.bin",
       "variant": "release",
       "size_bytes": 4194304,
-      "sha256": "c014001b19edb8bd1a1d7a3b343b13023fbaac9154f9a605b27b4a801f007d72",
+      "sha256": "7254eac7cc00ad0dad2018ce3373b77234a65b823825eca6b29026b888899d8a",
       "application_image": false,
       "merged_flash_image": true
     },
