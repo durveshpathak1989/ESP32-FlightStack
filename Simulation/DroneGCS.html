@@ -1666,17 +1666,68 @@ function fmtGain(val,dp){
   return v.toFixed(places);
 }
 function syncI(id,val,dp){if(val==null)return;const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=fmtGain(val,dp);}
+function normSerialStick(us){
+  const v=(Number(us)-1500)/500;
+  return clamp(Number.isFinite(v)?v:0,-1,1);
+}
+function normSerialThrottle(us){
+  const lo=Number(CFG.thrMin)||1000;
+  const hi=Number(CFG.thrMax)||2000;
+  const span=Math.max(1,hi-lo);
+  const v=(Number(us)-lo)/span;
+  return clamp(Number.isFinite(v)?v:0,0,1);
+}
+function finishSerialParse(recordRow=true){
+  setParser(true);lastTelemMs=Date.now();
+  if(recordRow){appendLogRow();pushHist();postTelemetryToAiLearner();}
+  render();
+}
 
 function processLine(raw){
   const line=raw.trim();if(!line)return;
   const isCalLine=line.startsWith('[CAL]')||line.startsWith('[CAL-MGR]');
-  const cls=isCalLine?'lCAL':line.startsWith('[BOOT]')?'lBOOT':/^\[RC\]|^\[iBUS\]/.test(line)?'lRC':line.startsWith('[TUNE]')?'lTUNE':/^\[GPS\]/.test(line)?'lCAL':/^\[IMU\]|^\[NVS\]/.test(line)?'lIMU':/WARN|FAIL|FATAL|Timeout|ERROR/i.test(line)?'lWARN':/^\[/.test(line)?'lBOOT':/^[╔╚╠║╗╝╣═─]/.test(line)?'lCAL':/\|\s*R=/.test(line)?'lTELEM':'lOTHER';
+  const cls=isCalLine?'lCAL':line.startsWith('[BOOT]')?'lBOOT':/^\[RC\]|^\[iBUS\]/.test(line)?'lRC':line.startsWith('[TUNE]')?'lTUNE':/^\[GPS\]/.test(line)?'lCAL':/^\[IMU\]|^\[NVS\]/.test(line)?'lIMU':/WARN|FAIL|FATAL|Timeout|ERROR/i.test(line)?'lWARN':/^\[/.test(line)?'lBOOT':/^[╔╚╠║╗╝╣═─]/.test(line)?'lCAL':/\|\s*(?:RAW\s+)?R=/.test(line)?'lTELEM':'lOTHER';
   addCalLog(line,cls);
   if(isCalLine){const el=document.getElementById('calStage');el.textContent=line.replace('[CAL-MGR]','').replace('[CAL]','').trim();}
   const gm=line.match(/\[GPS\]\s+Fix\s+Lat=([\-\d.]+)\s+Lon=([\-\d.]+)\s+Alt=([\d.]+)m\s+Sats=(\d+)\s+HDOP=([\d.]+)\s+Speed=([\d.]+)km\/h\s+UTC=(\d+):(\d+):(\d+)/);
   if(gm){S.gpsValid=true;S.gpsLat=+gm[1];S.gpsLon=+gm[2];S.gpsAlt=+gm[3];S.gpsSats=+gm[4];S.gpsHdop=+gm[5];S.gpsSpd=+gm[6];S.gpsH=+gm[7];S.gpsM=+gm[8];S.gpsSec=+gm[9];S.gpsFix=1;}
   const ngm=line.match(/\[GPS\]\s+No fix\s+Sats=(\d+)/);
   if(ngm){S.gpsValid=false;S.gpsSats=+ngm[1];}
+  const ch=line.match(/CH:\s*1=\s*(\d+)\s+2=\s*(\d+)\s+3=\s*(\d+)\s+4=\s*(\d+)\s+5=\s*(\d+)\s+6=\s*(\d+)\s+7=\s*(\d+)\s+8=\s*(\d+)\s+9=\s*(\d+)\s+10=\s*(\d+)/);
+  if(ch){
+    S.rcCh1Us=+ch[1];S.rcCh2Us=+ch[2];S.rcCh3Us=+ch[3];S.rcCh4Us=+ch[4];S.rcCh5Us=+ch[5];
+    S.rcCh6Us=+ch[6];S.rcCh7Us=+ch[7];S.rcCh8Us=+ch[8];S.rcCh9Us=+ch[9];S.rcCh10Us=+ch[10];
+    S.rcRoll=normSerialStick(ch[1]);S.rcPitch=normSerialStick(ch[2]);S.thr=normSerialThrottle(ch[3]);S.rcYaw=normSerialStick(ch[4]);
+    S.armSwitchRawUs=S.rcCh7Us;S.modeSwitchRawUs=S.rcCh8Us;S.auxTune1RawUs=S.rcCh5Us;S.auxTune2RawUs=S.rcCh6Us;
+    finishSerialParse(false);return;
+  }
+  const sens=line.match(/SENS:\s*acc=([+\-]?[\d.]+)\s+([+\-]?[\d.]+)\s+([+\-]?[\d.]+)\s+g\s+\|\s+gyro=([+\-]?[\d.]+)\s+([+\-]?[\d.]+)\s+([+\-]?[\d.]+)\s+dps\s+\|\s+mag=([+\-]?[\d.]+)\s+([+\-]?[\d.]+)\s+([+\-]?[\d.]+)/);
+  if(sens){
+    S.ax=+sens[1];S.ay=+sens[2];S.az=+sens[3];
+    S.gx=+sens[4];S.gy=+sens[5];S.gz=+sens[6];
+    S.mx=+sens[7];S.my=+sens[8];S.mz=+sens[9];
+    finishSerialParse(false);return;
+  }
+  const num='([+\\-]?\\d+(?:\\.\\d+)?)';
+  const currentRe=new RegExp('^\\[\\s*(\\d+)\\s*\\]\\s+(\\S+)\\s*\\|\\s*RAW\\s+R=\\s*'+num+'\\s+P=\\s*'+num+'\\s+Y=\\s*'+num+
+    '\\s*\\|\\s*CTRL\\s+R=\\s*'+num+'\\s+P=\\s*'+num+'\\s+Y=\\s*'+num+
+    '\\s*\\|\\s*OFF\\s+R=\\s*'+num+'\\s+P=\\s*'+num+'\\s+Y=\\s*'+num+
+    '\\s*\\|\\s*MOT\\s+'+num+'\\s+'+num+'\\s+'+num+'\\s+'+num+
+    '\\s*\\|\\s*BMP\\s+'+num+'C\\s+'+num+'hPa\\s+'+num+'m\\s*\\|\\s*ToF\\s+(\\S+)\\s+'+num+'m\\s+obj=(\\d+)\\s+(\\d+)ms\\s*\\|\\s*GPS\\s+(\\S+)\\s+Sats=(\\d+)\\s*\\|\\s*Mag:(\\S+)\\s+Est:(\\S+)\\s+mKp='+num);
+  const cm0=line.match(currentRe);
+  if(cm0){
+    S.tick=+cm0[1];S.mode=nMode(cm0[2]);S.armed=S.mode!=='DISARMED'&&S.mode!=='FAILSAFE';
+    S.roll=+cm0[3];S.pitch=+cm0[4];S.yaw=+cm0[5];
+    S.rollCtrl=+cm0[6];S.pitchCtrl=+cm0[7];S.yawCtrl=+cm0[8];
+    S.rollOffset=+cm0[9];S.pitchOffset=+cm0[10];S.yawOffset=+cm0[11];
+    S.motFL=+cm0[12];S.motFR=+cm0[13];S.motRL=+cm0[14];S.motRR=+cm0[15];
+    const KV=CFG.kv,VBAT=CFG.cells*CFG.cellV;S.rpmFL=S.motFL*KV*VBAT;S.rpmFR=S.motFR*KV*VBAT;S.rpmRL=S.motRL*KV*VBAT;S.rpmRR=S.motRR*KV*VBAT;
+    S.bmpTemp=+cm0[16];S.bmpPressure=+cm0[17];S.bmpAlt=+cm0[18];S.bmpValid=true;
+    S.tofValid=cm0[19]==='OK';S.tofReady=cm0[19]!=='OFF';S.tofDistanceM=+cm0[20];S.tofObjectCount=+cm0[21];S.tofAgeMs=+cm0[22];
+    S.gpsValid=cm0[23]==='FIX';S.gpsSats=+cm0[24];S.magValid=cm0[25]==='9DOF';S.ahrsFilter=cm0[26];S.imuValid=true;
+    syncI('mKp',cm0[27],4);
+    finishSerialParse();return;
+  }
   const re=/\[\s*(\d+)\s*\]\s+(\S+)\s*\|.*R=\s*([+\-]?\d[\d.]*)\s+P=\s*([+\-]?\d[\d.]*)\s+Y=\s*([\d.]+).*T=([\d.]+)\s+R=([+\-]?\d[\d.]*)\s+P=([+\-]?\d[\d.]*)\s+Y=([+\-]?\d[\d.]*).*MOT\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+).*RC@([\d.]+)Hz/;
   const m=line.match(re);
   if(m){
@@ -1693,7 +1744,7 @@ function processLine(raw){
     const bm=line.match(/BMP\s+([\d.]+)C\s+([\d.]+)hPa\s+([\d.]+)m/);if(bm){S.bmpTemp=+bm[1];S.bmpPressure=+bm[2];S.bmpAlt=+bm[3];S.bmpValid=true;}
     const cm=line.match(/CPU\s+C0=([\d.]+)%\s+C1=([\d.]+)%/);if(cm){S.cpu0=+cm[1];S.cpu1=+cm[2];}
     const mm=line.match(/mKp=([\d.]+)/);if(mm)syncI('mKp',mm[1],4);
-    setParser(true);lastTelemMs=Date.now();appendLogRow();pushHist();postTelemetryToAiLearner();render();
+    finishSerialParse();
   }
 }
 function nMode(x){x=(x||'').toUpperCase();return x==='DISARMD'?'DISARMED':x==='FAILSFE'?'FAILSAFE':x;}
