@@ -290,7 +290,7 @@ Created by: Durvesh Pathak dp676@cornell.edu
   <div class="section">
     <h3>Test 7.5 — Runtime Tuning Levers</h3>
     <p style="color:#8b949e;font-size:11px;margin-bottom:10px">
-      Sends the full tuning set to /tune. Use while DISARMED first. This panel now covers pilot limits, PID authority, throttle shaping, rate PID, angle PID, yaw hold, and Mahony AHRS.
+      Sends the full tuning set to /tune. Use while DISARMED first. This panel now covers pilot limits, PID authority, throttle shaping, rate PID, angle PID, yaw hold, Mahony AHRS, and ToF altitude hold.
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
       <div class="section" style="margin:0"><h3>Command Limits</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
@@ -339,6 +339,11 @@ Created by: Durvesh Pathak dp676@cornell.edu
         <div><label>mahony_kp</label><input type="number" id="in-mkp" step="0.1" value="2.0"></div>
         <div><label>mahony_ki</label><input type="number" id="in-mki" step="0.001" value="0.005"></div>
       </div></div>
+      <div class="section" style="margin:0"><h3>ToF Altitude Hold</h3><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div><label>alt_hold_kp</label><input type="number" id="in-alt-hold-kp" step="0.001" value="0.080"></div>
+        <div><label>alt_hold_kd</label><input type="number" id="in-alt-hold-kd" step="0.001" value="0.040"></div>
+        <div><label>alt_hold_max_trim</label><input type="number" id="in-alt-hold-max-trim" step="0.001" value="0.120"></div>
+      </div></div>
     </div>
     <div class="row" style="margin-top:10px">
       <button class="btn btn-green" onclick="t75Send()">Send All Tuning Levers (Disarmed Test)</button>
@@ -363,6 +368,10 @@ Created by: Durvesh Pathak dp676@cornell.edu
       <div class="card"><h3>Yaw Hold Kp</h3><div class="val" id="t75-aykp">—</div></div>
       <div class="card"><h3>Mahony Kp</h3><div class="val" id="t75-mkp">—</div></div>
       <div class="card"><h3>Mahony Ki</h3><div class="val" id="t75-mki">—</div></div>
+      <div class="card"><h3>Alt Hold Kp</h3><div class="val" id="t75-ahkp">—</div></div>
+      <div class="card"><h3>Alt Hold Kd</h3><div class="val" id="t75-ahkd">—</div></div>
+      <div class="card"><h3>Alt Max Trim</h3><div class="val" id="t75-ahtrim">—</div></div>
+      <div class="card"><h3>Alt Hold State</h3><div class="val" id="t75-ahstate">—</div></div>
     </div>
   </div>
   <div class="section">
@@ -624,7 +633,7 @@ function setVal(id, val, cls) {
   const el = document.getElementById(id);
   if (!el) return;
   el.textContent = val;
-  if (cls) el.className = 'val ' + cls;
+  el.className = cls ? 'val ' + cls : 'val';
 }
 
 function fmtMaybe(v, dp=3) {
@@ -697,6 +706,11 @@ async function pollTelemetry() {
     setVal('t75-aykp', fmtMaybe(d.pidAngleYawKp ?? d.pid_angle_yaw_kp, 3));
     setVal('t75-mkp', fmtMaybe(d.mahonyKp, 4));
     setVal('t75-mki', fmtMaybe(d.mahonyKi, 5));
+    setVal('t75-ahkp', fmtMaybe(d.altHoldKp ?? d.alt_hold_kp, 3));
+    setVal('t75-ahkd', fmtMaybe(d.altHoldKd ?? d.alt_hold_kd, 3));
+    setVal('t75-ahtrim', fmtMaybe(d.altHoldMaxTrim ?? d.alt_hold_max_trim, 3));
+    const holdState = d.altitudeHoldActive ? 'ACTIVE' : d.altitudeHoldReady ? 'READY' : d.altitudeHoldRequested ? 'REQUESTED' : 'OFF';
+    setVal('t75-ahstate', holdState, d.altitudeHoldActive ? 'ok' : d.altitudeHoldReady ? 'warn' : '');
 
     // Test 7.6 BMP live
     setVal('t76-valid', d.bmpValid?'YES':'NO', d.bmpValid?'ok':'err');
@@ -1007,7 +1021,10 @@ const T75_MAP = {
     pid_angle_pitch_kd: 'in-angle-pitch-kd',
     pid_angle_yaw_kp: 'in-angle-yaw-kp',
     mahony_kp: 'in-mkp',
-    mahony_ki: 'in-mki'
+    mahony_ki: 'in-mki',
+    alt_hold_kp: 'in-alt-hold-kp',
+    alt_hold_kd: 'in-alt-hold-kd',
+    alt_hold_max_trim: 'in-alt-hold-max-trim'
 };
 
 function t75BuildPayload() {

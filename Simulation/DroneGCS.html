@@ -703,12 +703,21 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
     <div class="tune-row"><span>Freq Hz</span><input class="tval" id="notchFreqHz" value="105.38"><button class="tapply" onclick="sendSingle('notch_freq_hz','notchFreqHz')">SET</button></div>
     <div class="tune-row"><span>Q</span><input class="tval" id="notchQ" value="10.0"><button class="tapply" onclick="sendSingle('notch_q','notchQ')">SET</button></div>
 
+    <div class="sec-title" style="margin-top:12px">TOF ALTITUDE HOLD</div>
+    <div class="tune-row"><span>Hold Kp</span><input class="tval" id="altHoldKp" value="0.080"><button class="tapply" onclick="sendSingle('alt_hold_kp','altHoldKp')">SET</button></div>
+    <div class="tune-row"><span>Hold Kd</span><input class="tval" id="altHoldKd" value="0.040"><button class="tapply" onclick="sendSingle('alt_hold_kd','altHoldKd')">SET</button></div>
+    <div class="tune-row"><span>Max Trim</span><input class="tval" id="altHoldMaxTrim" value="0.120"><button class="tapply" onclick="sendSingle('alt_hold_max_trim','altHoldMaxTrim')">SET</button></div>
+
     <div class="sec-title" style="margin-top:12px">LIVE VALUES</div>
     <div class="data-row"><span class="dn">mKp</span><span class="dv" id="smKp">—</span></div>
     <div class="data-row"><span class="dn">mKi</span><span class="dv" id="smKi">—</span></div>
     <div class="data-row"><span class="dn">rKp</span><span class="dv" id="srKp">—</span></div>
     <div class="data-row"><span class="dn">Notch</span><span class="dv" id="sNotch">—</span></div>
     <div class="data-row"><span class="dn">EKF R</span><span class="dv" id="sEkfR">—</span></div>
+    <div class="data-row"><span class="dn">Alt Hold</span><span class="dv" id="sAltHold">—</span></div>
+    <div class="data-row"><span class="dn">ToF</span><span class="dv" id="sTofAlt">—</span></div>
+    <div class="data-row"><span class="dn">EKF Z</span><span class="dv" id="sEkfZ">—</span></div>
+    <div class="data-row"><span class="dn">Trim</span><span class="dv" id="sAltTrim">—</span></div>
     <div id="tuneStatusTune" style="margin-top:8px;font-size:11px;color:var(--t3)">Wi-Fi only · DISARM first</div>
     <button class="apply-all-btn" onclick="sendAllGains()">💾 SAVE ALL TUNING TO DRONE (NVS)</button>
   </div>
@@ -861,7 +870,7 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
       <div class="cfg-section">
         <div class="cfg-row"><span class="cfg-lbl">Stick Deadband<small>µs around 1500 centre — default 30</small></span><input class="cfg-inp" id="cfg-deadband" value="30" type="number" min="0" max="150" step="5"></div>
         <div class="cfg-row"><span class="cfg-lbl">Arm Threshold<small>µs — CH5 above this = ARMED</small></span><input class="cfg-inp" id="cfg-armthr" value="1700" type="number" min="1500" max="2000" step="10"></div>
-        <div class="cfg-row"><span class="cfg-lbl">Calib Trigger<small>µs — VrA above this = calib request</small></span><input class="cfg-inp" id="cfg-calthr" value="1700" type="number" min="1500" max="2000" step="10"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Calib Trigger<small>µs - disarmed calib, armed altitude hold</small></span><input class="cfg-inp" id="cfg-calthr" value="1700" type="number" min="1500" max="2000" step="10"></div>
         <div class="cfg-row"><span class="cfg-lbl">Failsafe Timeout<small>ms — no signal → FAILSAFE</small></span><input class="cfg-inp" id="cfg-failsafe" value="500" type="number" min="100" max="5000" step="100"></div>
         <div class="cfg-row"><span class="cfg-lbl">Throttle Min<small>µs — zero throttle</small></span><input class="cfg-inp" id="cfg-thrmin" value="1000" type="number" min="800" max="1200" step="10"></div>
         <div class="cfg-row"><span class="cfg-lbl">Throttle Max<small>µs — full throttle</small></span><input class="cfg-inp" id="cfg-thrmax" value="2000" type="number" min="1800" max="2200" step="10"></div>
@@ -898,6 +907,9 @@ canvas#cmp{border-radius:6px;border:1px solid var(--sep)}
         <div class="cfg-row"><span class="cfg-lbl">Mag Declination<small>degrees; optional true-north correction</small></span><input class="cfg-inp" id="cfg-ekfdecl" value="0.0" type="number" min="-30" max="30" step="0.1"></div>
         <div class="cfg-row"><span class="cfg-lbl">Mag Yaw Offset<small>degrees; bench heading trim</small></span><input class="cfg-inp" id="cfg-ekfmagoff" value="0.0" type="number" min="-180" max="180" step="1"></div>
         <div class="cfg-row"><span class="cfg-lbl">Mag Yaw Sign<small>use -1 if yaw correction is reversed</small></span><input class="cfg-inp" id="cfg-ekfmagsign" value="1" type="number" min="-1" max="1" step="2"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Alt Hold Kp<small>throttle trim per metre of EKF Z error</small></span><input class="cfg-inp" id="cfg-altholdkp" value="0.080" type="number" min="0" max="0.5" step="0.001"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Alt Hold Kd<small>damps vertical velocity from ToF-corrected EKF</small></span><input class="cfg-inp" id="cfg-altholdkd" value="0.040" type="number" min="0" max="0.5" step="0.001"></div>
+        <div class="cfg-row"><span class="cfg-lbl">Alt Hold Max Trim<small>maximum throttle offset added by hold</small></span><input class="cfg-inp" id="cfg-altholdmaxtrim" value="0.120" type="number" min="0" max="0.3" step="0.001"></div>
       </div>
     </div>
 
@@ -968,6 +980,7 @@ const CFG_DEFAULTS = {
   notchEnable:1, notchFreqHz:105.38, notchQ:10.0,
   ekfAngleQ:0.0008, ekfBiasQ:0.000001, ekfAccelR:0.400, ekfMagR:0.200,
   ekfMagDeclinationDeg:0.0, ekfMagYawOffsetDeg:0.0, ekfMagYawSign:1,
+  altHoldKp:0.080, altHoldKd:0.040, altHoldMaxTrim:0.120,
   dshot:300, dshotMin:48, dshotMax:2047, bidir:0,
   wifiIp:'192.168.4.1', pollMs:250, plotBuf:300, gpsTrack:3000
 };
@@ -993,10 +1006,16 @@ function applyCfgToInputs(){
     'cfg-notchen':'notchEnable','cfg-notchhz':'notchFreqHz','cfg-notchq':'notchQ',
     'cfg-ekfangq':'ekfAngleQ','cfg-ekfbiasq':'ekfBiasQ','cfg-ekfaccr':'ekfAccelR','cfg-ekfmagr':'ekfMagR',
     'cfg-ekfdecl':'ekfMagDeclinationDeg','cfg-ekfmagoff':'ekfMagYawOffsetDeg','cfg-ekfmagsign':'ekfMagYawSign',
+    'cfg-altholdkp':'altHoldKp','cfg-altholdkd':'altHoldKd','cfg-altholdmaxtrim':'altHoldMaxTrim',
     'cfg-dshot':'dshot','cfg-dshotmin':'dshotMin','cfg-dshotmax':'dshotMax','cfg-bidir':'bidir',
     'cfg-ip':'wifiIp','cfg-poll':'pollMs','cfg-plotbuf':'plotBuf','cfg-gpstrk':'gpsTrack'
   };
   for(const [id,key] of Object.entries(map)){const el=document.getElementById(id);if(el)el.value=CFG[key];}
+}
+function cfgNum(id,fallback){
+  const el=document.getElementById(id);
+  const v=Number(el?el.value:NaN);
+  return Number.isFinite(v)?v:fallback;
 }
 function readCfgFromInputs(){
   CFG.kv       = +document.getElementById('cfg-kv').value||920;
@@ -1032,6 +1051,9 @@ function readCfgFromInputs(){
   CFG.ekfMagDeclinationDeg = +document.getElementById('cfg-ekfdecl').value||0.0;
   CFG.ekfMagYawOffsetDeg   = +document.getElementById('cfg-ekfmagoff').value||0.0;
   CFG.ekfMagYawSign        = +document.getElementById('cfg-ekfmagsign').value||1;
+  CFG.altHoldKp       = cfgNum('cfg-altholdkp',0.080);
+  CFG.altHoldKd       = cfgNum('cfg-altholdkd',0.040);
+  CFG.altHoldMaxTrim  = cfgNum('cfg-altholdmaxtrim',0.120);
   CFG.dshot    = +document.getElementById('cfg-dshot').value||300;
   CFG.dshotMin = +document.getElementById('cfg-dshotmin').value||48;
   CFG.dshotMax = +document.getElementById('cfg-dshotmax').value||2047;
@@ -1081,6 +1103,7 @@ function saveConfig(){
   setTimeout(()=>{el.textContent='Config active';el.style.color='var(--t3)';},2500);
   // Sync mahony inputs in TUNE tab
   syncI('mKp',CFG.mahonyKp,4);syncI('mKi',CFG.mahonyKi,5);
+  syncI('altHoldKp',CFG.altHoldKp,3);syncI('altHoldKd',CFG.altHoldKd,3);syncI('altHoldMaxTrim',CFG.altHoldMaxTrim,3);
   addCalLog('[CFG] Config saved — KV='+CFG.kv+' cells='+CFG.cells+'S vbat='+( CFG.cells*CFG.cellV).toFixed(1)+'V','lTUNE');
 }
 async function pushConfigToDrone(){
@@ -1122,7 +1145,10 @@ async function pushConfigToDrone(){
     ekf_mag_r:        CFG.ekfMagR,
     ekf_mag_declination_deg: CFG.ekfMagDeclinationDeg,
     ekf_mag_yaw_offset_deg:  CFG.ekfMagYawOffsetDeg,
-    ekf_mag_yaw_sign:        CFG.ekfMagYawSign
+    ekf_mag_yaw_sign:        CFG.ekfMagYawSign,
+    alt_hold_kp:      CFG.altHoldKp,
+    alt_hold_kd:      CFG.altHoldKd,
+    alt_hold_max_trim:CFG.altHoldMaxTrim
   };
   await postTune(payload);
   el.textContent='✓ Saved permanently to drone';el.style.color='var(--green)';
@@ -1158,6 +1184,10 @@ const S={
   armingTransitionCount:0,lastArmChangeMs:0,throttleLow:false,controlAuthorityRemaining:0,
   rollOutputLimited:false,pitchOutputLimited:false,yawOutputLimited:false,rateOutputLimited:false,
   bmpTemp:NaN,bmpPressure:NaN,bmpAlt:NaN,bmpValid:false,
+  tofDistanceM:NaN,tofAgeMs:NaN,tofValid:false,tofReady:false,
+  ekfPosZM:NaN,ekfVelZMps:NaN,tofEkfAgeMs:NaN,tofEkfVelocityAccepted:false,
+  altitudeHoldRequested:false,altitudeHoldReady:false,altitudeHoldActive:false,
+  altitudeHoldSetpointM:NaN,altitudeHoldErrorM:NaN,altitudeHoldThrottleTrim:0,
   cpu0:NaN,cpu1:NaN,
   gpsValid:false,gpsLat:0,gpsLon:0,gpsAlt:0,gpsSpd:0,gpsCrs:0,
   gpsSats:0,gpsHdop:0,gpsFix:0,gpsH:0,gpsM:0,gpsSec:0
@@ -1568,6 +1598,13 @@ function applyJson(j){
   S.yawOutputLimited=!!j.yawOutputLimited;S.rateOutputLimited=!!j.rateOutputLimited;
   S.bmpTemp=+j.bmpTempC;S.bmpPressure=+j.bmpPressureHpa;S.bmpAlt=+j.bmpAltitudeM;
   S.bmpValid=!!j.bmpValid;S.cpu0=+j.cpuCore0;S.cpu1=+j.cpuCore1;
+  S.tofDistanceM=Number(j.tofDistanceM);S.tofAgeMs=Number(j.tofAgeMs);
+  S.tofValid=!!j.tofValid;S.tofReady=!!j.tofReady;
+  S.ekfPosZM=Number(j.ekfPosZM);S.ekfVelZMps=Number(j.ekfVelZMps);S.tofEkfAgeMs=Number(j.tofEkfAgeMs);
+  S.tofEkfVelocityAccepted=!!j.tofEkfVelocityAccepted;
+  S.altitudeHoldRequested=!!j.altitudeHoldRequested;S.altitudeHoldReady=!!j.altitudeHoldReady;S.altitudeHoldActive=!!j.altitudeHoldActive;
+  S.altitudeHoldSetpointM=Number(j.altitudeHoldSetpointM);S.altitudeHoldErrorM=Number(j.altitudeHoldErrorM);
+  S.altitudeHoldThrottleTrim=Number(j.altitudeHoldThrottleTrim)||0;
   S.gpsValid=!!j.gpsValid;S.gpsLat=+j.gpsLat||0;S.gpsLon=+j.gpsLon||0;
   S.gpsAlt=+j.gpsAltM||0;S.gpsSpd=+j.gpsSpeedKmh||0;S.gpsCrs=+j.gpsCourse||0;
   S.gpsSats=+j.gpsSats||0;S.gpsHdop=+j.gpsHdop||0;S.gpsFix=+j.gpsQuality||0;
@@ -1591,8 +1628,27 @@ function applyJson(j){
   S.notchEnable=!!j.notchEnable;S.notchFreqHz=+j.notchFreqHz||0;S.notchQ=+j.notchQ||0;
   syncI('ekfAngleQ',j.ekfAngleQ,6);syncI('ekfBiasQ',j.ekfBiasQ,6);syncI('ekfAccelR',j.ekfAccelR,3);syncI('ekfMagR',j.ekfMagR,3);
   syncI('ekfMagYawOffset',j.ekfMagYawOffsetDeg,2);syncI('ekfMagYawSign',j.ekfMagYawSign,0);
+  syncI('altHoldKp',j.altHoldKp ?? j.alt_hold_kp,3);syncI('altHoldKd',j.altHoldKd ?? j.alt_hold_kd,3);syncI('altHoldMaxTrim',j.altHoldMaxTrim ?? j.alt_hold_max_trim,3);
   if(j.notchFreqHz!=null)setText('sNotch',(j.notchEnable?'ON ':'OFF ')+Number(j.notchFreqHz).toFixed(0)+'Hz Q'+Number(j.notchQ||0).toFixed(1));
   if(j.ekfAccelR!=null)setText('sEkfR','A '+Number(j.ekfAccelR).toFixed(3)+' M '+Number(j.ekfMagR||0).toFixed(3));
+  if(j.altitudeHoldActive!=null||j.altitudeHoldReady!=null||j.altitudeHoldRequested!=null){
+    const hold=j.altitudeHoldActive?'ACTIVE':j.altitudeHoldReady?'READY':j.altitudeHoldRequested?'REQUESTED':'OFF';
+    setText('sAltHold',hold);
+  }
+  if(j.tofDistanceM!=null){
+    const tof=Number(j.tofDistanceM);
+    const age=Number(j.tofAgeMs);
+    setText('sTofAlt',(Number.isFinite(tof)?tof.toFixed(2)+' m':'--')+(Number.isFinite(age)?' / '+age.toFixed(0)+'ms':''));
+  }
+  if(j.ekfPosZM!=null||j.ekfVelZMps!=null){
+    const z=Number(j.ekfPosZM),vz=Number(j.ekfVelZMps);
+    setText('sEkfZ',(Number.isFinite(z)?z.toFixed(2)+' m':'--')+' / '+(Number.isFinite(vz)?vz.toFixed(2)+' m/s':'--'));
+  }
+  if(j.altitudeHoldThrottleTrim!=null){
+    const trim=Number(j.altitudeHoldThrottleTrim);
+    const err=Number(j.altitudeHoldErrorM);
+    setText('sAltTrim',(Number.isFinite(trim)?trim.toFixed(3):'--')+(Number.isFinite(err)?' err '+err.toFixed(2)+'m':''));
+  }
   if(j.pidRollKp!=null)setText('srKp',fmtGain(j.pidRollKp,4));
   lastTelemMs=Date.now();appendLogRow();pushHist();postTelemetryToAiLearner();render();
 }
@@ -1730,6 +1786,7 @@ async function sendAllGains(){
     notch_enable:'notchEnable', notch_freq_hz:'notchFreqHz', notch_q:'notchQ',
     ekf_angle_q:'ekfAngleQ', ekf_bias_q:'ekfBiasQ', ekf_accel_r:'ekfAccelR', ekf_mag_r:'ekfMagR',
     ekf_mag_yaw_offset_deg:'ekfMagYawOffset', ekf_mag_yaw_sign:'ekfMagYawSign',
+    alt_hold_kp:'altHoldKp', alt_hold_kd:'altHoldKd', alt_hold_max_trim:'altHoldMaxTrim',
     notch_enable:'notchEnable',notch_freq_hz:'notchFreqHz',notch_q:'notchQ',
     ekf_angle_q:'ekfAngleQ',ekf_bias_q:'ekfBiasQ',ekf_accel_r:'ekfAccelR',ekf_mag_r:'ekfMagR',
     ekf_mag_yaw_offset_deg:'ekfMagYawOffset',ekf_mag_yaw_sign:'ekfMagYawSign'
