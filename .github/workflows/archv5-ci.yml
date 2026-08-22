@@ -1,0 +1,27 @@
+name: ArchV5 Portable CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - ArchV5
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run ArchV5 host tests
+        run: cd tests && make test_all
+
+  no-platform-leaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check Services/Core platform includes
+        run: |
+          if grep -R -n -E '#include.*(Arduino|FreeRTOS|esp_)' RC_FlightController/src/Services RC_FlightController/src/Core; then
+            echo "Platform include leak detected"
+            exit 1
+          fi

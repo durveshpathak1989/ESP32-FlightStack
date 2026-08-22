@@ -1,5 +1,24 @@
 # FlightStack Architecture
 
+## ArchV5 DSAR layer map
+
+ArchV5 introduces a DSAR stack alongside the current flight-tested sketch:
+
+```text
+Application      FlightApplication, ModeManager, FailsafePolicy
+Services         Pure control, estimation, navigation, diagnostics algorithms
+Components       SWC wrappers, rate contracts, data conversion
+Platform         ESP32 clock, storage, Wi-Fi, composition root
+HAL / Drivers    Existing MPU9250, BMP280, GPS, iBUS, motor PWM modules
+Hardware         ESP32, sensors, radio, ESCs, battery
+```
+
+The existing `RC_FlightController.ino` remains the flight-proven entry point
+until hardware regression testing signs off on the new orchestration path.
+ArchV5 code lives under `RC_FlightController/src/Services`,
+`RC_FlightController/src/Components`, `RC_FlightController/src/Application`,
+and `RC_FlightController/src/Platforms`.
+
 ## Goal
 
 The flight algorithms should be understandable and testable without knowing
@@ -98,8 +117,9 @@ a controller should require:
 
 ## Current migration status
 
-The project now has portable flight types and initial hardware contracts.
-`FlightConfig.h` is the single beginner-facing location for board pins and safe
-defaults. `PidController.h` is portable standard C++ and no longer lives inside
-the Arduino sketch. Existing concrete drivers are still called directly from
-the sketch; moving them behind ESP32 adapters is the next migration phase.
+The project now has versioned ArchV5 data contracts, portable service-layer
+SWCs, component wrappers, a ModeManager, a FlightApplication orchestration
+path, and ESP32/host composition scaffolding. Existing concrete drivers are
+still called directly from the flight-tested sketch; moving the sketch to the
+new `FlightApplication` path requires props-off bench tests and flight
+regression tests.
