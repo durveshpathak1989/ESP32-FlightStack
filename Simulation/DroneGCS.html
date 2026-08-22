@@ -1418,9 +1418,20 @@ const wifiUrl='http://192.168.4.1/telemetry',tuneUrl='http://192.168.4.1/tune';
 const aiUrl='http://127.0.0.1:8765';
 let aiLearningOn=true,lastAiPostMs=0,latestAiBias=null;
 let simTimer=null,simT=0,simMode='OFF',lastTelemMs=0;
-let parserFailCount=0,lastParserOkMs=0,lastParserError='';
+let lastParserOkMs=0,lastTelemetryMiss='';
 const td=new TextDecoder();
-setInterval(()=>{const a=lastTelemMs?Date.now()-lastTelemMs:null;setText('sAge',a?a+'ms':'—');},300);
+function markTelemetryMiss(reason=''){
+  lastTelemetryMiss=reason||lastTelemetryMiss||'telemetry poll missed';
+  const el=document.getElementById('sAge');if(el)el.title=lastTelemetryMiss;
+}
+setInterval(()=>{
+  const a=lastTelemMs?Date.now()-lastTelemMs:null;
+  const el=document.getElementById('sAge');if(!el)return;
+  if(!a){el.textContent='—';el.style.color='';return;}
+  const staleAt=Math.max(1500,(Number(CFG.pollMs)||250)*4);
+  el.textContent=a+'ms';el.style.color=a>staleAt?'var(--orange)':'';
+  if(a<=staleAt)el.title='';
+},300);
 
 function toggleAiLearning(){
   aiLearningOn=!aiLearningOn;
@@ -1525,7 +1536,7 @@ async function pollIdentity(){
 async function pollWifi(){
   if(!wifiOn)return;
   try{const r=await fetch(wifiUrl2,{cache:'no-store'});const j=await r.json();if(!j.ok)throw new Error(j.error||'bad');applyJson(j);setParser(true);}
-  catch(e){setParser(false,e.message||'poll failed');}
+  catch(e){markTelemetryMiss(e.message||'poll failed');}
 }
 async function pollWifiLog(){
   if(!wifiOn)return;
@@ -1762,19 +1773,11 @@ function nMode(x){x=(x||'').toUpperCase();return x==='DISARMD'?'DISARMED':x==='F
 function setParser(ok,reason=''){
   const el=document.getElementById('sParse');if(!el)return;
   if(ok){
-    parserFailCount=0;lastParserOkMs=Date.now();lastParserError='';
+    lastParserOkMs=Date.now();
     el.textContent='OK';el.style.color='var(--green)';el.title='';
     return;
   }
-  parserFailCount++;
-  lastParserError=reason||lastParserError||'no match';
-  const staleMs=lastParserOkMs?Date.now()-lastParserOkMs:Infinity;
-  const hardFail=parserFailCount>=3||staleMs>Math.max(1500,(Number(CFG.pollMs)||250)*4);
-  if(hardFail){
-    el.textContent='NO MATCH';el.style.color='var(--red)';el.title=lastParserError;
-  }else{
-    el.textContent='OK';el.style.color='var(--green)';el.title='Transient telemetry miss: '+lastParserError;
-  }
+  el.textContent='NO MATCH';el.style.color='var(--red)';el.title=reason||'telemetry parser did not match input';
 }
 
 const MAX_LOG=500;let calCount=0;
