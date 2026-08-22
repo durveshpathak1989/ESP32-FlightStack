@@ -1184,7 +1184,7 @@ const S={
   armingTransitionCount:0,lastArmChangeMs:0,throttleLow:false,controlAuthorityRemaining:0,
   rollOutputLimited:false,pitchOutputLimited:false,yawOutputLimited:false,rateOutputLimited:false,
   bmpTemp:NaN,bmpPressure:NaN,bmpAlt:NaN,bmpValid:false,
-  tofDistanceM:NaN,tofAgeMs:NaN,tofValid:false,tofReady:false,
+  tofDistanceM:NaN,tofDistanceMm:0,tofRangeStatus:0,tofObjectCount:0,tofStreamCount:0,tofSignalMcps:NaN,tofAmbientMcps:NaN,tofAgeMs:NaN,tofLastUpdateMs:0,tofValid:false,tofReady:false,
   ekfPosZM:NaN,ekfVelZMps:NaN,tofEkfAgeMs:NaN,tofEkfVelocityAccepted:false,
   altitudeHoldRequested:false,altitudeHoldReady:false,altitudeHoldActive:false,
   altitudeHoldSetpointM:NaN,altitudeHoldErrorM:NaN,altitudeHoldThrottleTrim:0,
@@ -1306,6 +1306,9 @@ const LOG_COLUMNS=[
   'motorFL_preSat','motorFR_preSat','motorRL_preSat','motorRR_preSat',
   'motorFL_postSat','motorFR_postSat','motorRL_postSat','motorRR_postSat',
   'motorFL_cmd','motorFR_cmd','motorRL_cmd','motorRR_cmd','motorSaturated','satFL','satFR','satRL','satRR','controlAuthorityRemaining',
+  'tofDistance_m','tofDistance_mm','tofRangeStatus','tofObjectCount','tofStreamCount','tofSignal_mcps','tofAmbient_mcps','tofAge_ms','tofLastUpdate_ms','tofReady','tofValid',
+  'ekfPosZ_m','ekfVelZ_mps','tofEkfAge_ms','tofEkfVelocityAccepted',
+  'altHoldRequested','altHoldReady','altHoldActive','altHoldSetpoint_m','altHoldError_m','altHoldThrottleTrim',
   'accelVibeRms_g','gyroVibeRms_dps','dominantVibeFreq_Hz','dominantVibeMag','notchEnabled','notchCenterHz','notchQ',
   'batteryVoltage_V','batteryAdcCounts','batterySag_V',
   'loopPeriod_us','loopJitter_us','imuRead_us','ahrsUpdate_us','controlUpdate_us','motorWrite_us','wifiService_us','onboardLogWrite_us',
@@ -1356,6 +1359,9 @@ function appendLogRow(){
     logFixed(S.motorFLPreSat,4),logFixed(S.motorFRPreSat,4),logFixed(S.motorRLPreSat,4),logFixed(S.motorRRPreSat,4),
     logFixed(S.motFL,4),logFixed(S.motFR,4),logFixed(S.motRL,4),logFixed(S.motRR,4),
     logFixed(S.motFL,4),logFixed(S.motFR,4),logFixed(S.motRL,4),logFixed(S.motRR,4),logBool(S.motorSaturated),logBool(satAny),logBool(satAny),logBool(satAny),logBool(satAny),logFixed(S.controlAuthorityRemaining,6),
+    logFixed(S.tofDistanceM,4),S.tofDistanceMm||0,S.tofRangeStatus||0,S.tofObjectCount||0,S.tofStreamCount||0,logFixed(S.tofSignalMcps,4),logFixed(S.tofAmbientMcps,4),S.tofAgeMs||0,S.tofLastUpdateMs||0,logBool(S.tofReady),logBool(S.tofValid),
+    logFixed(S.ekfPosZM,4),logFixed(S.ekfVelZMps,4),S.tofEkfAgeMs||0,logBool(S.tofEkfVelocityAccepted),
+    logBool(S.altitudeHoldRequested),logBool(S.altitudeHoldReady),logBool(S.altitudeHoldActive),logFixed(S.altitudeHoldSetpointM,4),logFixed(S.altitudeHoldErrorM,4),logFixed(S.altitudeHoldThrottleTrim,5),
     logFixed(S.accelVibeRmsG,5),logFixed(S.gyroVibeRmsDps,4),logFixed(S.dominantVibeFreqHz,2),logFixed(S.dominantVibeMag,5),logBool(S.notchEnable),logFixed(S.notchFreqHz,2),logFixed(S.notchQ,2),
     logFixed(S.batteryVoltageV,3),S.batteryAdcCounts||0,logFixed(S.batterySagV,3),
     S.loopPeriodUs||0,S.loopJitterUs||0,S.imuReadUs||0,S.ahrsUpdateUs||0,S.controlUpdateUs||0,S.motorWriteUs||0,S.wifiServiceUs||0,S.onboardLogWriteUs||0,
@@ -1412,6 +1418,7 @@ const wifiUrl='http://192.168.4.1/telemetry',tuneUrl='http://192.168.4.1/tune';
 const aiUrl='http://127.0.0.1:8765';
 let aiLearningOn=true,lastAiPostMs=0,latestAiBias=null;
 let simTimer=null,simT=0,simMode='OFF',lastTelemMs=0;
+let parserFailCount=0,lastParserOkMs=0,lastParserError='';
 const td=new TextDecoder();
 setInterval(()=>{const a=lastTelemMs?Date.now()-lastTelemMs:null;setText('sAge',a?a+'ms':'—');},300);
 
@@ -1517,7 +1524,8 @@ async function pollIdentity(){
 }
 async function pollWifi(){
   if(!wifiOn)return;
-  try{const r=await fetch(wifiUrl2,{cache:'no-store'});const j=await r.json();if(!j.ok)throw new Error(j.error||'bad');applyJson(j);setParser(true);}catch(e){setParser(false);}
+  try{const r=await fetch(wifiUrl2,{cache:'no-store'});const j=await r.json();if(!j.ok)throw new Error(j.error||'bad');applyJson(j);setParser(true);}
+  catch(e){setParser(false,e.message||'poll failed');}
 }
 async function pollWifiLog(){
   if(!wifiOn)return;
@@ -1598,7 +1606,10 @@ function applyJson(j){
   S.yawOutputLimited=!!j.yawOutputLimited;S.rateOutputLimited=!!j.rateOutputLimited;
   S.bmpTemp=+j.bmpTempC;S.bmpPressure=+j.bmpPressureHpa;S.bmpAlt=+j.bmpAltitudeM;
   S.bmpValid=!!j.bmpValid;S.cpu0=+j.cpuCore0;S.cpu1=+j.cpuCore1;
-  S.tofDistanceM=Number(j.tofDistanceM);S.tofAgeMs=Number(j.tofAgeMs);
+  S.tofDistanceM=Number(j.tofDistanceM);S.tofDistanceMm=+j.tofDistanceMm||0;S.tofRangeStatus=+j.tofRangeStatus||0;
+  S.tofObjectCount=+j.tofObjectCount||0;S.tofStreamCount=+j.tofStreamCount||0;
+  S.tofSignalMcps=Number(j.tofSignalMcps);S.tofAmbientMcps=Number(j.tofAmbientMcps);
+  S.tofAgeMs=Number(j.tofAgeMs);S.tofLastUpdateMs=+j.tofLastUpdateMs||0;
   S.tofValid=!!j.tofValid;S.tofReady=!!j.tofReady;
   S.ekfPosZM=Number(j.ekfPosZM);S.ekfVelZMps=Number(j.ekfVelZMps);S.tofEkfAgeMs=Number(j.tofEkfAgeMs);
   S.tofEkfVelocityAccepted=!!j.tofEkfVelocityAccepted;
@@ -1723,7 +1734,7 @@ function processLine(raw){
     S.motFL=+cm0[12];S.motFR=+cm0[13];S.motRL=+cm0[14];S.motRR=+cm0[15];
     const KV=CFG.kv,VBAT=CFG.cells*CFG.cellV;S.rpmFL=S.motFL*KV*VBAT;S.rpmFR=S.motFR*KV*VBAT;S.rpmRL=S.motRL*KV*VBAT;S.rpmRR=S.motRR*KV*VBAT;
     S.bmpTemp=+cm0[16];S.bmpPressure=+cm0[17];S.bmpAlt=+cm0[18];S.bmpValid=true;
-    S.tofValid=cm0[19]==='OK';S.tofReady=cm0[19]!=='OFF';S.tofDistanceM=+cm0[20];S.tofObjectCount=+cm0[21];S.tofAgeMs=+cm0[22];
+    S.tofValid=cm0[19]==='OK';S.tofReady=cm0[19]!=='OFF';S.tofDistanceM=+cm0[20];S.tofDistanceMm=Math.round(S.tofDistanceM*1000);S.tofObjectCount=+cm0[21];S.tofAgeMs=+cm0[22];
     S.gpsValid=cm0[23]==='FIX';S.gpsSats=+cm0[24];S.magValid=cm0[25]==='9DOF';S.ahrsFilter=cm0[26];S.imuValid=true;
     syncI('mKp',cm0[27],4);
     finishSerialParse();return;
@@ -1748,7 +1759,23 @@ function processLine(raw){
   }
 }
 function nMode(x){x=(x||'').toUpperCase();return x==='DISARMD'?'DISARMED':x==='FAILSFE'?'FAILSAFE':x;}
-function setParser(ok){const el=document.getElementById('sParse');if(!el)return;el.textContent=ok?'OK':'NO MATCH';el.style.color=ok?'var(--green)':'var(--red)';}
+function setParser(ok,reason=''){
+  const el=document.getElementById('sParse');if(!el)return;
+  if(ok){
+    parserFailCount=0;lastParserOkMs=Date.now();lastParserError='';
+    el.textContent='OK';el.style.color='var(--green)';el.title='';
+    return;
+  }
+  parserFailCount++;
+  lastParserError=reason||lastParserError||'no match';
+  const staleMs=lastParserOkMs?Date.now()-lastParserOkMs:Infinity;
+  const hardFail=parserFailCount>=3||staleMs>Math.max(1500,(Number(CFG.pollMs)||250)*4);
+  if(hardFail){
+    el.textContent='NO MATCH';el.style.color='var(--red)';el.title=lastParserError;
+  }else{
+    el.textContent='OK';el.style.color='var(--green)';el.title='Transient telemetry miss: '+lastParserError;
+  }
+}
 
 const MAX_LOG=500;let calCount=0;
 function addCalLog(text,cls='lOTHER'){
