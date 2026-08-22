@@ -146,7 +146,10 @@ String Logger::csvHeader() const {
              "angleRollP,angleRollI,angleRollD,angleRollOut,anglePitchP,anglePitchI,anglePitchD,anglePitchOut,angleYawP,angleYawI,angleYawD,angleYawOut,"
              "rateRollP,rateRollI,rateRollD,rateRollOut,ratePitchP,ratePitchI,ratePitchD,ratePitchOut,rateYawP,rateYawI,rateYawD,rateYawOut,"
              "motorFLPre,motorFRPre,motorRLPre,motorRRPre,motFL,motFR,motRL,motRR,motorDiagA,motorDiagB,motorDiagDiff,"
-             "rpmFL,rpmFR,rpmRL,rpmRR,rpmDiagA,rpmDiagB,rpmDiagDiff,batteryV,cpu0,cpu1,notchFreqHz,notchQ,notchEnable,bmpAltM,bmpVzMps,gpsValid,gpsSats,gpsHdop\n");
+             "rpmFL,rpmFR,rpmRL,rpmRR,rpmDiagA,rpmDiagB,rpmDiagDiff,batteryV,cpu0,cpu1,notchFreqHz,notchQ,notchEnable,bmpAltM,bmpVzMps,"
+             "tofDistanceM,tofDistanceMm,tofRangeStatus,tofObjectCount,tofStreamCount,tofSignalMcps,tofAmbientMcps,tofAgeMs,tofLastUpdateMs,tofReady,tofValid,"
+             "ekfPosZM,ekfVelZMps,tofEkfAgeMs,tofEkfVelAccepted,altHoldRequested,altHoldReady,altHoldActive,altHoldSetpointM,altHoldErrorM,altHoldTrim,"
+             "gpsValid,gpsSats,gpsHdop\n");
 }
 
 String Logger::csvRow(uint16_t chronologicalIndex) const {
@@ -158,7 +161,7 @@ String Logger::csvRow(uint16_t chronologicalIndex) const {
     portEXIT_CRITICAL(const_cast<portMUX_TYPE*>(&_mux));
     if (!ok) return String();
 
-    String s; s.reserve(1800);
+    String s; s.reserve(2200);
     s += String(r.t_us); s += ','; s += String(r.loop_count); s += ','; s += String(r.period_us); s += ',';
     s += String(r.jitter_us); s += ','; s += String(r.control_exec_us); s += ','; s += String(r.imu_read_us); s += ',';
     s += String(r.rc_read_us); s += ','; s += String(r.ahrs_exec_us); s += ','; s += String(r.pid_exec_us); s += ',';
@@ -208,7 +211,23 @@ String Logger::csvRow(uint16_t chronologicalIndex) const {
     _appendFloat(s,r.rpm_diag_a,0); _appendFloat(s,r.rpm_diag_b,0); _appendFloat(s,r.rpm_diag_diff,0);
     _appendFloat(s,r.battery_v,3); _appendFloat(s,r.cpu0_pct,1); _appendFloat(s,r.cpu1_pct,1);
     _appendFloat(s,r.notch_freq_hz,2); _appendFloat(s,r.notch_q,2); s += ','; s += String(r.notch_enable);
-    _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3); s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
+    _appendFloat(s,r.bmp_alt_m,3); _appendFloat(s,r.bmp_vz_mps,3);
+    _appendFloat(s,r.tof_distance_m,3); s += ','; s += String(r.tof_distance_mm);
+    s += ','; s += String(r.tof_range_status); s += ','; s += String(r.tof_object_count);
+    s += ','; s += String(r.tof_stream_count);
+    _appendFloat(s,r.tof_signal_mcps,3); _appendFloat(s,r.tof_ambient_mcps,3);
+    s += ','; s += String(r.tof_age_ms); s += ','; s += String(r.tof_last_update_ms);
+    s += ','; s += String(r.tof_ready); s += ','; s += String(r.tof_valid);
+    _appendFloat(s,r.ekf_pos_z_m,3); _appendFloat(s,r.ekf_vel_z_mps,3);
+    s += ','; s += String(r.tof_ekf_age_ms);
+    s += ','; s += String(r.tof_ekf_velocity_accepted);
+    s += ','; s += String(r.altitude_hold_requested);
+    s += ','; s += String(r.altitude_hold_ready);
+    s += ','; s += String(r.altitude_hold_active);
+    _appendFloat(s,r.altitude_hold_setpoint_m,3);
+    _appendFloat(s,r.altitude_hold_error_m,3);
+    _appendFloat(s,r.altitude_hold_throttle_trim,4);
+    s += ','; s += String(r.gps_valid); s += ','; s += String(r.gps_sats); _appendFloat(s,r.gps_hdop,2);
     s += '\n';
     return s;
 }

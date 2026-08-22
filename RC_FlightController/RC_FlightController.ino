@@ -30,7 +30,7 @@
  * ║   CH7  SWA  → ARM / DISARM                                       ║
  * ║   CH8  SWB  → ANGLE / ACRO                                       ║
  * ║   CH9  SWC  → Accel confirm during calibration                   ║
- * ║   CH10 SWD  → CALIBRATION trigger (flip UP while disarmed)       ║
+ * ║   CH10 SWD  → CAL trigger disarmed / ToF altitude hold armed     ║
  * ╠══════════════════════════════════════════════════════════════════╣
  * ║  SERIAL COMMANDS                                                  ║
  * ║   p  → toggle ~4 Hz [PID] tuning trace on/off (off at boot)     ║
@@ -292,6 +292,11 @@ struct FlightState {
     float actualRpmFL, actualRpmFR, actualRpmRL, actualRpmRR;
     bool  rpmActualValid;
     float bmpVerticalSpeed_mps;
+    float ekfPosZ_m, ekfVelZ_mps;
+    uint32_t tofEkfLastFused_ms, tofEkfAge_ms;
+    bool  tofEkfVelocityAccepted;
+    bool  altitudeHoldRequested, altitudeHoldReady, altitudeHoldActive;
+    float altitudeHoldSetpoint_m, altitudeHoldError_m, altitudeHoldThrottleTrim;
 
     // Diagnostic attitude sources for PID/AHRS review
     float accelRoll_deg, accelPitch_deg;        // accel-only tilt estimate
@@ -382,6 +387,9 @@ struct TuningState {
     float ekf_mag_declination_deg;
     float ekf_mag_yaw_offset_deg;
     float ekf_mag_yaw_sign;
+    float alt_hold_kp;
+    float alt_hold_kd;
+    float alt_hold_max_trim;
 
     volatile bool dirty;
 };
@@ -391,7 +399,7 @@ static SemaphoreHandle_t g_tuneMutex;
 // Versioned NVS record for runtime tuning. The size and CRC checks make a
 // firmware update or interrupted flash write fall back safely to defaults.
 static constexpr uint32_t TUNING_NVS_MAGIC   = 0x54554E45UL; // "TUNE"
-static constexpr uint16_t TUNING_NVS_SCHEMA  = 1;
+static constexpr uint16_t TUNING_NVS_SCHEMA  = 2;
 static constexpr char     TUNING_NVS_NS[]    = "flightTune";
 static constexpr char     TUNING_NVS_KEY[]   = "state";
 
@@ -587,6 +595,9 @@ static void syncTuningFromObjects()
     g_tuning.ekf_mag_declination_deg    = TUNE_EKF_MAG_DECL_DEG;
     g_tuning.ekf_mag_yaw_offset_deg     = TUNE_EKF_MAG_YAW_OFF_DEG;
     g_tuning.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
+    g_tuning.alt_hold_kp                = TUNE_ALT_HOLD_KP;
+    g_tuning.alt_hold_kd                = TUNE_ALT_HOLD_KD;
+    g_tuning.alt_hold_max_trim          = TUNE_ALT_HOLD_MAX_TRIM;
     g_tuning.dirty                      = false;
 }
 // Copy g_tuning into live PID/AHRS objects. Caller already holds g_tuneMutex.
@@ -638,6 +649,9 @@ static void applyTuningToObjectsLocked()
     attitudeEKF.setMagDeclinationDeg(constrain(g_tuning.ekf_mag_declination_deg, -30.0f, 30.0f));
     attitudeEKF.setMagYawOffsetDeg(constrain(g_tuning.ekf_mag_yaw_offset_deg, -180.0f, 180.0f));
     attitudeEKF.setMagYawSign(g_tuning.ekf_mag_yaw_sign);
+    g_tuning.alt_hold_kp       = constrain(g_tuning.alt_hold_kp, 0.0f, 0.500f);
+    g_tuning.alt_hold_kd       = constrain(g_tuning.alt_hold_kd, 0.0f, 0.500f);
+    g_tuning.alt_hold_max_trim = constrain(g_tuning.alt_hold_max_trim, 0.0f, 0.300f);
 
     g_tuning.dirty         = false;
     g_tuneApplySeq         = g_tuneRequestSeq;
@@ -975,6 +989,28 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.rpm_actual_valid=s.rpmActualValid;
     out.bmp_temp_c=s.bmpTemp_c; out.bmp_pressure_hpa=s.bmpPressure_hpa;
     out.bmp_altitude_m=s.bmpAltitude_m; out.bmp_valid=s.bmpValid;
+    out.tof_distance_m=s.tofDistance_m;
+    out.tof_distance_mm=s.tofDistance_mm;
+    out.tof_range_status=s.tofRangeStatus;
+    out.tof_object_count=s.tofObjectCount;
+    out.tof_stream_count=s.tofStreamCount;
+    out.tof_signal_mcps=s.tofSignalMcps;
+    out.tof_ambient_mcps=s.tofAmbientMcps;
+    out.tof_age_ms=s.tofAge_ms;
+    out.tof_last_update_ms=s.tofLastUpdate_ms;
+    out.tof_ready=s.tofReady;
+    out.tof_valid=s.tofValid;
+    out.ekf_pos_z_m=s.ekfPosZ_m;
+    out.ekf_vel_z_mps=s.ekfVelZ_mps;
+    out.tof_ekf_last_fused_ms=s.tofEkfLastFused_ms;
+    out.tof_ekf_age_ms=s.tofEkfAge_ms;
+    out.tof_ekf_velocity_accepted=s.tofEkfVelocityAccepted;
+    out.altitude_hold_requested=s.altitudeHoldRequested;
+    out.altitude_hold_ready=s.altitudeHoldReady;
+    out.altitude_hold_active=s.altitudeHoldActive;
+    out.altitude_hold_setpoint_m=s.altitudeHoldSetpoint_m;
+    out.altitude_hold_error_m=s.altitudeHoldError_m;
+    out.altitude_hold_throttle_trim=s.altitudeHoldThrottleTrim;
     out.cpu_core0_pct=s.cpuCore0_pct; out.cpu_core1_pct=s.cpuCore1_pct;
     out.cpu_valid=s.cpuValid;
 
@@ -1020,6 +1056,9 @@ static bool provideTelemetry(TelemetryPacket& out)
     out.ekf_mag_declination_deg=t.ekf_mag_declination_deg;
     out.ekf_mag_yaw_offset_deg=t.ekf_mag_yaw_offset_deg;
     out.ekf_mag_yaw_sign=t.ekf_mag_yaw_sign;
+    out.alt_hold_kp=t.alt_hold_kp;
+    out.alt_hold_kd=t.alt_hold_kd;
+    out.alt_hold_max_trim=t.alt_hold_max_trim;
     out.tune_request_seq = g_tuneRequestSeq;
     out.tune_apply_seq   = g_tuneApplySeq;
     out.tune_reject_seq  = g_tuneRejectSeq;
@@ -1120,6 +1159,9 @@ static bool handleTune(const TunePacket& in)
     if (in.has_ekf_mag_declination_deg)  g_tuning.ekf_mag_declination_deg = constrain(in.ekf_mag_declination_deg, -30.0f, 30.0f);
     if (in.has_ekf_mag_yaw_offset_deg)   g_tuning.ekf_mag_yaw_offset_deg  = constrain(in.ekf_mag_yaw_offset_deg, -180.0f, 180.0f);
     if (in.has_ekf_mag_yaw_sign)         g_tuning.ekf_mag_yaw_sign        = (in.ekf_mag_yaw_sign < 0.0f) ? -1.0f : 1.0f;
+    if (in.has_alt_hold_kp)              g_tuning.alt_hold_kp             = constrain(in.alt_hold_kp, 0.0f, 0.500f);
+    if (in.has_alt_hold_kd)              g_tuning.alt_hold_kd             = constrain(in.alt_hold_kd, 0.0f, 0.500f);
+    if (in.has_alt_hold_max_trim)        g_tuning.alt_hold_max_trim       = constrain(in.alt_hold_max_trim, 0.0f, 0.300f);
     // Accept and apply immediately while disarmed. This removes the confusing
     // one-cycle handshake where the POST succeeded but telemetry still showed
     // old values until taskControl got around to applying dirty tuning.
@@ -1388,7 +1430,7 @@ static void taskRC(void* /*pv*/)
                 calManager.request(CalibrationMode::IMU_ALL_GUIDED,CalibrationSource::RC);        
                 calLog("[RC] Calibration Manager request — IMU All GUIDED.");
             } else if (cmd.mode != FlightMode::DISARMED) {
-                calLog("[RC] Cannot calibrate while armed.");
+                calLog("[RC] SWD high while armed — ToF altitude hold requested.");
             }
         }
         swdPrev = cmd.swdHigh;
@@ -1678,6 +1720,11 @@ static void taskControl(void* /*pv*/)
     // Do not use vTaskDelay(1) here, and do not busy-wait: both caused
     // either 40 ms periods or watchdog resets on this build.
     uint32_t lastUs = 0;
+    uint32_t lastFusedTofTimestampMs = 0;
+    bool altitudeHoldEngaged = false;
+    float altitudeHoldSetpointM = 0.0f;
+    float altitudeHoldErrorM = 0.0f;
+    float altitudeHoldTrim = 0.0f;
 
     pidRateRoll.reset();  pidRatePitch.reset();  pidRateYaw.reset();
     pidAngleRoll.reset(); pidAnglePitch.reset();
@@ -1697,6 +1744,11 @@ static void taskControl(void* /*pv*/)
             pidAngleRoll.reset(); pidAnglePitch.reset();
             pidAngleYaw.reset();
             attitudeEKF.reset();
+            lastFusedTofTimestampMs = 0;
+            altitudeHoldEngaged = false;
+            altitudeHoldSetpointM = 0.0f;
+            altitudeHoldErrorM = 0.0f;
+            altitudeHoldTrim = 0.0f;
             g_yawHoldActive = false;
             runAutonomousCalibration();
             g_calibState = CalibState::IDLE;
@@ -1772,6 +1824,10 @@ static void taskControl(void* /*pv*/)
             pidAngleYaw.reset();
 
             g_yawHoldActive = false;
+            altitudeHoldEngaged = false;
+            altitudeHoldSetpointM = 0.0f;
+            altitudeHoldErrorM = 0.0f;
+            altitudeHoldTrim = 0.0f;
 
             updateExecTimingAndPrint(0, 0, periodUs, TARGET_US);
 
@@ -1789,6 +1845,17 @@ static void taskControl(void* /*pv*/)
         float filtAx = 0.0f, filtAy = 0.0f, filtAz = 0.0f;
         float accelRollDeg = 0.0f, accelPitchDeg = 0.0f;
         float rollAngleErrDeg = 0.0f, pitchAngleErrDeg = 0.0f;
+        float tofControlDistanceM = 0.0f;
+        uint32_t tofControlTimestampMs = 0;
+        bool tofControlValid = false;
+        if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
+            tofControlDistanceM = g_state.tofDistance_m;
+            tofControlTimestampMs = g_state.tofLastUpdate_ms;
+            tofControlValid = g_state.tofValid;
+            xSemaphoreGive(g_flightMutex);
+        }
+        PositionVelocityEstimate ekfPv;
+        bool tofEkfVelocityAccepted = false;
         if (imuOk) {
             if (g_notchResetPending) {
                 notchAx.reset(s.ax_g);
@@ -1866,6 +1933,8 @@ static void taskControl(void* /*pv*/)
             if (ahrsMode != lastAhrsMode) {
                 attitudeEKF.reset();
                 madgwickAHRS.reset();
+                lastFusedTofTimestampMs = 0;
+                altitudeHoldEngaged = false;
                 lastAhrsMode = ahrsMode;
             }
             g_ahrsFilterModeActive = ahrsMode;
@@ -1881,6 +1950,15 @@ static void taskControl(void* /*pv*/)
             } else {
                 AttitudeEstimate ekfOut;
                 attitudeEKF.update(ekfIn, dt, ekfOut);
+                if (tofControlValid &&
+                    tofControlTimestampMs != 0 &&
+                    tofControlTimestampMs != lastFusedTofTimestampMs) {
+                    attitudeEKF.updateTofMeasurement(tofControlDistanceM,
+                                                     tofControlTimestampMs);
+                    lastFusedTofTimestampMs = tofControlTimestampMs;
+                }
+                ekfPv = attitudeEKF.positionVelocity();
+                tofEkfVelocityAccepted = attitudeEKF.lastTofVelocityAccepted();
                 att.roll_deg = ekfOut.roll_deg; att.pitch_deg = ekfOut.pitch_deg; att.yaw_deg = ekfOut.yaw_deg;
                 att.q0 = ekfOut.q0; att.q1 = ekfOut.q1; att.q2 = ekfOut.q2; att.q3 = ekfOut.q3;
             }
@@ -1914,6 +1992,9 @@ static void taskControl(void* /*pv*/)
             rollAngleErrDeg  = att.roll_deg  - accelRollDeg;
             pitchAngleErrDeg = att.pitch_deg - accelPitchDeg;
         }
+        const uint32_t tofEkfAgeMs = (lastFusedTofTimestampMs != 0)
+                                   ? (millis() - lastFusedTofTimestampMs)
+                                   : UINT32_MAX;
 
         phaseStartUs = micros();
         RCCommand cmd = rcReceiver.getCommand();
@@ -1993,6 +2074,10 @@ static void taskControl(void* /*pv*/)
             lpfSpRoll.reset(); lpfSpPitch.reset(); lpfSpYaw.reset();
             pidAngleYaw.reset();
             g_yawHoldActive = false;
+            altitudeHoldEngaged = false;
+            altitudeHoldSetpointM = 0.0f;
+            altitudeHoldErrorM = 0.0f;
+            altitudeHoldTrim = 0.0f;
 
             phaseStartUs = micros();
             if (xSemaphoreTake(g_flightMutex, 0) == pdTRUE) {
@@ -2061,6 +2146,17 @@ static void taskControl(void* /*pv*/)
                 g_state.cmdRpmFL = g_state.cmdRpmFR = g_state.cmdRpmRL = g_state.cmdRpmRR = 0.0f;
                 g_state.actualRpmFL = g_state.actualRpmFR = g_state.actualRpmRL = g_state.actualRpmRR = 0.0f;
                 g_state.rpmActualValid = false;
+                g_state.ekfPosZ_m = ekfPv.valid ? ekfPv.posZ_m : 0.0f;
+                g_state.ekfVelZ_mps = ekfPv.valid ? ekfPv.velZ_mps : 0.0f;
+                g_state.tofEkfLastFused_ms = lastFusedTofTimestampMs;
+                g_state.tofEkfAge_ms = tofEkfAgeMs;
+                g_state.tofEkfVelocityAccepted = tofEkfVelocityAccepted;
+                g_state.altitudeHoldRequested = cmd.valid && cmd.swdHigh;
+                g_state.altitudeHoldReady = false;
+                g_state.altitudeHoldActive = false;
+                g_state.altitudeHoldSetpoint_m = altitudeHoldSetpointM;
+                g_state.altitudeHoldError_m = 0.0f;
+                g_state.altitudeHoldThrottleTrim = 0.0f;
                 if (imuOk) {
                     g_state.roll_deg = att.roll_deg;  g_state.pitch_deg = att.pitch_deg;
                     g_state.yaw_deg  = att.yaw_deg;
@@ -2146,6 +2242,9 @@ static void taskControl(void* /*pv*/)
             tune.ekf_mag_declination_deg    = TUNE_EKF_MAG_DECL_DEG;
             tune.ekf_mag_yaw_offset_deg     = TUNE_EKF_MAG_YAW_OFF_DEG;
             tune.ekf_mag_yaw_sign           = TUNE_EKF_MAG_YAW_SIGN;
+            tune.alt_hold_kp                = TUNE_ALT_HOLD_KP;
+            tune.alt_hold_kd                = TUNE_ALT_HOLD_KD;
+            tune.alt_hold_max_trim          = TUNE_ALT_HOLD_MAX_TRIM;
         }
 
         const float MAX_ANGLE_DEG      = tune.max_angle_deg;
@@ -2230,10 +2329,46 @@ static void taskControl(void* /*pv*/)
         const float IDLE_RAMP_END              = tune.idle_ramp_end;
 
         float thrRaw = constrain(cmd.throttle, 0.0f, 1.0f);
+        const bool altitudeHoldRequested = cmd.valid && cmd.swdHigh;
+        const bool altitudeHoldReady =
+            imuOk &&
+            g_ahrsFilterModeActive == 0 &&
+            tofControlValid &&
+            tofControlDistanceM >= TUNE_ALT_HOLD_MIN_TOF_M &&
+            tofControlDistanceM <= TUNE_ALT_HOLD_MAX_TOF_M &&
+            tofEkfAgeMs <= TOF_STALE_MS &&
+            ekfPv.valid &&
+            isfinite(ekfPv.posZ_m) &&
+            isfinite(ekfPv.velZ_mps);
+        const bool altitudeHoldActive =
+            altitudeHoldRequested &&
+            altitudeHoldReady &&
+            thrRaw > THROTTLE_CUT;
+
+        if (altitudeHoldActive) {
+            if (!altitudeHoldEngaged) {
+                altitudeHoldSetpointM = ekfPv.posZ_m;
+                altitudeHoldEngaged = true;
+            }
+            altitudeHoldErrorM = altitudeHoldSetpointM - ekfPv.posZ_m;
+            const float maxTrim = constrain(tune.alt_hold_max_trim, 0.0f, 0.300f);
+            altitudeHoldTrim = constrain(tune.alt_hold_kp * altitudeHoldErrorM -
+                                          tune.alt_hold_kd * ekfPv.velZ_mps,
+                                          -maxTrim,
+                                          maxTrim);
+        } else {
+            altitudeHoldEngaged = false;
+            altitudeHoldSetpointM = altitudeHoldReady ? ekfPv.posZ_m : 0.0f;
+            altitudeHoldErrorM = 0.0f;
+            altitudeHoldTrim = 0.0f;
+        }
 
         float thrTarget = 0.0f;
         if (thrRaw > THROTTLE_CUT) {
-            thrTarget = throttleExpo(thrRaw, THROTTLE_EXPO);
+            thrTarget = constrain(throttleExpo(thrRaw, THROTTLE_EXPO) +
+                                  altitudeHoldTrim,
+                                  0.0f,
+                                  1.0f);
         }
 
         float maxStepUp   = THROTTLE_UP_RATE_PER_SEC * dt;
@@ -2457,6 +2592,27 @@ static void taskControl(void* /*pv*/)
             row.notch_enable = tune.notch_enable ? 1 : 0;
             row.bmp_alt_m = g_state.bmpAltitude_m;
             row.bmp_vz_mps = g_state.bmpVerticalSpeed_mps;
+            row.tof_distance_m = g_state.tofDistance_m;
+            row.tof_distance_mm = g_state.tofDistance_mm;
+            row.tof_range_status = g_state.tofRangeStatus;
+            row.tof_object_count = g_state.tofObjectCount;
+            row.tof_stream_count = g_state.tofStreamCount;
+            row.tof_signal_mcps = g_state.tofSignalMcps;
+            row.tof_ambient_mcps = g_state.tofAmbientMcps;
+            row.tof_age_ms = clampU16(g_state.tofAge_ms);
+            row.tof_last_update_ms = g_state.tofLastUpdate_ms;
+            row.tof_ready = g_state.tofReady ? 1 : 0;
+            row.tof_valid = g_state.tofValid ? 1 : 0;
+            row.ekf_pos_z_m = ekfPv.valid ? ekfPv.posZ_m : 0.0f;
+            row.ekf_vel_z_mps = ekfPv.valid ? ekfPv.velZ_mps : 0.0f;
+            row.tof_ekf_age_ms = clampU16(tofEkfAgeMs);
+            row.tof_ekf_velocity_accepted = tofEkfVelocityAccepted ? 1 : 0;
+            row.altitude_hold_requested = altitudeHoldRequested ? 1 : 0;
+            row.altitude_hold_ready = altitudeHoldReady ? 1 : 0;
+            row.altitude_hold_active = altitudeHoldActive ? 1 : 0;
+            row.altitude_hold_setpoint_m = altitudeHoldSetpointM;
+            row.altitude_hold_error_m = altitudeHoldErrorM;
+            row.altitude_hold_throttle_trim = altitudeHoldTrim;
             row.gps_valid = g_state.gps.valid ? 1 : 0;
             row.gps_sats = g_state.gps.satellites;
             row.gps_hdop = g_state.gps.hdop;
@@ -2502,6 +2658,17 @@ static void taskControl(void* /*pv*/)
                 g_state.motorSaturated=motorSaturated;
                 g_state.cmdRpmFL=cmdRpmFL; g_state.cmdRpmFR=cmdRpmFR; g_state.cmdRpmRL=cmdRpmRL; g_state.cmdRpmRR=cmdRpmRR;
                 g_state.actualRpmFL=0.0f; g_state.actualRpmFR=0.0f; g_state.actualRpmRL=0.0f; g_state.actualRpmRR=0.0f; g_state.rpmActualValid=false;
+                g_state.ekfPosZ_m = ekfPv.valid ? ekfPv.posZ_m : 0.0f;
+                g_state.ekfVelZ_mps = ekfPv.valid ? ekfPv.velZ_mps : 0.0f;
+                g_state.tofEkfLastFused_ms = lastFusedTofTimestampMs;
+                g_state.tofEkfAge_ms = tofEkfAgeMs;
+                g_state.tofEkfVelocityAccepted = tofEkfVelocityAccepted;
+                g_state.altitudeHoldRequested = altitudeHoldRequested;
+                g_state.altitudeHoldReady = altitudeHoldReady;
+                g_state.altitudeHoldActive = altitudeHoldActive;
+                g_state.altitudeHoldSetpoint_m = altitudeHoldSetpointM;
+                g_state.altitudeHoldError_m = altitudeHoldErrorM;
+                g_state.altitudeHoldThrottleTrim = altitudeHoldTrim;
                 g_state.accelRoll_deg = accelRollDeg;
                 g_state.accelPitch_deg = accelPitchDeg;
                 g_state.gyroRoll_deg = g_gyroRollDeg;

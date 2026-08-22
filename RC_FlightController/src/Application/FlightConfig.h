@@ -41,6 +41,13 @@ constexpr uint32_t TOF_INTER_MEASUREMENT_MS = 25;
 constexpr uint32_t TOF_TASK_PERIOD_MS = 25;
 constexpr uint32_t TOF_STALE_MS = 200;
 
+// ToF altitude hold ----------------------------------------------------------
+constexpr float TUNE_ALT_HOLD_KP = 0.080f;      // throttle trim per metre error
+constexpr float TUNE_ALT_HOLD_KD = 0.040f;      // throttle trim per m/s vertical speed
+constexpr float TUNE_ALT_HOLD_MAX_TRIM = 0.120f;
+constexpr float TUNE_ALT_HOLD_MIN_TOF_M = 0.05f;
+constexpr float TUNE_ALT_HOLD_MAX_TOF_M = 3.50f;
+
 // Pilot limits and motor authority ------------------------------------------
 constexpr float TUNE_MAX_ANGLE_DEG = 5.0f;
 constexpr float TUNE_MAX_RATE_DPS = 200.0f;
