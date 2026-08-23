@@ -108,8 +108,6 @@
 #define GYRO_SCALE_500DPS   (500.0f  / 32768.0f)
 #define ACCEL_SCALE_8G      (8.0f    / 32768.0f)
 #define MAG_SCALE_16BIT     (4912.0f / 32760.0f)
-#define DEG2RAD             (3.14159265358979f / 180.0f)
-#define RAD2DEG             (180.0f / 3.14159265358979f)
 
 // ─────────────────────────────────────────────────────────────
 //  §4  SPI speed constants

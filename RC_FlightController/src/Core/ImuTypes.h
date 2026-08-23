@@ -5,6 +5,13 @@
 
 #include <stdint.h>
 
+#ifndef DEG2RAD
+#define DEG2RAD             (3.14159265358979f / 180.0f)
+#endif
+#ifndef RAD2DEG
+#define RAD2DEG             (180.0f / 3.14159265358979f)
+#endif
+
 struct MPU_RawData {
     int16_t ax, ay, az;
     int16_t gx, gy, gz;

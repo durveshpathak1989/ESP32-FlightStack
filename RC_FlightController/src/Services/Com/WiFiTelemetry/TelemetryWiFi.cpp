@@ -12,7 +12,7 @@
  */
 
 #include "TelemetryWiFi.h"
-#include "../Diagnostics/DebugConfig/DebugConfig.h"
+#include "../../Diagnostics/DebugConfig/DebugConfig.h"
 #include <math.h>
 
 TelemetryWiFi telemetryWiFi(80);

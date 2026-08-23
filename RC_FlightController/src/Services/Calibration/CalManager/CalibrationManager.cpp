@@ -20,7 +20,7 @@
  **/
 
 #include "CalibrationManager.h"
-#include "../Diagnostics/DebugConfig/DebugConfig.h"
+#include "../../Diagnostics/DebugConfig/DebugConfig.h"
 
 // Physical pose list.
 // axis: 0=X, 1=Y, 2=Z
