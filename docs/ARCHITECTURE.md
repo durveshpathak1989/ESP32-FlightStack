@@ -24,23 +24,31 @@ The `Core` directory must never include Arduino, ESP32, FreeRTOS, Wi-Fi, or a
 concrete device driver. Platform adapters may depend on the core, never the
 reverse.
 
-## Directory target
+## Directory layout (implemented)
 
 ```text
 RC_FlightController/src/
-├── Core/
-│   ├── FlightTypes.h        plain portable data
-│   ├── Ports.h              hardware contracts
-│   ├── Control/             controller interfaces and algorithms
-│   └── Estimation/          AHRS/EKF-facing abstractions
-├── Application/
-│   ├── FlightConfig.h       beginner-facing defaults
-│   ├── FlightApplication.*  use cases and flight-state transitions
-│   └── Control/             built-in PID implementation
-├── Platforms/
-│   ├── Esp32/               Arduino/FreeRTOS/Preferences/Wi-Fi adapters
-│   └── Host/                deterministic test adapters
-└── Drivers/                 concrete sensors and protocols
+├── Core/                      portable data + port contracts
+│   ├── FlightTypes.h
+│   ├── Ports.h
+│   └── ImuTypes.h             shared IMU plain-data structs
+├── Cfg/
+│   └── FlightConfig.h         beginner-facing defaults and pins
+├── App/                       application layer (algorithms only)
+│   ├── Control/PidController.h
+│   ├── Filters/NotchFilter/
+│   └── Estimation/{EKF, AHRS, MahonyAHRS, Madgwick}
+├── Services/
+│   ├── Com/WiFiTelemetry      HTTP telemetry, tuning, OTA
+│   ├── Calibration/CalManager
+│   ├── SignalProcessing/FFT
+│   └── Diagnostics/{Logger, DebugConfig, ESP32Core}
+├── EcuAbstraction/
+│   ├── Sensors/{IMU, BMP280, GPS, ToF}
+│   ├── Actuators/MotorControl
+│   ├── Receiver/iFly
+│   └── Power/BatteryMonitor
+└── Mcal/                      ESP32 Arduino core API boundary today
 ```
 
 ## Swapping hardware
@@ -98,8 +106,12 @@ a controller should require:
 
 ## Current migration status
 
-The project now has portable flight types and initial hardware contracts.
-`FlightConfig.h` is the single beginner-facing location for board pins and safe
-defaults. `PidController.h` is portable standard C++ and no longer lives inside
-the Arduino sketch. Existing concrete drivers are still called directly from
-the sketch; moving them behind ESP32 adapters is the next migration phase.
+The layered refactor (branch `refactor/autosar-layered`) vendored all
+submodules into an AUTOSAR-style tree: `App/`, `Services/`,
+`EcuAbstraction/`, `Mcal/`, with portable types and port contracts in
+`Core/` and configuration in `Cfg/`. See `docs/LAYERS.md` for the layer
+contracts and sanctioned exceptions. `FlightConfig.h` is the single
+beginner-facing location for board pins and safe defaults.
+`PidController.h` is portable standard C++. Remaining work: move direct
+driver calls in the sketch behind `EcuAbstraction` adapters, and wrap
+ESP32 peripheral APIs in explicit `Mcal` primitives.

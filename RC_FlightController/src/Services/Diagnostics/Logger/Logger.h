@@ -14,7 +14,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
-#include "../EKF/AttitudeEKF.h"
+#include "../../../App/Estimation/EKF/AttitudeEKF.h"
 
 #ifndef LOGGER_DEFAULT_CAPACITY
 #define LOGGER_DEFAULT_CAPACITY 600U   // 100 Hz x 6 s default

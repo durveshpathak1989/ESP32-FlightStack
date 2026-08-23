@@ -66,13 +66,14 @@ jobs:
           grep -Fq "FlashSize=4M" board-details.txt
           grep -Fq "PSRAM=disabled" board-details.txt
 
-      - name: Verify sketch and submodules
+      - name: Verify sketch and layered sources
         shell: bash
         run: |
           set -euo pipefail
           test -f "${SKETCH_PATH}/RC_FlightController.ino"
           test -f "${BUILD_INFO_HEADER}"
-          git submodule status --recursive | tee submodules.txt
+          test -d "${SKETCH_PATH}/src/Mcal"
+          find "${SKETCH_PATH}/src" -maxdepth 1 -type d | sort | tee layers.txt
 
       - name: Generate firmware build identity
         shell: bash
@@ -160,7 +161,7 @@ jobs:
           cp compile-release.txt "${PUBLISH_PATH}/compile-release.txt"
           cp compile-debug.txt "${PUBLISH_PATH}/compile-debug.txt"
           cp board-details.txt "${PUBLISH_PATH}/board-details.txt"
-          cp submodules.txt "${PUBLISH_PATH}/submodules.txt"
+          cp layers.txt "${PUBLISH_PATH}/layers.txt"
 
           python3 - <<'PY'
           import hashlib
